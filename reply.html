@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft Reply</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      /* Use uploaded image as background */
+      background: url('background.png') no-repeat center center fixed;
+      background-size: cover;
+      min-height: 100vh;
+      color: #003049;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .section {
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      background: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #003049;
+    }
+    .reply {
+      background: rgba(255, 255, 255, 0.5);
+      white-space: pre-wrap;
+    }
+    a { color: #0a6fa1; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Draft Reply</h1>
+  <div id="original" class="section"></div>
+  <div id="draft" class="section reply"></div>
+  <p><a href="index.html">← Back to Inbox</a></p>
+
+  <script>
+    // Same email data array as index.html
+    const emails = [
+      {
+        sender: 'boss@example.com',
+        subject: 'Urgent: invoice overdue',
+        body: 'Hi team, we need to pay the invoice ASAP. Please handle it urgently as this invoice was due last week.'
+      },
+      {
+        sender: 'newsletter@company.com',
+        subject: 'Weekly newsletter',
+        body: "Hello, this is our weekly newsletter. Don't forget to update your preferences."
+      },
+      {
+        sender: 'client@example.com',
+        subject: 'Meeting next week',
+        body: 'Let\'s schedule a meeting next week to discuss the project progress and timeline.'
+      },
+      {
+        sender: 'sales@vendor.com',
+        subject: 'Proposal for pricing',
+        body: 'Hi, I\'m sending you a proposal for our product pricing. Please review it and let me know if you have any questions.'
+      }
+    ];
+
+    // Parse query parameters
+    function getQueryParam(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+
+    // Split text into sentences (naive)
+    function splitSentences(text) {
+      return text.match(/[^.!?]+[.!?]?/g) || [];
+    }
+
+    // Summarise text: pick up to three sentences longer than 5 words
+    function summarise(text) {
+      const sentences = splitSentences(text);
+      const selected = [];
+      for (const s of sentences) {
+        if (s.trim().split(/\s+/).length > 5) {
+          selected.push(s.trim());
+        }
+        if (selected.length >= 3) break;
+      }
+      if (selected.length === 0) {
+        return text.length > 120 ? text.slice(0, 117) + '…' : text;
+      }
+      return selected.join(' ');
+    }
+
+    function buildPage() {
+      const idx = parseInt(getQueryParam('idx'), 10);
+      if (isNaN(idx) || idx < 0 || idx >= emails.length) {
+        document.getElementById('original').textContent = 'Invalid message.';
+        document.getElementById('draft').textContent = '';
+        return;
+      }
+      const email = emails[idx];
+      const originalDiv = document.getElementById('original');
+      originalDiv.innerHTML = '<strong>From:</strong> ' + email.sender + '<br>' +
+                              '<strong>Subject:</strong> ' + email.subject + '<br><br>' +
+                              '<pre>' + email.body + '</pre>';
+      const replyDiv = document.getElementById('draft');
+      const greetingName = email.sender.split('@')[0];
+      const summary = summarise(email.body);
+      const reply = 'Hi ' + greetingName + ',\n\n' +
+                    "Thanks for reaching out. Here's a quick summary of your message:\n" +
+                    summary + '\n\n' +
+                    'Let me know if I missed anything or if you have questions.\n\n' +
+                    'Best regards,\nYour Name';
+      replyDiv.textContent = reply;
+    }
+
+    buildPage();
+  </script>
+</body>
+</html>
