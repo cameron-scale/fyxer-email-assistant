@@ -108,10 +108,15 @@
     // OAuth configuration. Replace the placeholders below with your own client IDs
     // and ensure the redirect URI matches the location from which this page is served.
     const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID';
+    // Use the client ID you registered in Azure AD.  This must match the
+    // Application (client) ID in your app registration or the login will fail.
     const OUTLOOK_CLIENT_ID = 'ecf692e9-9c6e-40c3-97dc-62d957200e33';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
-    const OUTLOOK_SCOPES = 'https://graph.microsoft.com/Mail.Read';
+    // Request both profile and mail read access from Microsoft Graph.  The
+    // implicit grant flow expects space‑separated scopes (not full URLs).
+    // See https://learn.microsoft.com/entra/identity-platform/scopes-oidc for details.
+    const OUTLOOK_SCOPES = 'User.Read Mail.Read';
 
     // Sample data used when the user hasn't connected their account.  Once a user
     // signs in via OAuth, this array will be replaced with real messages fetched
@@ -447,7 +452,9 @@
       const token = localStorage.getItem('outlook_access_token');
       if (!token) return;
       try {
-        const resp = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=10', {
+        // Use the standard messages endpoint.  With the Mail.Read scope we
+        // can read messages directly from the signed‑in user’s mailbox.
+        const resp = await fetch('https://graph.microsoft.com/v1.0/me/messages?$top=10', {
           headers: { 'Authorization': 'Bearer ' + token }
         });
         const data = await resp.json();
