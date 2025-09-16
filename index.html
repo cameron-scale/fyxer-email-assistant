@@ -105,8 +105,18 @@
   <div id="inbox"></div>
 
   <script>
-    // Sample email data. In a production app this would be fetched from your email providers.
-    const emails = [
+    // OAuth configuration. Replace the placeholders below with your own client IDs
+    // and ensure the redirect URI matches the location from which this page is served.
+    const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID';
+    const OUTLOOK_CLIENT_ID = 'YOUR_OUTLOOK_CLIENT_ID';
+    const REDIRECT_URI = window.location.origin + window.location.pathname;
+    const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
+    const OUTLOOK_SCOPES = 'https://graph.microsoft.com/Mail.Read';
+
+    // Sample data used when the user hasn't connected their account.  Once a user
+    // signs in via OAuth, this array will be replaced with real messages fetched
+    // from Gmail or Outlook.  Feel free to extend or modify these examples.
+    const sampleEmails = [
       {
         sender: 'boss@example.com',
         subject: 'Urgent: invoice overdue',
@@ -152,6 +162,10 @@
         deleted: false
       }
     ];
+
+    // The main emails array used by the UI.  Initially seeded with sample data,
+    // but replaced with real messages after a user signs in.
+    let emails = [...sampleEmails];
 
     // Category definitions and keywords
     const categories = {
@@ -308,14 +322,167 @@
       }
     }
 
-    // Add event listeners for account linking buttons (placeholder behaviour)
-    document.getElementById('connectOutlook').addEventListener('click', () => {
-      alert('Outlook sign in is a placeholder. API integration disabled.');
-    });
-    document.getElementById('connectGmail').addEventListener('click', () => {
-      alert('Gmail sign in is a placeholder. API integration disabled.');
-    });
+    // ============================
+    // OAuth helper functions
+    // ============================
 
+    // Generate a random string for the OAuth state parameter to mitigate CSRF
+    function generateRandomString(length = 16) {
+      const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+      let result = '';
+      for (let i = 0; i < length; i++) {
+        result += charset.charAt(Math.floor(Math.random() * charset.length));
+      }
+      return result;
+    }
+
+    // Begin Google OAuth (implicit grant). Redirects the user to Google's
+    // authorization endpoint with the appropriate parameters. After the user
+    // completes the consent flow, Google will redirect back with an access token
+    // in the URL hash (#access_token=...).
+    function authenticateGmail() {
+      const state = generateRandomString();
+      localStorage.setItem('gmail_state', state);
+      const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' +
+        '?client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID) +
+        '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
+        '&response_type=token' +
+        '&scope=' + encodeURIComponent(GMAIL_SCOPES) +
+        '&state=' + encodeURIComponent(state);
+      window.location.href = authUrl;
+    }
+
+    // Begin Outlook (Microsoft) OAuth (implicit grant). Redirects the user to
+    // Microsoft’s authorization endpoint. After consent, an access token will
+    // arrive in the URL hash (#access_token=...).
+    function authenticateOutlook() {
+      const state = generateRandomString();
+      localStorage.setItem('outlook_state', state);
+      const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize' +
+        '?client_id=' + encodeURIComponent(OUTLOOK_CLIENT_ID) +
+        '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
+        '&response_type=token' +
+        '&scope=' + encodeURIComponent(OUTLOOK_SCOPES) +
+        '&response_mode=fragment' +
+        '&state=' + encodeURIComponent(state);
+      window.location.href = authUrl;
+    }
+
+    // Parse the URL fragment returned from the OAuth servers and store access
+    // tokens accordingly. Once tokens are saved, trigger message fetches.
+    function handleAuthResponse() {
+      const fragment = window.location.hash.substring(1);
+      if (!fragment) return;
+      const params = new URLSearchParams(fragment);
+      const accessToken = params.get('access_token');
+      const state = params.get('state');
+      if (!accessToken || !state) return;
+      // Clear the fragment to avoid exposing the token
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Identify which provider returned the token based on the stored state
+      if (state === localStorage.getItem('gmail_state')) {
+        localStorage.setItem('gmail_access_token', accessToken);
+        fetchGmailMessages();
+      } else if (state === localStorage.getItem('outlook_state')) {
+        localStorage.setItem('outlook_access_token', accessToken);
+        fetchOutlookMessages();
+      }
+    }
+
+    // Retrieve a batch of recent messages from the Gmail API using the stored
+    // access token.  This function populates the global `emails` array and
+    // rebuilds the inbox UI.  It fetches only a handful of messages for demo
+    // purposes; in a production app you might implement pagination.
+    async function fetchGmailMessages() {
+      const token = localStorage.getItem('gmail_access_token');
+      if (!token) return;
+      try {
+        // List message IDs
+        const listResp = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=10', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const listData = await listResp.json();
+        if (!listData.messages) {
+          console.warn('No Gmail messages returned.');
+          return;
+        }
+        const messages = [];
+        for (const msg of listData.messages) {
+          const detailResp = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/' + msg.id + '?format=metadata&metadataHeaders=Subject&metadataHeaders=From', {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          const detail = await detailResp.json();
+          // Extract subject and sender from the headers
+          const headers = detail.payload.headers || [];
+          const subjHeader = headers.find(h => h.name === 'Subject');
+          const fromHeader = headers.find(h => h.name === 'From');
+          const subject = subjHeader ? subjHeader.value : '(no subject)';
+          const sender = fromHeader ? fromHeader.value : '';
+          // Gmail API provides a snippet summary for each message
+          const body = detail.snippet || '';
+          messages.push({
+            sender: sender,
+            subject: subject,
+            body: body,
+            read: false,
+            archived: false,
+            snoozedUntil: null,
+            flagged: false,
+            reportedSpam: false,
+            deleted: false
+          });
+        }
+        // Replace the global emails array with fetched messages
+        emails = messages;
+        buildInbox();
+      } catch (err) {
+        console.error('Error fetching Gmail messages:', err);
+      }
+    }
+
+    // Retrieve a batch of recent messages from the Microsoft Graph API.  This
+    // function requires that the Mail.Read scope be granted and populates the
+    // `emails` array accordingly.
+    async function fetchOutlookMessages() {
+      const token = localStorage.getItem('outlook_access_token');
+      if (!token) return;
+      try {
+        const resp = await fetch('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=10', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await resp.json();
+        if (!data.value) {
+          console.warn('No Outlook messages returned.');
+          return;
+        }
+        const messages = data.value.map(item => {
+          return {
+            sender: item.from && item.from.emailAddress ? item.from.emailAddress.address : '',
+            subject: item.subject || '(no subject)',
+            body: item.bodyPreview || '',
+            read: item.isRead || false,
+            archived: false,
+            snoozedUntil: null,
+            flagged: item.flag && item.flag.flagStatus === 'flagged',
+            reportedSpam: false,
+            deleted: false
+          };
+        });
+        emails = messages;
+        buildInbox();
+      } catch (err) {
+        console.error('Error fetching Outlook messages:', err);
+      }
+    }
+
+    // Attach OAuth functions to the sign-in buttons
+    document.getElementById('connectOutlook').addEventListener('click', authenticateOutlook);
+    document.getElementById('connectGmail').addEventListener('click', authenticateGmail);
+
+    // On page load, check if we're returning from an OAuth redirect and handle
+    // any tokens in the URL fragment.  Then build the inbox with either the
+    // sample data or previously fetched messages.
+    handleAuthResponse();
     buildInbox();
   </script>
 </body>
