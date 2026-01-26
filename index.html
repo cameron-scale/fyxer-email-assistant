@@ -396,6 +396,11 @@
       gap: 8px;
     }
 
+    .trial-details {
+      display: grid;
+      gap: 10px;
+    }
+
     .toast {
       position: fixed;
       right: 24px;
@@ -537,6 +542,18 @@
         </section>
 
         <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">Billing</h3>
+            <span id="trialStatus" class="chip">Trial inactive</span>
+          </div>
+          <div class="trial-details">
+            <p class="brand-sub">Start a 7-day free trial. Card required to activate access.</p>
+            <button id="startTrial" class="primary">Start free trial</button>
+            <p id="trialNote" class="brand-sub"></p>
+          </div>
+        </section>
+
+        <section class="card">
           <div class="calendar-header">
             <h3 class="panel-title">Upcoming events</h3>
             <button id="calendarRefresh" class="ghost">Refresh</button>
@@ -567,6 +584,8 @@
     const STORAGE_KEY = 'ai_email_sorter_emails_v1';
     const ACTIVE_EMAIL_KEY = 'ai_email_sorter_active_email';
     const NOTIFY_KEY = 'ai_email_sorter_notifications';
+    const TRIAL_STATUS_KEY = 'ai_email_sorter_trial_status';
+    const TRIAL_START_KEY = 'ai_email_sorter_trial_start';
     const APPLE_CAL_URL_KEY = 'ai_email_sorter_apple_cal_url';
     const APPLE_CAL_ICS_KEY = 'ai_email_sorter_apple_cal_ics';
 
@@ -827,6 +846,7 @@
       renderDetail();
       renderSummary();
       updateConnectionStatus();
+      updateTrialUI();
     }
 
     function renderCategoryButtons(grouped) {
@@ -1111,6 +1131,84 @@
       setStatusPill(document.getElementById('googleCalStatus'), Boolean(googleToken), 'Google Cal');
       setStatusPill(document.getElementById('outlookCalStatus'), Boolean(outlookToken), 'Outlook Cal');
       setStatusPill(document.getElementById('appleCalStatus'), appleConnected, 'Apple Cal');
+    }
+
+    function getTrialInfo() {
+      const status = localStorage.getItem(TRIAL_STATUS_KEY);
+      const started = Number(localStorage.getItem(TRIAL_START_KEY));
+      if (status === 'active' && started) {
+        const elapsedDays = Math.floor((Date.now() - started) / 86400000);
+        const daysLeft = Math.max(0, 7 - elapsedDays);
+        if (daysLeft === 0) {
+          return { state: 'ended', elapsedDays, daysLeft };
+        }
+        return { state: 'active', elapsedDays, daysLeft };
+      }
+      return { state: 'inactive', elapsedDays: 0, daysLeft: 7 };
+    }
+
+    function updateTrialUI() {
+      const statusEl = document.getElementById('trialStatus');
+      const noteEl = document.getElementById('trialNote');
+      const buttonEl = document.getElementById('startTrial');
+      if (!statusEl || !noteEl || !buttonEl) return;
+
+      const info = getTrialInfo();
+      if (info.state === 'active') {
+        statusEl.textContent = 'Trial day ' + Math.min(info.elapsedDays + 1, 7);
+        statusEl.className = 'chip low';
+        noteEl.textContent = info.daysLeft + ' day(s) left in your trial.';
+        buttonEl.textContent = 'Trial active';
+        buttonEl.disabled = true;
+        return;
+      }
+
+      if (info.state === 'ended') {
+        statusEl.textContent = 'Trial ended';
+        statusEl.className = 'chip spam';
+        noteEl.textContent = 'Trial ended. Add a subscription to keep access.';
+        buttonEl.textContent = 'Trial ended';
+        buttonEl.disabled = true;
+        return;
+      }
+
+      statusEl.textContent = 'Trial inactive';
+      statusEl.className = 'chip';
+      noteEl.textContent = '7-day free trial with card required. Configure Stripe keys in .env to enable checkout.';
+      buttonEl.textContent = 'Start free trial';
+      buttonEl.disabled = false;
+    }
+
+    async function startTrialCheckout() {
+      const buttonEl = document.getElementById('startTrial');
+      if (buttonEl) buttonEl.disabled = true;
+
+      try {
+        const resp = await fetch('/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: 'trial' })
+        });
+
+        if (!resp.ok) {
+          const error = await resp.json().catch(() => ({}));
+          showToast(error.error || 'Unable to start checkout.');
+          if (buttonEl) buttonEl.disabled = false;
+          return;
+        }
+
+        const data = await resp.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          showToast('Checkout unavailable.');
+          if (buttonEl) buttonEl.disabled = false;
+        }
+      } catch (err) {
+        console.error('Checkout error', err);
+        showToast('Checkout failed.');
+        if (buttonEl) buttonEl.disabled = false;
+      }
     }
 
     function requestNotifications() {
@@ -1637,6 +1735,8 @@
       localStorage.removeItem(APPLE_CAL_URL_KEY);
       localStorage.removeItem(APPLE_CAL_ICS_KEY);
       localStorage.removeItem(NOTIFY_KEY);
+      localStorage.removeItem(TRIAL_STATUS_KEY);
+      localStorage.removeItem(TRIAL_START_KEY);
       loadEmails();
       updateView();
       renderCalendarEvents();
@@ -1657,6 +1757,7 @@
       document.getElementById('syncCalendars').addEventListener('click', syncCalendars);
       document.getElementById('calendarRefresh').addEventListener('click', syncCalendars);
       document.getElementById('enableNotifications').addEventListener('click', requestNotifications);
+      document.getElementById('startTrial').addEventListener('click', startTrialCheckout);
 
       document.getElementById('loadSample').addEventListener('click', () => {
         emails = sampleEmails.map(createEmail);
