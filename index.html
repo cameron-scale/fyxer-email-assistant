@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Email Sorter</title>
+  <title>Fyxer Style AI Inbox</title>
   <style>
     :root {
       --ink: #0b2239;
-      --muted: #4b647a;
-      --glass: rgba(255, 255, 255, 0.5);
-      --glass-border: rgba(255, 255, 255, 0.7);
+      --muted: #51657a;
+      --accent: #1d7dd8;
       --urgent: #e63946;
       --medium: #f4a261;
       --low: #2a9d8f;
       --spam: #6c757d;
-      --accent: #1d7dd8;
-      --shadow: 0 6px 22px rgba(0, 0, 0, 0.15);
+      --glass: rgba(255, 255, 255, 0.62);
+      --glass-border: rgba(255, 255, 255, 0.72);
+      --shadow: 0 10px 30px rgba(7, 22, 39, 0.15);
     }
 
     * {
@@ -33,19 +33,15 @@
     }
 
     .app {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+      display: grid;
+      gap: 16px;
     }
 
     .card {
       border-radius: 16px;
-      padding: 18px 20px;
-    }
-
-    .glass {
+      padding: 16px 18px;
       background: var(--glass);
       border: 1px solid var(--glass-border);
       backdrop-filter: blur(12px);
@@ -53,76 +49,73 @@
       box-shadow: var(--shadow);
     }
 
-    .hero {
+    .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
+      gap: 16px;
       flex-wrap: wrap;
     }
 
-    .hero h1 {
-      margin: 8px 0 6px;
-      font-size: 2.1rem;
-    }
-
-    .pill {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 999px;
-      background: rgba(29, 125, 216, 0.15);
-      color: var(--accent);
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .status-panel {
-      min-width: 240px;
+    .brand {
       display: grid;
-      gap: 10px;
+      gap: 4px;
     }
 
-    .status-row {
+    .brand-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+
+    .brand-sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .status-group {
       display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .status-pill {
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
-      font-weight: 600;
-    }
-
-    .status {
-      padding: 4px 10px;
+      gap: 6px;
       border-radius: 999px;
+      padding: 4px 10px;
       font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      font-weight: 600;
+      border: 1px solid rgba(0, 0, 0, 0.05);
     }
 
-    .status.on {
+    .status-pill.connected {
       background: rgba(42, 157, 143, 0.2);
       color: #1f6f64;
     }
 
-    .status.off {
-      background: rgba(108, 117, 125, 0.2);
-      color: #5b6368;
+    .status-pill.disconnected {
+      background: rgba(108, 117, 125, 0.15);
+      color: #56606b;
     }
 
-    .controls {
-      display: grid;
-      gap: 12px;
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
     }
 
-    .control-row {
+    .top-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
     }
 
     button {
       border: none;
-      border-radius: 8px;
-      padding: 10px 16px;
+      border-radius: 10px;
+      padding: 10px 14px;
       font-weight: 600;
       cursor: pointer;
       transition: transform 0.05s ease, opacity 0.2s ease;
@@ -139,189 +132,223 @@
 
     .primary {
       background: var(--accent);
-      color: white;
+      color: #fff;
     }
 
     .ghost {
-      background: rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.7);
       color: var(--ink);
       border: 1px solid rgba(255, 255, 255, 0.8);
     }
 
-    .helper {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-
-    .stats-grid {
+    .layout {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
+      grid-template-columns: 260px minmax(0, 1fr) 320px;
+      gap: 16px;
+      align-items: start;
     }
 
-    .stat-card {
-      border-radius: 14px;
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-weight: 700;
+    .sidebar,
+    .main,
+    .rightbar {
+      display: grid;
+      gap: 16px;
     }
 
-    .stat-card.urgent {
-      background: rgba(230, 57, 70, 0.15);
-      color: var(--urgent);
+    .panel-title {
+      margin: 0 0 8px;
+      font-size: 1rem;
     }
 
-    .stat-card.medium {
-      background: rgba(244, 162, 97, 0.18);
-      color: #b45d20;
-    }
-
-    .stat-card.low {
-      background: rgba(42, 157, 143, 0.18);
-      color: #1f6f64;
-    }
-
-    .stat-card.spam {
-      background: rgba(108, 117, 125, 0.18);
-      color: #4c5257;
-    }
-
-    .stat-count {
-      font-size: 1.6rem;
-    }
-
-    .focus-section h2 {
-      margin: 0 0 6px;
-    }
-
-    .focus-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .focus-nav {
-      display: flex;
+    .category-buttons {
+      display: grid;
       gap: 8px;
     }
 
-    .urgent-view {
-      margin-top: 12px;
-      padding: 16px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.8);
-      display: grid;
-      gap: 10px;
-    }
-
-    .urgent-view h3 {
-      margin: 0;
-      color: var(--urgent);
-    }
-
-    .meta {
+    .category-btn {
       display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      font-size: 0.85rem;
-      color: var(--muted);
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      font-weight: 600;
     }
 
-    .tag {
+    .category-btn.active {
+      border-color: rgba(29, 125, 216, 0.6);
+      box-shadow: 0 4px 18px rgba(29, 125, 216, 0.18);
+      color: var(--accent);
+    }
+
+    .count-pill {
       padding: 2px 8px;
       border-radius: 999px;
-      background: rgba(29, 125, 216, 0.15);
-      color: var(--accent);
-      font-weight: 600;
       font-size: 0.75rem;
-    }
-
-    .reason {
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-
-    .action-bar {
-      margin-top: 12px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 12px;
-      border-radius: 12px;
-      background: rgba(0, 0, 0, 0.05);
-      position: sticky;
-      bottom: 12px;
-    }
-
-    .action-bar button {
-      background: rgba(255, 255, 255, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.8);
-    }
-
-    .action-bar button[data-action="delete"] {
-      color: var(--urgent);
-    }
-
-    .action-bar button[data-action="junk"] {
-      color: #6c757d;
-    }
-
-    .category-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    .category-lists {
-      display: grid;
-      gap: 18px;
-    }
-
-    .category-block h3 {
-      margin-bottom: 8px;
+      background: rgba(0, 0, 0, 0.07);
     }
 
     .email-list {
       display: grid;
-      gap: 12px;
+      gap: 10px;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 4px;
     }
 
-    .email-card {
-      padding: 14px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.8);
+    .email-item {
       display: grid;
-      gap: 8px;
+      gap: 6px;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.85);
     }
 
-    .email-subject {
+    .email-item.active {
+      border-color: rgba(29, 125, 216, 0.6);
+      box-shadow: 0 4px 18px rgba(29, 125, 216, 0.18);
+    }
+
+    .email-item small {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .email-title {
       font-weight: 700;
     }
 
-    .email-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-
-    .email-actions {
+    .chip-row {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
     }
 
-    .email-actions button {
-      padding: 6px 10px;
+    .chip {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(29, 125, 216, 0.15);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .chip.urgent {
+      background: rgba(230, 57, 70, 0.15);
+      color: var(--urgent);
+    }
+
+    .chip.medium {
+      background: rgba(244, 162, 97, 0.18);
+      color: #a3541f;
+    }
+
+    .chip.low {
+      background: rgba(42, 157, 143, 0.18);
+      color: #1f6f64;
+    }
+
+    .chip.spam {
+      background: rgba(108, 117, 125, 0.18);
+      color: #4c5257;
+    }
+
+    .focus-header,
+    .detail-header,
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .focus-body {
+      display: grid;
+      gap: 10px;
+    }
+
+    .focus-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .focus-title {
+      margin: 0;
+      color: var(--urgent);
+    }
+
+    .action-bar {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      position: sticky;
+      bottom: 12px;
+    }
+
+    .detail-content {
+      display: grid;
+      gap: 10px;
+    }
+
+    .detail-meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    .summary-block {
+      display: grid;
+      gap: 10px;
+    }
+
+    .summary-block p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .summary-highlight {
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .calendar-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .calendar-item {
+      display: grid;
+      gap: 4px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+    }
+
+    .calendar-item small {
+      color: var(--muted);
       font-size: 0.75rem;
     }
 
@@ -330,8 +357,9 @@
       font-style: italic;
     }
 
-    .hidden {
-      display: none;
+    .demo-actions {
+      display: grid;
+      gap: 8px;
     }
 
     .toast {
@@ -353,105 +381,141 @@
       opacity: 1;
       transform: translateY(0);
     }
+
+    @media (max-width: 1100px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="app">
-    <header class="hero">
-      <div>
-        <span class="pill">AI triage</span>
-        <h1>Inbox Priority Assistant</h1>
-        <p class="helper">Read Gmail and Outlook messages, then sort them into urgent, medium, low, or ads/spam.</p>
+    <header class="card topbar">
+      <div class="brand">
+        <div class="brand-title">Fyxer Style AI Inbox</div>
+        <div class="brand-sub">AI sorts mail and calendar to keep urgent items in focus.</div>
       </div>
-      <div class="status-panel card glass">
-        <div class="status-row">
-          <span>Gmail</span>
-          <span id="gmailStatus" class="status off">Disconnected</span>
-        </div>
-        <div class="status-row">
-          <span>Outlook</span>
-          <span id="outlookStatus" class="status off">Disconnected</span>
-        </div>
-        <div class="status-row">
-          <span>Notifications</span>
-          <span id="notifyStatus" class="status off">Disabled</span>
-        </div>
+      <div class="status-group">
+        <span id="gmailStatus" class="status-pill disconnected"><span class="dot"></span>Gmail</span>
+        <span id="outlookStatus" class="status-pill disconnected"><span class="dot"></span>Outlook</span>
+        <span id="notifyStatus" class="status-pill disconnected"><span class="dot"></span>Notifications</span>
+      </div>
+      <div class="top-actions">
+        <button id="connectGoogle" class="primary">Connect Google</button>
+        <button id="connectOutlook" class="primary">Connect Outlook</button>
+        <button id="connectApple" class="ghost">Connect Apple Calendar</button>
+        <button id="syncInbox" class="ghost">Sync inbox</button>
+        <button id="syncCalendars" class="ghost">Sync calendars</button>
+        <button id="enableNotifications" class="ghost">Enable notifications</button>
       </div>
     </header>
 
-    <section class="card glass controls">
-      <div class="control-row">
-        <button id="connectGmail" class="primary">Connect Gmail</button>
-        <button id="connectOutlook" class="primary">Connect Outlook</button>
-        <button id="syncInbox" class="ghost">Sync inbox</button>
-        <button id="enableNotifications" class="ghost">Enable notifications</button>
-      </div>
-      <div class="control-row">
-        <button id="loadSample" class="ghost">Load sample inbox</button>
-        <button id="simulateEmail" class="ghost">Simulate new email</button>
-        <button id="clearLocal" class="ghost">Reset local data</button>
-      </div>
-      <p class="helper">Add your OAuth client IDs in the script. Actions are stored locally unless you enable write scopes.</p>
-    </section>
+    <div class="layout">
+      <aside class="sidebar">
+        <section class="card">
+          <h3 class="panel-title">Priority lanes</h3>
+          <div id="categoryButtons" class="category-buttons"></div>
+        </section>
 
-    <section class="stats-grid">
-      <div class="stat-card urgent">
-        <span>Urgent</span>
-        <span id="statUrgent" class="stat-count">0</span>
-      </div>
-      <div class="stat-card medium">
-        <span>Medium</span>
-        <span id="statMedium" class="stat-count">0</span>
-      </div>
-      <div class="stat-card low">
-        <span>Low</span>
-        <span id="statLow" class="stat-count">0</span>
-      </div>
-      <div class="stat-card spam">
-        <span>Ads/Spam</span>
-        <span id="statSpam" class="stat-count">0</span>
-      </div>
-    </section>
+        <section class="card">
+          <div class="focus-header">
+            <h3 class="panel-title" id="listTitle">Urgent inbox</h3>
+            <span id="listCount" class="count-pill">0</span>
+          </div>
+          <div id="emailList" class="email-list"></div>
+        </section>
 
-    <section class="card glass focus-section">
-      <div class="focus-header">
-        <div>
-          <h2>Urgent Focus</h2>
-          <p class="helper">Open urgent messages one by one and action them from the bottom bar.</p>
-        </div>
-        <div class="focus-nav">
-          <button id="prevUrgent" class="ghost">Previous</button>
-          <button id="nextUrgent" class="ghost">Next</button>
-        </div>
-      </div>
-      <div id="urgentEmpty" class="empty">No urgent emails right now.</div>
-      <div id="urgentView" class="urgent-view hidden">
-        <div class="meta">
-          <span id="urgentFrom"></span>
-          <span id="urgentReceived"></span>
-          <span id="urgentSource" class="tag"></span>
-        </div>
-        <h3 id="urgentSubject"></h3>
-        <p id="urgentReason" class="reason"></p>
-        <p id="urgentPreview"></p>
-      </div>
-      <div class="action-bar" id="urgentActions">
-        <button data-action="archive">Archive</button>
-        <button data-action="delete">Delete</button>
-        <button data-action="junk">Report junk</button>
-        <button data-action="read">Mark read</button>
-        <button data-action="reply">Draft reply</button>
-        <button data-action="open">Open in list</button>
-      </div>
-    </section>
+        <section class="card">
+          <h3 class="panel-title">Demo tools</h3>
+          <div class="demo-actions">
+            <button id="loadSample" class="ghost">Load sample inbox</button>
+            <button id="simulateEmail" class="ghost">Simulate new email</button>
+            <button id="clearLocal" class="ghost">Reset local data</button>
+          </div>
+        </section>
+      </aside>
 
-    <section class="card glass">
-      <div class="category-header">
-        <h2>Inbox by category</h2>
-        <span class="helper">Sorted by AI signals and message intent.</span>
-      </div>
-      <div id="categoryLists" class="category-lists"></div>
-    </section>
+      <main class="main">
+        <section class="card">
+          <div class="focus-header">
+            <div>
+              <h2>Urgent Focus</h2>
+              <div class="brand-sub">Open urgent messages one by one.</div>
+            </div>
+            <div class="top-actions">
+              <button id="prevUrgent" class="ghost">Previous</button>
+              <button id="nextUrgent" class="ghost">Next</button>
+            </div>
+          </div>
+          <div id="focusEmpty" class="empty">No urgent emails right now.</div>
+          <div id="focusView" class="focus-body">
+            <div class="focus-meta">
+              <span id="focusFrom"></span>
+              <span id="focusReceived"></span>
+              <span id="focusProvider" class="chip"></span>
+            </div>
+            <h3 id="focusSubject" class="focus-title"></h3>
+            <p id="focusReason" class="summary-highlight"></p>
+            <p id="focusPreview"></p>
+          </div>
+          <div id="focusActions" class="action-bar">
+            <button data-action="archive" class="ghost">Archive</button>
+            <button data-action="delete" class="ghost">Delete</button>
+            <button data-action="junk" class="ghost">Report junk</button>
+            <button data-action="read" class="ghost">Mark read</button>
+            <button data-action="reply" class="ghost">Draft reply</button>
+            <button data-action="open" class="ghost">Open in list</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h2>Message detail</h2>
+            <div class="top-actions">
+              <button id="detailArchive" class="ghost">Archive</button>
+              <button id="detailDelete" class="ghost">Delete</button>
+              <button id="detailJunk" class="ghost">Report junk</button>
+              <button id="detailRead" class="ghost">Mark read</button>
+              <button id="detailReply" class="ghost">Draft reply</button>
+            </div>
+          </div>
+          <div id="detailEmpty" class="empty">Select an email to view details.</div>
+          <div id="detailView" class="detail-content">
+            <div class="detail-meta" id="detailMeta"></div>
+            <h3 id="detailSubject"></h3>
+            <pre id="detailBody"></pre>
+          </div>
+        </section>
+      </main>
+
+      <aside class="rightbar">
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">AI summary</h3>
+            <span id="summaryCategory" class="chip">No selection</span>
+          </div>
+          <div class="summary-block">
+            <p><span class="summary-highlight">Why:</span> <span id="summaryReason"></span></p>
+            <p><span class="summary-highlight">Summary:</span> <span id="summaryText"></span></p>
+            <p><span class="summary-highlight">Suggested next:</span> <span id="summaryAction"></span></p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="calendar-header">
+            <h3 class="panel-title">Upcoming events</h3>
+            <button id="calendarRefresh" class="ghost">Refresh</button>
+          </div>
+          <div class="chip-row">
+            <span id="googleCalStatus" class="status-pill disconnected"><span class="dot"></span>Google Cal</span>
+            <span id="outlookCalStatus" class="status-pill disconnected"><span class="dot"></span>Outlook Cal</span>
+            <span id="appleCalStatus" class="status-pill disconnected"><span class="dot"></span>Apple Cal</span>
+          </div>
+          <div id="calendarList" class="calendar-list"></div>
+        </section>
+      </aside>
+    </div>
   </div>
 
   <div id="toast" class="toast"></div>
@@ -460,34 +524,33 @@
     const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID';
     const OUTLOOK_CLIENT_ID = 'YOUR_OUTLOOK_CLIENT_ID';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
-    const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
-    const OUTLOOK_SCOPES = 'User.Read Mail.Read';
+    const GOOGLE_SCOPES = [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/calendar.readonly'
+    ].join(' ');
+    const OUTLOOK_SCOPES = 'User.Read Mail.Read Calendars.Read';
 
     const STORAGE_KEY = 'ai_email_sorter_emails_v1';
     const ACTIVE_EMAIL_KEY = 'ai_email_sorter_active_email';
     const NOTIFY_KEY = 'ai_email_sorter_notifications';
+    const APPLE_CAL_URL_KEY = 'ai_email_sorter_apple_cal_url';
+    const APPLE_CAL_ICS_KEY = 'ai_email_sorter_apple_cal_ics';
 
-    const CATEGORY_KEYS = {
+    const CATEGORY_LABELS = {
       urgent: 'Urgent',
       medium: 'Medium importance',
       low: 'Low importance',
-      spam: 'Ads/Spam',
-      archived: 'Archived',
-      trash: 'Trash'
+      spam: 'Ads/Spam'
     };
 
-    const CATEGORY_ORDER = [
-      'urgent',
-      'medium',
-      'low',
-      'spam',
-      'archived',
-      'trash'
-    ];
+    const VISIBLE_CATEGORIES = ['urgent', 'medium', 'low', 'spam'];
 
     let emails = [];
+    let selectedCategory = 'urgent';
+    let selectedEmailId = null;
     let urgentQueue = [];
     let urgentIndex = 0;
+    let calendarEvents = [];
 
     const sampleEmails = (() => {
       const now = Date.now();
@@ -686,172 +749,222 @@
       return { category, reason };
     }
 
-    function sortByReceived(list) {
-      return list.sort((a, b) => b.receivedAt - a.receivedAt);
-    }
-
     function groupByCategory() {
       const grouped = {
         urgent: [],
         medium: [],
         low: [],
-        spam: [],
-        archived: [],
-        trash: []
+        spam: []
       };
 
       emails.forEach(email => {
         const classification = classifyEmail(email);
         email.category = classification.category;
         email.categoryReason = classification.reason;
-        grouped[classification.category].push(email);
+        if (grouped[classification.category]) {
+          grouped[classification.category].push(email);
+        }
       });
 
-      Object.keys(grouped).forEach(key => sortByReceived(grouped[key]));
+      Object.keys(grouped).forEach(key => {
+        grouped[key].sort((a, b) => b.receivedAt - a.receivedAt);
+      });
+
       return grouped;
     }
 
-    function buildStats(grouped) {
-      document.getElementById('statUrgent').textContent = grouped.urgent.length;
-      document.getElementById('statMedium').textContent = grouped.medium.length;
-      document.getElementById('statLow').textContent = grouped.low.length;
-      document.getElementById('statSpam').textContent = grouped.spam.length;
-
-      if (grouped.urgent.length > 0) {
-        document.title = '(' + grouped.urgent.length + ') AI Email Sorter';
-      } else {
-        document.title = 'AI Email Sorter';
+    function ensureSelectedCategory(grouped) {
+      if (!VISIBLE_CATEGORIES.includes(selectedCategory)) {
+        selectedCategory = 'urgent';
+      }
+      if (grouped[selectedCategory].length === 0) {
+        const fallback = VISIBLE_CATEGORIES.find(key => grouped[key].length > 0);
+        selectedCategory = fallback || 'urgent';
       }
     }
 
-    function renderUrgentFocus(grouped) {
+    function updateView() {
+      saveEmails();
+      const grouped = groupByCategory();
+      ensureSelectedCategory(grouped);
+      renderCategoryButtons(grouped);
+      renderEmailList(grouped);
+      renderFocus(grouped);
+      renderDetail();
+      renderSummary();
+      updateConnectionStatus();
+    }
+
+    function renderCategoryButtons(grouped) {
+      const container = document.getElementById('categoryButtons');
+      container.innerHTML = '';
+      VISIBLE_CATEGORIES.forEach(key => {
+        const btn = document.createElement('button');
+        btn.className = 'category-btn' + (selectedCategory === key ? ' active' : '');
+        btn.innerHTML = '<span>' + CATEGORY_LABELS[key] + '</span><span class="count-pill">' + grouped[key].length + '</span>';
+        btn.addEventListener('click', () => {
+          selectedCategory = key;
+          updateView();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function renderEmailList(grouped) {
+      const list = grouped[selectedCategory];
+      const listTitle = document.getElementById('listTitle');
+      const listCount = document.getElementById('listCount');
+      const container = document.getElementById('emailList');
+      container.innerHTML = '';
+
+      listTitle.textContent = CATEGORY_LABELS[selectedCategory] + ' inbox';
+      listCount.textContent = list.length;
+
+      if (list.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No emails in this lane.';
+        container.appendChild(empty);
+        selectedEmailId = null;
+        return;
+      }
+
+      if (!selectedEmailId || !list.some(item => item.id === selectedEmailId)) {
+        selectedEmailId = list[0].id;
+      }
+
+      list.forEach(email => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'email-item' + (email.id === selectedEmailId ? ' active' : '');
+
+        const title = document.createElement('div');
+        title.className = 'email-title';
+        title.textContent = email.subject;
+
+        const meta = document.createElement('small');
+        meta.textContent = (email.sender || 'Unknown sender') + ' · ' + formatTimestamp(email.receivedAt);
+
+        const reason = document.createElement('small');
+        reason.textContent = email.categoryReason;
+
+        const chips = document.createElement('div');
+        chips.className = 'chip-row';
+        chips.appendChild(buildChip(CATEGORY_LABELS[email.category], email.category));
+        chips.appendChild(buildChip(email.provider || 'mail', ''));
+
+        item.appendChild(title);
+        item.appendChild(meta);
+        item.appendChild(reason);
+        item.appendChild(chips);
+
+        item.addEventListener('click', () => {
+          selectedEmailId = email.id;
+          updateView();
+        });
+
+        container.appendChild(item);
+      });
+    }
+
+    function buildChip(label, categoryKey) {
+      const chip = document.createElement('span');
+      chip.className = 'chip' + (categoryKey ? ' ' + categoryKey : '');
+      chip.textContent = label;
+      return chip;
+    }
+
+    function renderFocus(grouped) {
       urgentQueue = grouped.urgent;
-      const urgentView = document.getElementById('urgentView');
-      const urgentEmpty = document.getElementById('urgentEmpty');
+      const focusEmpty = document.getElementById('focusEmpty');
+      const focusView = document.getElementById('focusView');
       const prevBtn = document.getElementById('prevUrgent');
       const nextBtn = document.getElementById('nextUrgent');
 
       if (urgentQueue.length === 0) {
-        urgentView.classList.add('hidden');
-        urgentEmpty.classList.remove('hidden');
+        focusEmpty.style.display = 'block';
+        focusView.style.display = 'none';
         prevBtn.disabled = true;
         nextBtn.disabled = true;
         urgentIndex = 0;
         return;
       }
 
-      urgentEmpty.classList.add('hidden');
-      urgentView.classList.remove('hidden');
+      focusEmpty.style.display = 'none';
+      focusView.style.display = 'grid';
 
       if (urgentIndex >= urgentQueue.length) {
         urgentIndex = 0;
       }
 
       const email = urgentQueue[urgentIndex];
-      document.getElementById('urgentFrom').textContent = email.sender || 'Unknown sender';
-      document.getElementById('urgentReceived').textContent = formatTimestamp(email.receivedAt);
-      document.getElementById('urgentSource').textContent = email.provider || 'mail';
-      document.getElementById('urgentSubject').textContent = email.subject;
-      document.getElementById('urgentReason').textContent = email.categoryReason;
-      document.getElementById('urgentPreview').textContent = summarize(email.body);
+      document.getElementById('focusFrom').textContent = email.sender || 'Unknown sender';
+      document.getElementById('focusReceived').textContent = formatTimestamp(email.receivedAt);
+      document.getElementById('focusProvider').textContent = email.provider || 'mail';
+      document.getElementById('focusSubject').textContent = email.subject;
+      document.getElementById('focusReason').textContent = email.categoryReason;
+      document.getElementById('focusPreview').textContent = summarize(email.body);
 
       prevBtn.disabled = urgentQueue.length <= 1;
       nextBtn.disabled = urgentQueue.length <= 1;
+
+      selectedEmailId = email.id;
     }
 
-    function renderCategories(grouped) {
-      const container = document.getElementById('categoryLists');
-      container.innerHTML = '';
+    function renderDetail() {
+      const detailEmpty = document.getElementById('detailEmpty');
+      const detailView = document.getElementById('detailView');
+      const email = getSelectedEmail();
 
-      CATEGORY_ORDER.forEach(key => {
-        const list = grouped[key];
-        const block = document.createElement('div');
-        block.className = 'category-block';
-
-        const header = document.createElement('h3');
-        header.textContent = CATEGORY_KEYS[key] + ' (' + list.length + ')';
-        block.appendChild(header);
-
-        if (list.length === 0) {
-          const empty = document.createElement('div');
-          empty.className = 'empty';
-          empty.textContent = 'No emails in this category.';
-          block.appendChild(empty);
-        } else {
-          const listEl = document.createElement('div');
-          listEl.className = 'email-list';
-          list.forEach(email => listEl.appendChild(buildEmailCard(email)));
-          block.appendChild(listEl);
-        }
-
-        container.appendChild(block);
-      });
-    }
-
-    function buildEmailCard(email) {
-      const card = document.createElement('div');
-      card.className = 'email-card';
-      card.id = 'email-' + email.id;
-
-      const subject = document.createElement('div');
-      subject.className = 'email-subject';
-      subject.textContent = email.subject;
-      if (email.read) {
-        subject.style.opacity = '0.7';
+      if (!email) {
+        detailEmpty.style.display = 'block';
+        detailView.style.display = 'none';
+        return;
       }
 
-      const meta = document.createElement('div');
-      meta.className = 'email-meta';
+      detailEmpty.style.display = 'none';
+      detailView.style.display = 'grid';
 
-      const senderSpan = document.createElement('span');
-      senderSpan.textContent = email.sender || 'Unknown sender';
-
-      const timeSpan = document.createElement('span');
-      timeSpan.textContent = formatTimestamp(email.receivedAt);
-
-      const providerTag = document.createElement('span');
-      providerTag.className = 'tag';
-      providerTag.textContent = email.provider || 'mail';
-
-      const categoryTag = document.createElement('span');
-      categoryTag.className = 'tag';
-      categoryTag.textContent = CATEGORY_KEYS[email.category] || 'Other';
-
-      meta.appendChild(senderSpan);
-      meta.appendChild(timeSpan);
-      meta.appendChild(providerTag);
-      meta.appendChild(categoryTag);
-
-      const reason = document.createElement('div');
-      reason.className = 'reason';
-      reason.textContent = email.categoryReason;
-
-      const preview = document.createElement('div');
-      preview.textContent = summarize(email.body);
-
-      const actions = document.createElement('div');
-      actions.className = 'email-actions';
-      addAction(actions, 'Open', () => focusEmail(email));
-      addAction(actions, 'Mark read', () => markRead(email.id));
-      addAction(actions, 'Archive', () => archiveEmail(email.id));
-      addAction(actions, 'Delete', () => deleteEmail(email.id));
-      addAction(actions, 'Report junk', () => reportJunk(email.id));
-      addAction(actions, 'Draft reply', () => draftReply(email.id));
-
-      card.appendChild(subject);
-      card.appendChild(meta);
-      card.appendChild(reason);
-      card.appendChild(preview);
-      card.appendChild(actions);
-
-      return card;
+      document.getElementById('detailMeta').textContent = (email.sender || 'Unknown sender') +
+        ' · ' + formatTimestamp(email.receivedAt) + ' · ' + (email.provider || 'mail');
+      document.getElementById('detailSubject').textContent = email.subject;
+      document.getElementById('detailBody').textContent = email.body || '(No message body)';
     }
 
-    function addAction(container, label, handler) {
-      const btn = document.createElement('button');
-      btn.textContent = label;
-      btn.addEventListener('click', handler);
-      container.appendChild(btn);
+    function renderSummary() {
+      const email = getSelectedEmail();
+      const categoryEl = document.getElementById('summaryCategory');
+      const reasonEl = document.getElementById('summaryReason');
+      const summaryEl = document.getElementById('summaryText');
+      const actionEl = document.getElementById('summaryAction');
+
+      if (!email) {
+        categoryEl.textContent = 'No selection';
+        categoryEl.className = 'chip';
+        reasonEl.textContent = 'Select an email to see insights.';
+        summaryEl.textContent = '';
+        actionEl.textContent = '';
+        return;
+      }
+
+      categoryEl.textContent = CATEGORY_LABELS[email.category] || 'Other';
+      categoryEl.className = 'chip ' + email.category;
+      reasonEl.textContent = email.categoryReason;
+      summaryEl.textContent = summarize(email.body);
+      actionEl.textContent = suggestNextStep(email.category);
+    }
+
+    function getSelectedEmail() {
+      if (!selectedEmailId) return null;
+      return emails.find(item => item.id === selectedEmailId) || null;
+    }
+
+    function suggestNextStep(category) {
+      if (category === 'urgent') return 'Reply today or schedule a follow-up.';
+      if (category === 'medium') return 'Plan a response within 1-2 days.';
+      if (category === 'low') return 'Review later or archive.';
+      if (category === 'spam') return 'Report junk or delete.';
+      return 'Review the message.';
     }
 
     function summarize(text) {
@@ -900,28 +1013,37 @@
       }
     }
 
-    function focusEmail(email) {
-      const index = urgentQueue.findIndex(item => item.id === email.id);
-      if (index >= 0) {
-        urgentIndex = index;
-        updateView();
-        document.getElementById('urgentView').scrollIntoView({ behavior: 'smooth' });
-      } else {
-        showToast('This email is not urgent.');
-      }
-    }
-
     function draftReply(id) {
       localStorage.setItem(ACTIVE_EMAIL_KEY, id);
       window.location.href = 'reply.html?id=' + encodeURIComponent(id);
     }
 
-    function updateView() {
-      saveEmails();
-      const grouped = groupByCategory();
-      buildStats(grouped);
-      renderUrgentFocus(grouped);
-      renderCategories(grouped);
+    function handleFocusAction(action) {
+      if (urgentQueue.length === 0) return;
+      const current = urgentQueue[urgentIndex];
+      if (!current) return;
+
+      if (action === 'archive') archiveEmail(current.id);
+      if (action === 'delete') deleteEmail(current.id);
+      if (action === 'junk') reportJunk(current.id);
+      if (action === 'read') markRead(current.id);
+      if (action === 'reply') draftReply(current.id);
+      if (action === 'open') {
+        selectedCategory = 'urgent';
+        selectedEmailId = current.id;
+        updateView();
+        document.getElementById('emailList').scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function handleUrgentNav(direction) {
+      if (urgentQueue.length <= 1) return;
+      if (direction === 'next') {
+        urgentIndex = (urgentIndex + 1) % urgentQueue.length;
+      } else {
+        urgentIndex = (urgentIndex - 1 + urgentQueue.length) % urgentQueue.length;
+      }
+      updateView();
     }
 
     function showToast(message) {
@@ -934,26 +1056,27 @@
       }, 2800);
     }
 
-    function setNotificationStatus(enabled) {
-      const el = document.getElementById('notifyStatus');
-      el.textContent = enabled ? 'Enabled' : 'Disabled';
-      el.classList.toggle('on', enabled);
-      el.classList.toggle('off', !enabled);
+    function setStatusPill(el, connected, label) {
+      el.classList.toggle('connected', connected);
+      el.classList.toggle('disconnected', !connected);
+      if (label) {
+        el.innerHTML = '<span class="dot"></span>' + label;
+      }
     }
 
     function updateConnectionStatus() {
-      const gmailToken = localStorage.getItem('gmail_access_token');
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
       const outlookToken = localStorage.getItem('outlook_access_token');
-      const gmailStatus = document.getElementById('gmailStatus');
-      const outlookStatus = document.getElementById('outlookStatus');
+      const notifyEnabled = localStorage.getItem(NOTIFY_KEY) === 'true';
 
-      gmailStatus.textContent = gmailToken ? 'Connected' : 'Disconnected';
-      gmailStatus.classList.toggle('on', Boolean(gmailToken));
-      gmailStatus.classList.toggle('off', !gmailToken);
+      setStatusPill(document.getElementById('gmailStatus'), Boolean(googleToken), 'Gmail');
+      setStatusPill(document.getElementById('outlookStatus'), Boolean(outlookToken), 'Outlook');
+      setStatusPill(document.getElementById('notifyStatus'), notifyEnabled, 'Notifications');
 
-      outlookStatus.textContent = outlookToken ? 'Connected' : 'Disconnected';
-      outlookStatus.classList.toggle('on', Boolean(outlookToken));
-      outlookStatus.classList.toggle('off', !outlookToken);
+      const appleConnected = Boolean(localStorage.getItem(APPLE_CAL_URL_KEY) || localStorage.getItem(APPLE_CAL_ICS_KEY));
+      setStatusPill(document.getElementById('googleCalStatus'), Boolean(googleToken), 'Google Cal');
+      setStatusPill(document.getElementById('outlookCalStatus'), Boolean(outlookToken), 'Outlook Cal');
+      setStatusPill(document.getElementById('appleCalStatus'), appleConnected, 'Apple Cal');
     }
 
     function requestNotifications() {
@@ -965,7 +1088,7 @@
       Notification.requestPermission().then(permission => {
         const enabled = permission === 'granted';
         localStorage.setItem(NOTIFY_KEY, String(enabled));
-        setNotificationStatus(enabled);
+        updateConnectionStatus();
         showToast(enabled ? 'Notifications enabled.' : 'Notifications blocked.');
       });
     }
@@ -1064,20 +1187,20 @@
     }
 
     async function syncInbox() {
-      const hasGmail = Boolean(localStorage.getItem('gmail_access_token'));
-      const hasOutlook = Boolean(localStorage.getItem('outlook_access_token'));
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
 
-      if (!hasGmail && !hasOutlook) {
-        showToast('Connect Gmail or Outlook first.');
+      if (!googleToken && !outlookToken) {
+        showToast('Connect Google or Outlook first.');
         return;
       }
 
       const incoming = [];
-      if (hasGmail) {
+      if (googleToken) {
         const gmailMessages = await fetchGmailMessages();
         incoming.push(...gmailMessages);
       }
-      if (hasOutlook) {
+      if (outlookToken) {
         const outlookMessages = await fetchOutlookMessages();
         incoming.push(...outlookMessages);
       }
@@ -1100,18 +1223,18 @@
       return result;
     }
 
-    function authenticateGmail() {
+    function authenticateGoogle() {
       if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
         showToast('Set your Google client ID before connecting.');
         return;
       }
       const state = generateRandomString();
-      localStorage.setItem('gmail_state', state);
+      localStorage.setItem('google_state', state);
       const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' +
         '?client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID) +
         '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
         '&response_type=token' +
-        '&scope=' + encodeURIComponent(GMAIL_SCOPES) +
+        '&scope=' + encodeURIComponent(GOOGLE_SCOPES) +
         '&state=' + encodeURIComponent(state) +
         '&prompt=consent';
       window.location.href = authUrl;
@@ -1144,9 +1267,9 @@
 
       window.history.replaceState({}, document.title, window.location.pathname);
 
-      if (state === localStorage.getItem('gmail_state')) {
-        localStorage.setItem('gmail_access_token', accessToken);
-        showToast('Gmail connected.');
+      if (state === localStorage.getItem('google_state') || state === localStorage.getItem('gmail_state')) {
+        localStorage.setItem('google_access_token', accessToken);
+        showToast('Google connected.');
         return true;
       }
       if (state === localStorage.getItem('outlook_state')) {
@@ -1158,7 +1281,7 @@
     }
 
     async function fetchGmailMessages() {
-      const token = localStorage.getItem('gmail_access_token');
+      const token = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
       if (!token) return [];
 
       try {
@@ -1224,44 +1347,266 @@
       }
     }
 
-    function handleUrgentAction(action) {
-      if (urgentQueue.length === 0) return;
-      const current = urgentQueue[urgentIndex];
-      if (!current) return;
+    async function fetchGoogleCalendarEvents() {
+      const token = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      if (!token) return [];
+      const timeMin = new Date().toISOString();
+      const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events' +
+        '?maxResults=6&singleEvents=true&orderBy=startTime&timeMin=' + encodeURIComponent(timeMin);
 
-      if (action === 'archive') archiveEmail(current.id);
-      if (action === 'delete') deleteEmail(current.id);
-      if (action === 'junk') reportJunk(current.id);
-      if (action === 'read') markRead(current.id);
-      if (action === 'reply') draftReply(current.id);
-      if (action === 'open') {
-        const element = document.getElementById('email-' + current.id);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth' });
-        }
+      try {
+        const resp = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await resp.json();
+        if (!data.items) return [];
+        return data.items.map(item => ({
+          id: 'gcal-' + item.id,
+          provider: 'google',
+          title: item.summary || '(no title)',
+          start: item.start && (item.start.dateTime || item.start.date) ? Date.parse(item.start.dateTime || item.start.date) : Date.now(),
+          end: item.end && (item.end.dateTime || item.end.date) ? Date.parse(item.end.dateTime || item.end.date) : Date.now(),
+          location: item.location || ''
+        }));
+      } catch (err) {
+        console.error('Google Calendar fetch failed', err);
+        showToast('Failed to fetch Google Calendar events.');
+        return [];
       }
     }
 
-    function handleUrgentNav(direction) {
-      if (urgentQueue.length <= 1) return;
-      if (direction === 'next') {
-        urgentIndex = (urgentIndex + 1) % urgentQueue.length;
-      } else {
-        urgentIndex = (urgentIndex - 1 + urgentQueue.length) % urgentQueue.length;
+    async function fetchOutlookCalendarEvents() {
+      const token = localStorage.getItem('outlook_access_token');
+      if (!token) return [];
+
+      try {
+        const url = 'https://graph.microsoft.com/v1.0/me/events?$top=6&$orderby=start/dateTime&$select=subject,start,end,location';
+        const resp = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await resp.json();
+        if (!data.value) return [];
+        return data.value.map(item => ({
+          id: 'ocal-' + item.id,
+          provider: 'outlook',
+          title: item.subject || '(no title)',
+          start: item.start && item.start.dateTime ? Date.parse(item.start.dateTime) : Date.now(),
+          end: item.end && item.end.dateTime ? Date.parse(item.end.dateTime) : Date.now(),
+          location: item.location && item.location.displayName ? item.location.displayName : ''
+        }));
+      } catch (err) {
+        console.error('Outlook Calendar fetch failed', err);
+        showToast('Failed to fetch Outlook Calendar events.');
+        return [];
       }
-      updateView();
+    }
+
+    function parseIcsEvents(raw, provider) {
+      if (!raw) return [];
+      const lines = [];
+      const rawLines = raw.split(/\r?\n/);
+      rawLines.forEach(line => {
+        if (line.startsWith(' ') || line.startsWith('\t')) {
+          if (lines.length > 0) {
+            lines[lines.length - 1] += line.trim();
+          }
+        } else {
+          lines.push(line.trim());
+        }
+      });
+
+      const events = [];
+      let current = null;
+      lines.forEach(line => {
+        if (line === 'BEGIN:VEVENT') {
+          current = {};
+        } else if (line === 'END:VEVENT') {
+          if (current && current.start) {
+            events.push({
+              id: 'apple-' + (current.uid || makeId()),
+              provider: provider || 'apple',
+              title: current.summary || '(no title)',
+              start: current.start,
+              end: current.end || current.start,
+              location: current.location || ''
+            });
+          }
+          current = null;
+        } else if (current) {
+          if (line.startsWith('SUMMARY')) {
+            current.summary = line.split(':').slice(1).join(':');
+          }
+          if (line.startsWith('DTSTART')) {
+            const value = line.split(':').slice(1).join(':');
+            current.start = parseIcsDate(value);
+          }
+          if (line.startsWith('DTEND')) {
+            const value = line.split(':').slice(1).join(':');
+            current.end = parseIcsDate(value);
+          }
+          if (line.startsWith('LOCATION')) {
+            current.location = line.split(':').slice(1).join(':');
+          }
+          if (line.startsWith('UID')) {
+            current.uid = line.split(':').slice(1).join(':');
+          }
+        }
+      });
+
+      return events;
+    }
+
+    function parseIcsDate(value) {
+      if (!value) return Date.now();
+      const cleaned = value.replace('Z', '');
+      if (/^\d{8}$/.test(cleaned)) {
+        const year = Number(cleaned.slice(0, 4));
+        const month = Number(cleaned.slice(4, 6)) - 1;
+        const day = Number(cleaned.slice(6, 8));
+        return new Date(year, month, day).getTime();
+      }
+      if (/^\d{8}T\d{6}$/.test(cleaned)) {
+        const year = Number(cleaned.slice(0, 4));
+        const month = Number(cleaned.slice(4, 6)) - 1;
+        const day = Number(cleaned.slice(6, 8));
+        const hour = Number(cleaned.slice(9, 11));
+        const minute = Number(cleaned.slice(11, 13));
+        const second = Number(cleaned.slice(13, 15));
+        return new Date(year, month, day, hour, minute, second).getTime();
+      }
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? Date.now() : parsed;
+    }
+
+    async function fetchAppleCalendarEvents() {
+      const ics = localStorage.getItem(APPLE_CAL_ICS_KEY);
+      const url = localStorage.getItem(APPLE_CAL_URL_KEY);
+
+      if (ics) {
+        return parseIcsEvents(ics, 'apple');
+      }
+
+      if (!url) return [];
+
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Fetch failed');
+        const text = await resp.text();
+        return parseIcsEvents(text, 'apple');
+      } catch (err) {
+        console.error('Apple Calendar fetch failed', err);
+        showToast('Apple calendar fetch failed. Try pasting the ICS text.');
+        return [];
+      }
+    }
+
+    async function syncCalendars() {
+      const events = [];
+      const googleEvents = await fetchGoogleCalendarEvents();
+      const outlookEvents = await fetchOutlookCalendarEvents();
+      const appleEvents = await fetchAppleCalendarEvents();
+
+      events.push(...googleEvents, ...outlookEvents, ...appleEvents);
+
+      calendarEvents = events
+        .filter(event => event.start)
+        .sort((a, b) => a.start - b.start)
+        .slice(0, 8);
+
+      renderCalendarEvents();
+      updateConnectionStatus();
+
+      if (calendarEvents.length === 0) {
+        showToast('No upcoming events found.');
+      } else {
+        showToast('Calendar events updated.');
+      }
+    }
+
+    function renderCalendarEvents() {
+      const list = document.getElementById('calendarList');
+      list.innerHTML = '';
+
+      if (calendarEvents.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No upcoming events.';
+        list.appendChild(empty);
+        return;
+      }
+
+      calendarEvents.forEach(event => {
+        const item = document.createElement('div');
+        item.className = 'calendar-item';
+
+        const title = document.createElement('div');
+        title.textContent = event.title;
+
+        const time = document.createElement('small');
+        time.textContent = formatEventTime(event.start, event.end);
+
+        const location = document.createElement('small');
+        location.textContent = (event.location || '').trim();
+
+        const chipRow = document.createElement('div');
+        chipRow.className = 'chip-row';
+        chipRow.appendChild(buildChip(event.provider + ' calendar', ''));
+
+        item.appendChild(title);
+        item.appendChild(time);
+        if (event.location) {
+          item.appendChild(location);
+        }
+        item.appendChild(chipRow);
+        list.appendChild(item);
+      });
+    }
+
+    function formatEventTime(start, end) {
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      return startDate.toLocaleString() + ' - ' + endDate.toLocaleTimeString();
+    }
+
+    function connectAppleCalendar() {
+      const url = prompt('Paste your public iCloud calendar URL (or leave blank to paste raw ICS):', '');
+      if (url) {
+        localStorage.setItem(APPLE_CAL_URL_KEY, url);
+        localStorage.removeItem(APPLE_CAL_ICS_KEY);
+        showToast('Apple calendar URL saved.');
+        return;
+      }
+      const ics = prompt('Paste the raw .ics calendar content:', '');
+      if (ics) {
+        localStorage.setItem(APPLE_CAL_ICS_KEY, ics);
+        localStorage.removeItem(APPLE_CAL_URL_KEY);
+        showToast('Apple calendar ICS saved.');
+      }
+    }
+
+    function hasCalendarConnection() {
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
+      const appleConnected = Boolean(localStorage.getItem(APPLE_CAL_URL_KEY) || localStorage.getItem(APPLE_CAL_ICS_KEY));
+      return Boolean(googleToken || outlookToken || appleConnected);
     }
 
     function resetLocalData() {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(ACTIVE_EMAIL_KEY);
+      localStorage.removeItem('google_access_token');
       localStorage.removeItem('gmail_access_token');
       localStorage.removeItem('outlook_access_token');
+      localStorage.removeItem('google_state');
       localStorage.removeItem('gmail_state');
       localStorage.removeItem('outlook_state');
+      localStorage.removeItem(APPLE_CAL_URL_KEY);
+      localStorage.removeItem(APPLE_CAL_ICS_KEY);
+      localStorage.removeItem(NOTIFY_KEY);
       loadEmails();
-      updateConnectionStatus();
       updateView();
+      renderCalendarEvents();
+      updateConnectionStatus();
       showToast('Local data reset.');
     }
 
@@ -1269,20 +1614,16 @@
       loadEmails();
       const authed = handleAuthResponse();
       updateConnectionStatus();
-
-      const notifyEnabled = localStorage.getItem(NOTIFY_KEY) === 'true';
-      setNotificationStatus(notifyEnabled);
-
       updateView();
 
-      if (authed) {
-        syncInbox();
-      }
-
-      document.getElementById('connectGmail').addEventListener('click', authenticateGmail);
+      document.getElementById('connectGoogle').addEventListener('click', authenticateGoogle);
       document.getElementById('connectOutlook').addEventListener('click', authenticateOutlook);
+      document.getElementById('connectApple').addEventListener('click', connectAppleCalendar);
       document.getElementById('syncInbox').addEventListener('click', syncInbox);
+      document.getElementById('syncCalendars').addEventListener('click', syncCalendars);
+      document.getElementById('calendarRefresh').addEventListener('click', syncCalendars);
       document.getElementById('enableNotifications').addEventListener('click', requestNotifications);
+
       document.getElementById('loadSample').addEventListener('click', () => {
         emails = sampleEmails.map(createEmail);
         updateView();
@@ -1294,11 +1635,39 @@
       document.getElementById('prevUrgent').addEventListener('click', () => handleUrgentNav('prev'));
       document.getElementById('nextUrgent').addEventListener('click', () => handleUrgentNav('next'));
 
-      document.getElementById('urgentActions').addEventListener('click', event => {
+      document.getElementById('focusActions').addEventListener('click', event => {
         if (event.target.tagName !== 'BUTTON') return;
         const action = event.target.getAttribute('data-action');
-        handleUrgentAction(action);
+        handleFocusAction(action);
       });
+
+      document.getElementById('detailArchive').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) archiveEmail(email.id);
+      });
+      document.getElementById('detailDelete').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) deleteEmail(email.id);
+      });
+      document.getElementById('detailJunk').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) reportJunk(email.id);
+      });
+      document.getElementById('detailRead').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) markRead(email.id);
+      });
+      document.getElementById('detailReply').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) draftReply(email.id);
+      });
+
+      if (authed) {
+        syncInbox();
+        syncCalendars();
+      } else if (hasCalendarConnection()) {
+        syncCalendars();
+      }
     }
 
     init();
