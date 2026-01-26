@@ -13,9 +13,11 @@
       --medium: #f4a261;
       --low: #2a9d8f;
       --spam: #6c757d;
-      --glass: rgba(255, 255, 255, 0.62);
-      --glass-border: rgba(255, 255, 255, 0.72);
-      --shadow: 0 10px 30px rgba(7, 22, 39, 0.15);
+      --glass: rgba(255, 255, 255, 0.58);
+      --glass-border: rgba(255, 255, 255, 0.68);
+      --glass-highlight: rgba(255, 255, 255, 0.9);
+      --glass-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.22));
+      --shadow: 0 14px 35px rgba(7, 22, 39, 0.18);
     }
 
     * {
@@ -30,6 +32,21 @@
       background: url('background.png') no-repeat center center fixed;
       background-size: cover;
       min-height: 100vh;
+      position: relative;
+      isolation: isolate;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.45), transparent 45%),
+        radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.25), transparent 50%),
+        radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.3), transparent 55%);
+      opacity: 0.85;
+      pointer-events: none;
+      z-index: -1;
     }
 
     .app {
@@ -42,11 +59,30 @@
     .card {
       border-radius: 16px;
       padding: 16px 18px;
-      background: var(--glass);
+    }
+
+    :is(.card, .category-btn, .email-item, .status-pill, .action-bar, .calendar-item) {
+      position: relative;
+      overflow: hidden;
+      background: var(--glass-gradient);
       border: 1px solid var(--glass-border);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(22px) saturate(170%);
+      -webkit-backdrop-filter: blur(22px) saturate(170%);
+    }
+
+    :is(.card, .category-btn, .email-item, .status-pill, .action-bar, .calendar-item)::before {
+      content: '';
+      position: absolute;
+      inset: -60% -30%;
+      background: radial-gradient(circle at 20% 20%, var(--glass-highlight), transparent 55%);
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    :is(.card, .category-btn, .email-item, .status-pill, .action-bar, .calendar-item) > * {
+      position: relative;
+      z-index: 1;
     }
 
     .topbar {
@@ -86,17 +122,18 @@
       padding: 4px 10px;
       font-size: 0.75rem;
       font-weight: 600;
-      border: 1px solid rgba(0, 0, 0, 0.05);
     }
 
     .status-pill.connected {
-      background: rgba(42, 157, 143, 0.2);
+      background: linear-gradient(135deg, rgba(42, 157, 143, 0.28), rgba(255, 255, 255, 0.2));
       color: #1f6f64;
+      border-color: rgba(42, 157, 143, 0.35);
     }
 
     .status-pill.disconnected {
-      background: rgba(108, 117, 125, 0.15);
+      background: linear-gradient(135deg, rgba(108, 117, 125, 0.2), rgba(255, 255, 255, 0.2));
       color: #56606b;
+      border-color: rgba(108, 117, 125, 0.3);
     }
 
     .dot {
@@ -131,14 +168,18 @@
     }
 
     .primary {
-      background: var(--accent);
+      background: linear-gradient(135deg, #1d7dd8 0%, #5bb5ff 100%);
       color: #fff;
+      box-shadow: 0 10px 24px rgba(29, 125, 216, 0.35);
     }
 
     .ghost {
-      background: rgba(255, 255, 255, 0.7);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.25));
       color: var(--ink);
-      border: 1px solid rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(16px) saturate(160%);
+      -webkit-backdrop-filter: blur(16px) saturate(160%);
     }
 
     .layout {
@@ -172,8 +213,6 @@
       gap: 8px;
       padding: 10px 12px;
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.8);
       font-weight: 600;
     }
 
@@ -204,8 +243,6 @@
       text-align: left;
       padding: 10px 12px;
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.85);
     }
 
     .email-item.active {
@@ -232,28 +269,29 @@
       font-size: 0.7rem;
       padding: 2px 8px;
       border-radius: 999px;
-      background: rgba(29, 125, 216, 0.15);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.35));
+      border: 1px solid rgba(255, 255, 255, 0.6);
       color: var(--accent);
       font-weight: 600;
     }
 
     .chip.urgent {
-      background: rgba(230, 57, 70, 0.15);
+      background: linear-gradient(135deg, rgba(230, 57, 70, 0.25), rgba(255, 255, 255, 0.25));
       color: var(--urgent);
     }
 
     .chip.medium {
-      background: rgba(244, 162, 97, 0.18);
+      background: linear-gradient(135deg, rgba(244, 162, 97, 0.28), rgba(255, 255, 255, 0.25));
       color: #a3541f;
     }
 
     .chip.low {
-      background: rgba(42, 157, 143, 0.18);
+      background: linear-gradient(135deg, rgba(42, 157, 143, 0.28), rgba(255, 255, 255, 0.25));
       color: #1f6f64;
     }
 
     .chip.spam {
-      background: rgba(108, 117, 125, 0.18);
+      background: linear-gradient(135deg, rgba(108, 117, 125, 0.25), rgba(255, 255, 255, 0.25));
       color: #4c5257;
     }
 
@@ -289,8 +327,6 @@
       margin-top: 12px;
       padding: 10px;
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.85);
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
@@ -343,8 +379,6 @@
       gap: 4px;
       padding: 10px;
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.85);
     }
 
     .calendar-item small {
