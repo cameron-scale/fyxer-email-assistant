@@ -102,17 +102,56 @@
 </head>
 <body>
   <div class="card">
-    <h1>Trial activated</h1>
-    <p>Your 7-day free trial is now active.</p>
-    <p>You can return to the app and start using premium features.</p>
+    <h1 id="title">Validating trial...</h1>
+    <p id="statusLine">Checking your Stripe checkout session.</p>
+    <p id="detailLine">This usually takes a moment.</p>
     <a href="index.html">Open inbox</a>
   </div>
 
   <script>
-    localStorage.setItem('ai_email_sorter_trial_status', 'active');
-    if (!localStorage.getItem('ai_email_sorter_trial_start')) {
-      localStorage.setItem('ai_email_sorter_trial_start', String(Date.now()));
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    const title = document.getElementById('title');
+    const statusLine = document.getElementById('statusLine');
+    const detailLine = document.getElementById('detailLine');
+
+    async function confirmTrial() {
+      if (!sessionId) {
+        title.textContent = 'Missing checkout session';
+        statusLine.textContent = 'No session_id was provided.';
+        detailLine.textContent = 'Please contact support to activate your trial.';
+        return;
+      }
+
+      try {
+        const resp = await fetch('/confirm-checkout-session?session_id=' + encodeURIComponent(sessionId));
+        if (!resp.ok) {
+          const error = await resp.json().catch(() => ({}));
+          throw new Error(error.error || 'Unable to confirm checkout.');
+        }
+        const data = await resp.json();
+        if (data.status === 'active') {
+          localStorage.setItem('ai_email_sorter_trial_status', 'active');
+          if (data.trial_end) {
+            const trialStart = data.trial_end - 7 * 86400000;
+            localStorage.setItem('ai_email_sorter_trial_start', String(trialStart));
+          } else if (!localStorage.getItem('ai_email_sorter_trial_start')) {
+            localStorage.setItem('ai_email_sorter_trial_start', String(Date.now()));
+          }
+          title.textContent = 'Trial activated';
+          statusLine.textContent = 'Your 7-day free trial is now active.';
+          detailLine.textContent = 'You can return to the app and start using premium features.';
+          return;
+        }
+        throw new Error('Trial not active yet.');
+      } catch (err) {
+        title.textContent = 'Unable to confirm trial';
+        statusLine.textContent = err.message;
+        detailLine.textContent = 'Please contact support if this keeps happening.';
+      }
     }
+
+    confirmTrial();
   </script>
 </body>
 </html>

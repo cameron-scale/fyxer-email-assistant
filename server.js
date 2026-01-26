@@ -53,6 +53,37 @@ app.post('/create-checkout-session', async (req, res) => {
   }
 });
 
+app.get('/confirm-checkout-session', async (req, res) => {
+  const sessionId = req.query.session_id;
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(400).json({ error: 'Missing STRIPE_SECRET_KEY.' });
+  }
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing session_id.' });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription']
+    });
+
+    if (!session || session.status !== 'complete') {
+      return res.status(400).json({ error: 'Checkout session not complete.' });
+    }
+
+    const subscription = session.subscription;
+    const trialEnd = subscription && subscription.trial_end ? subscription.trial_end * 1000 : null;
+
+    return res.json({
+      status: 'active',
+      trial_end: trialEnd
+    });
+  } catch (err) {
+    console.error('Stripe confirmation error:', err);
+    return res.status(500).json({ error: 'Unable to confirm checkout session.' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
