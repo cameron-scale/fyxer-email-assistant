@@ -13,11 +13,11 @@
       --medium: #f4a261;
       --low: #2a9d8f;
       --spam: #6c757d;
-      --glass: rgba(255, 255, 255, 0.58);
-      --glass-border: rgba(255, 255, 255, 0.68);
-      --glass-highlight: rgba(255, 255, 255, 0.9);
-      --glass-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.22));
-      --shadow: 0 14px 35px rgba(7, 22, 39, 0.18);
+      --glass: rgba(255, 255, 255, 0.62);
+      --glass-border: rgba(255, 255, 255, 0.55);
+      --glass-highlight: rgba(255, 255, 255, 0.65);
+      --glass-gradient: linear-gradient(145deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.35));
+      --shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
     }
 
     * {
@@ -41,10 +41,10 @@
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.45), transparent 45%),
-        radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.25), transparent 50%),
-        radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.3), transparent 55%);
-      opacity: 0.85;
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.3), transparent 45%),
+        radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.2), transparent 55%),
+        radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.2), transparent 60%);
+      opacity: 0.65;
       pointer-events: none;
       z-index: -1;
     }
@@ -66,9 +66,9 @@
       overflow: hidden;
       background: var(--glass-gradient);
       border: 1px solid var(--glass-border);
-      box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-      backdrop-filter: blur(22px) saturate(170%);
-      -webkit-backdrop-filter: blur(22px) saturate(170%);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
     }
 
     :is(.card, .category-btn, .email-item, .status-pill, .action-bar, .calendar-item)::before {
@@ -76,7 +76,7 @@
       position: absolute;
       inset: -60% -30%;
       background: radial-gradient(circle at 20% 20%, var(--glass-highlight), transparent 55%);
-      opacity: 0.7;
+      opacity: 0.35;
       pointer-events: none;
     }
 
@@ -168,18 +168,18 @@
     }
 
     .primary {
-      background: linear-gradient(135deg, #1d7dd8 0%, #5bb5ff 100%);
+      background: linear-gradient(135deg, #1d7dd8 0%, #4aa5ff 100%);
       color: #fff;
-      box-shadow: 0 10px 24px rgba(29, 125, 216, 0.35);
+      box-shadow: 0 8px 18px rgba(29, 125, 216, 0.28);
     }
 
     .ghost {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.25));
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.35));
       color: var(--ink);
-      border: 1px solid rgba(255, 255, 255, 0.75);
-      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
-      backdrop-filter: blur(16px) saturate(160%);
-      -webkit-backdrop-filter: blur(16px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
     }
 
     .layout {
@@ -270,29 +270,29 @@
       font-size: 0.7rem;
       padding: 2px 8px;
       border-radius: 999px;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.35));
-      border: 1px solid rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.5);
       color: var(--accent);
       font-weight: 600;
     }
 
     .chip.urgent {
-      background: linear-gradient(135deg, rgba(230, 57, 70, 0.25), rgba(255, 255, 255, 0.25));
+      background: rgba(230, 57, 70, 0.2);
       color: var(--urgent);
     }
 
     .chip.medium {
-      background: linear-gradient(135deg, rgba(244, 162, 97, 0.28), rgba(255, 255, 255, 0.25));
+      background: rgba(244, 162, 97, 0.22);
       color: #a3541f;
     }
 
     .chip.low {
-      background: linear-gradient(135deg, rgba(42, 157, 143, 0.28), rgba(255, 255, 255, 0.25));
+      background: rgba(42, 157, 143, 0.22);
       color: #1f6f64;
     }
 
     .chip.spam {
-      background: linear-gradient(135deg, rgba(108, 117, 125, 0.25), rgba(255, 255, 255, 0.25));
+      background: rgba(108, 117, 125, 0.2);
       color: #4c5257;
     }
 
@@ -658,6 +658,18 @@
 
         <section class="card">
           <div class="detail-header">
+            <h3 class="panel-title">Integration settings</h3>
+            <button id="saveClientIds" class="ghost">Save</button>
+          </div>
+          <div class="stack-list">
+            <input id="googleClientIdInput" class="glass-input" type="text" placeholder="Google client ID">
+            <input id="outlookClientIdInput" class="glass-input" type="text" placeholder="Outlook client ID">
+            <p class="brand-sub">These are stored locally in your browser.</p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
             <h3 class="panel-title">Automation & rules</h3>
             <button id="runRules" class="ghost">Run rules</button>
           </div>
@@ -727,6 +739,21 @@
 
         <section class="card">
           <div class="detail-header">
+            <h3 class="panel-title">Compose & send</h3>
+            <button id="useSelectedEmail" class="ghost">Use selected</button>
+          </div>
+          <div class="stack-list">
+            <select id="sendProvider" class="glass-input"></select>
+            <input id="sendTo" class="glass-input" type="email" placeholder="Recipient email">
+            <input id="sendSubject" class="glass-input" type="text" placeholder="Subject">
+            <textarea id="sendBody" class="brief-text" placeholder="Write your message..."></textarea>
+            <button id="sendEmail" class="primary">Send email</button>
+            <p id="sendStatus" class="brand-sub"></p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
             <h3 class="panel-title">Daily brief</h3>
             <button id="generateBrief" class="ghost">Generate</button>
           </div>
@@ -776,9 +803,10 @@
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const GOOGLE_SCOPES = [
       'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/calendar.readonly'
     ].join(' ');
-    const OUTLOOK_SCOPES = 'User.Read Mail.Read Calendars.Read';
+    const OUTLOOK_SCOPES = 'User.Read Mail.Read Mail.Send Calendars.Read';
 
     const STORAGE_KEY = 'ai_email_sorter_emails_v1';
     const ACTIVE_EMAIL_KEY = 'ai_email_sorter_active_email';
@@ -788,6 +816,8 @@
     const SETTINGS_KEY = 'ai_email_sorter_settings';
     const RULES_KEY = 'ai_email_sorter_rules';
     const LOCAL_EVENTS_KEY = 'ai_email_sorter_local_events';
+    const GOOGLE_CLIENT_ID_KEY = 'ai_email_sorter_google_client_id';
+    const OUTLOOK_CLIENT_ID_KEY = 'ai_email_sorter_outlook_client_id';
     const APPLE_CAL_URL_KEY = 'ai_email_sorter_apple_cal_url';
     const APPLE_CAL_ICS_KEY = 'ai_email_sorter_apple_cal_ics';
 
@@ -1214,6 +1244,8 @@
       renderSlaTimers();
       renderAssignments();
       renderAutomationPanel();
+      renderIntegrationSettings();
+      renderSendProvider();
       renderScheduleSuggestions();
       saveEmails();
     }
@@ -1404,7 +1436,9 @@
       prevBtn.disabled = urgentQueue.length <= 1;
       nextBtn.disabled = urgentQueue.length <= 1;
 
-      selectedEmailId = email.id;
+      if (selectedCategory === 'urgent') {
+        selectedEmailId = email.id;
+      }
     }
 
     function renderDetail() {
@@ -1486,6 +1520,17 @@
       if (autoSchedule) autoSchedule.checked = Boolean(settings.autoSchedule);
 
       renderRulesList();
+    }
+
+    function renderIntegrationSettings() {
+      const googleInput = document.getElementById('googleClientIdInput');
+      const outlookInput = document.getElementById('outlookClientIdInput');
+      if (googleInput) {
+        googleInput.value = localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || '';
+      }
+      if (outlookInput) {
+        outlookInput.value = localStorage.getItem(OUTLOOK_CLIENT_ID_KEY) || '';
+      }
     }
 
     function renderRulesList() {
@@ -1671,34 +1716,39 @@
       const followUps = getFollowUpItems();
       const upcomingEvents = calendarEvents.slice(0, 3);
 
-      let brief = 'Daily Brief (' + new Date().toLocaleDateString() + ')\n';
-      brief += 'Inbox: ' + urgentCount + ' urgent, ' + mediumCount + ' medium, ' + lowCount + ' low, ' + spamCount + ' spam.\n\n';
-
-      if (slaItems.length > 0) {
-        brief += 'SLA watchlist:\n';
-        slaItems.forEach(item => {
-          brief += '- ' + item.email.subject + ' (' + item.sla.label + ')\n';
-        });
-        brief += '\n';
+      let brief = 'Daily Brief — ' + new Date().toLocaleDateString() + '\n';
+      brief += 'Top priorities:\n';
+      if (urgentCount > 0) {
+        const topUrgent = slaItems.find(item => item.email.category === 'urgent');
+        if (topUrgent) {
+          brief += '- Urgent: ' + urgentCount + ' messages. Next up: ' + topUrgent.email.subject + ' (' + topUrgent.sla.label + ')\n';
+        } else {
+          brief += '- Urgent: ' + urgentCount + ' messages.\n';
+        }
+      } else {
+        brief += '- No urgent items right now.\n';
       }
 
+      brief += '\nFollow-ups:\n';
       if (followUps.length > 0) {
-        brief += 'Follow-ups:\n';
         followUps.forEach(email => {
-          brief += '- ' + email.subject + ' (due ' + formatTimestamp(email.followUpAt) + ')\n';
+          brief += '- ' + email.subject + ' due ' + formatTimestamp(email.followUpAt) + '\n';
         });
-        brief += '\n';
+      } else {
+        brief += '- None scheduled.\n';
       }
 
+      brief += '\nToday\'s schedule:\n';
       if (upcomingEvents.length > 0) {
-        brief += 'Upcoming events:\n';
         upcomingEvents.forEach(event => {
-          brief += '- ' + event.title + ' (' + formatEventTime(event.start, event.end) + ')\n';
+          brief += '- ' + event.title + ' at ' + formatEventTime(event.start, event.end) + '\n';
         });
-        brief += '\n';
+      } else {
+        brief += '- No upcoming events.\n';
       }
 
-      brief += 'Automation: ' + (settings.autoArchiveSpam ? 'Spam auto-archive on' : 'Spam auto-archive off');
+      brief += '\nInbox snapshot: ' + mediumCount + ' medium, ' + lowCount + ' low, ' + spamCount + ' spam.\n';
+      brief += 'Automation: spam auto-archive ' + (settings.autoArchiveSpam ? 'on' : 'off');
       brief += ', auto-schedule ' + (settings.autoSchedule ? 'on' : 'off') + '.';
       return brief;
     }
@@ -1834,6 +1884,145 @@
     function draftReply(id) {
       localStorage.setItem(ACTIVE_EMAIL_KEY, id);
       window.location.href = 'reply.html?id=' + encodeURIComponent(id);
+    }
+
+    function extractEmailAddress(value) {
+      if (!value) return '';
+      const match = value.match(/<([^>]+)>/);
+      return match ? match[1] : value;
+    }
+
+    function base64UrlEncode(text) {
+      const bytes = new TextEncoder().encode(text);
+      let binary = '';
+      bytes.forEach(byte => {
+        binary += String.fromCharCode(byte);
+      });
+      const base64 = btoa(binary);
+      return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function renderSendProvider() {
+      const select = document.getElementById('sendProvider');
+      const sendButton = document.getElementById('sendEmail');
+      if (!select) return;
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
+
+      select.innerHTML = '';
+      const providers = [];
+      if (googleToken) providers.push({ value: 'google', label: 'Gmail' });
+      if (outlookToken) providers.push({ value: 'outlook', label: 'Outlook' });
+
+      if (providers.length > 1) {
+        const autoOption = document.createElement('option');
+        autoOption.value = 'auto';
+        autoOption.textContent = 'Auto (preferred)';
+        select.appendChild(autoOption);
+      }
+
+      providers.forEach(provider => {
+        const option = document.createElement('option');
+        option.value = provider.value;
+        option.textContent = provider.label;
+        select.appendChild(option);
+      });
+
+      if (providers.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Connect Gmail or Outlook';
+        select.appendChild(option);
+        if (sendButton) sendButton.disabled = true;
+      } else if (sendButton) {
+        sendButton.disabled = false;
+      }
+    }
+
+    async function sendEmailMessage() {
+      const providerSelect = document.getElementById('sendProvider');
+      const toInput = document.getElementById('sendTo');
+      const subjectInput = document.getElementById('sendSubject');
+      const bodyInput = document.getElementById('sendBody');
+      const status = document.getElementById('sendStatus');
+
+      if (!providerSelect || !toInput || !subjectInput || !bodyInput) return;
+      const to = toInput.value.trim();
+      const subject = subjectInput.value.trim();
+      const body = bodyInput.value.trim();
+
+      if (!to || !subject || !body) {
+        showToast('Fill in To, Subject, and Message.');
+        return;
+      }
+
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
+      let provider = providerSelect.value;
+
+      if (provider === 'auto') {
+        provider = googleToken ? 'google' : 'outlook';
+      }
+
+      if (provider === 'google' && !googleToken) {
+        showToast('Connect Google with send scope.');
+        return;
+      }
+      if (provider === 'outlook' && !outlookToken) {
+        showToast('Connect Outlook with Mail.Send scope.');
+        return;
+      }
+
+      if (status) status.textContent = 'Sending...';
+
+      try {
+        if (provider === 'google') {
+          const message = [
+            'To: ' + to,
+            'Subject: ' + subject,
+            'Content-Type: text/plain; charset="UTF-8"',
+            '',
+            body
+          ].join('\r\n');
+          const raw = base64UrlEncode(message);
+          const resp = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + googleToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ raw })
+          });
+          if (!resp.ok) throw new Error('Gmail send failed');
+        } else if (provider === 'outlook') {
+          const resp = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + outlookToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: {
+                subject,
+                body: { contentType: 'Text', content: body },
+                toRecipients: [{ emailAddress: { address: to } }]
+              },
+              saveToSentItems: true
+            })
+          });
+          if (!resp.ok) throw new Error('Outlook send failed');
+        }
+
+        if (status) status.textContent = 'Message sent.';
+        showToast('Email sent.');
+        toInput.value = '';
+        subjectInput.value = '';
+        bodyInput.value = '';
+      } catch (err) {
+        console.error(err);
+        if (status) status.textContent = 'Send failed. Check token scopes.';
+        showToast('Send failed. Check token scopes.');
+      }
     }
 
     function assignEmail(id, assignee) {
@@ -1988,9 +2177,16 @@
 
     async function startTrialCheckout() {
       const buttonEl = document.getElementById('startTrial');
+      const noteEl = document.getElementById('trialNote');
       if (buttonEl) buttonEl.disabled = true;
 
       try {
+        if (window.location.protocol === 'file:') {
+          showToast('Stripe checkout requires the app to be served (run npm start).');
+          if (noteEl) noteEl.textContent = 'Start the local server to enable checkout.';
+          if (buttonEl) buttonEl.disabled = false;
+          return;
+        }
         const resp = await fetch('/create-checkout-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1999,7 +2195,9 @@
 
         if (!resp.ok) {
           const error = await resp.json().catch(() => ({}));
-          showToast(error.error || 'Unable to start checkout.');
+          const message = error.error || 'Unable to start checkout. Check Stripe env vars.';
+          showToast(message);
+          if (noteEl) noteEl.textContent = message;
           if (buttonEl) buttonEl.disabled = false;
           return;
         }
@@ -2009,11 +2207,13 @@
           window.location.href = data.url;
         } else {
           showToast('Checkout unavailable.');
+          if (noteEl) noteEl.textContent = 'Checkout URL missing. Check the server logs.';
           if (buttonEl) buttonEl.disabled = false;
         }
       } catch (err) {
         console.error('Checkout error', err);
         showToast('Checkout failed.');
+        if (noteEl) noteEl.textContent = 'Checkout failed. Ensure the server is running.';
         if (buttonEl) buttonEl.disabled = false;
       }
     }
@@ -2162,15 +2362,24 @@
       return result;
     }
 
+    function getGoogleClientId() {
+      return localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || GOOGLE_CLIENT_ID;
+    }
+
+    function getOutlookClientId() {
+      return localStorage.getItem(OUTLOOK_CLIENT_ID_KEY) || OUTLOOK_CLIENT_ID;
+    }
+
     function authenticateGoogle() {
-      if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
-        showToast('Set your Google client ID before connecting.');
+      const clientId = getGoogleClientId();
+      if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID') {
+        showToast('Set your Google client ID in Integration settings.');
         return;
       }
       const state = generateRandomString();
       localStorage.setItem('google_state', state);
       const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' +
-        '?client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID) +
+        '?client_id=' + encodeURIComponent(clientId) +
         '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
         '&response_type=token' +
         '&scope=' + encodeURIComponent(GOOGLE_SCOPES) +
@@ -2180,14 +2389,15 @@
     }
 
     function authenticateOutlook() {
-      if (OUTLOOK_CLIENT_ID === 'YOUR_OUTLOOK_CLIENT_ID') {
-        showToast('Set your Outlook client ID before connecting.');
+      const clientId = getOutlookClientId();
+      if (!clientId || clientId === 'YOUR_OUTLOOK_CLIENT_ID') {
+        showToast('Set your Outlook client ID in Integration settings.');
         return;
       }
       const state = generateRandomString();
       localStorage.setItem('outlook_state', state);
       const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize' +
-        '?client_id=' + encodeURIComponent(OUTLOOK_CLIENT_ID) +
+        '?client_id=' + encodeURIComponent(clientId) +
         '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
         '&response_type=token' +
         '&scope=' + encodeURIComponent(OUTLOOK_SCOPES) +
@@ -2582,6 +2792,34 @@
       document.getElementById('calendarRefresh').addEventListener('click', syncCalendars);
       document.getElementById('enableNotifications').addEventListener('click', requestNotifications);
       document.getElementById('startTrial').addEventListener('click', startTrialCheckout);
+
+      document.getElementById('saveClientIds').addEventListener('click', () => {
+        const googleInput = document.getElementById('googleClientIdInput');
+        const outlookInput = document.getElementById('outlookClientIdInput');
+        if (googleInput) {
+          localStorage.setItem(GOOGLE_CLIENT_ID_KEY, googleInput.value.trim());
+        }
+        if (outlookInput) {
+          localStorage.setItem(OUTLOOK_CLIENT_ID_KEY, outlookInput.value.trim());
+        }
+        showToast('Client IDs saved.');
+      });
+
+      document.getElementById('sendEmail').addEventListener('click', sendEmailMessage);
+      document.getElementById('useSelectedEmail').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (!email) {
+          showToast('Select an email first.');
+          return;
+        }
+        const toInput = document.getElementById('sendTo');
+        const subjectInput = document.getElementById('sendSubject');
+        const bodyInput = document.getElementById('sendBody');
+        if (toInput) toInput.value = extractEmailAddress(email.sender);
+        if (subjectInput) subjectInput.value = 'Re: ' + email.subject;
+        if (bodyInput) bodyInput.value = '\n\n---\n' + (email.body || '');
+        showToast('Compose prefilled from selected email.');
+      });
 
       document.getElementById('selectAll').addEventListener('change', event => {
         const list = getCurrentList();
