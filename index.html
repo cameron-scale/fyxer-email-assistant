@@ -3,368 +3,2401 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fyxer Clone Email Assistant</title>
+  <title>Fyxer Style AI Inbox</title>
   <style>
-    /* Base styles */
+    :root {
+      --ink: #0b2239;
+      --muted: #51657a;
+      --accent: #1d7dd8;
+      --urgent: #e63946;
+      --medium: #f4a261;
+      --low: #2a9d8f;
+      --spam: #6c757d;
+      --glass: rgba(255, 255, 255, 0.62);
+      --glass-border: rgba(255, 255, 255, 0.55);
+      --glass-highlight: rgba(255, 255, 255, 0.65);
+      --glass-gradient: linear-gradient(145deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.35));
+      --shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
       margin: 0;
-      padding: 20px;
-      /* Use uploaded image as background */
+      padding: 24px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
       background: url('background.png') no-repeat center center fixed;
       background-size: cover;
       min-height: 100vh;
-      color: #003049;
+      position: relative;
+      isolation: isolate;
     }
-    h1 {
-      margin-bottom: 10px;
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.3), transparent 45%),
+        radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.2), transparent 55%),
+        radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.2), transparent 60%);
+      opacity: 0.65;
+      pointer-events: none;
+      z-index: -1;
     }
-    h2 {
-      margin-top: 30px;
-      color: #444;
+
+    .app {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
     }
+
     .card {
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 20px;
+      border-radius: 16px;
+      padding: 16px 18px;
     }
 
-    /* Glass effect container */
-    .glass {
-      background: rgba(255, 255, 255, 0.4);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.4);
+    :is(.card, .category-btn, .email-item, .status-pill, .action-bar, .calendar-item) {
+      position: relative;
+      overflow: hidden;
+      background: var(--glass-gradient);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
     }
 
-    .email {
-      /* Extend card and glass styles */
-      border: 1px solid rgba(150, 245, 250, 0.4);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.5);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      padding: 16px;
-      margin-bottom: 15px;
-      color: #003049;
-    }
-    .subject {
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #001f3f;
-    }
-    .snippet {
-      color: #003049;
-      font-size: 0.9em;
-      margin-bottom: 5px;
-    }
-    /* Hide old draft-link styling since Draft Reply will be a button */
-    .draft-link { display: none; }
-
-    /* Buttons for account linking and actions */
-    .auth-button {
-      background: rgba(255, 255, 255, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.5);
-      border-radius: 8px;
-      padding: 10px 20px;
-      margin-right: 10px;
-      color: #003049;
-      cursor: pointer;
-      backdrop-filter: blur(8px);
-    }
-    .auth-button:hover {
-      background: rgba(255, 255, 255, 0.6);
+    :is(.card, .category-btn, .email-item, .status-pill, .action-bar, .calendar-item)::before {
+      content: '';
+      position: absolute;
+      inset: -60% -30%;
+      background: radial-gradient(circle at 20% 20%, var(--glass-highlight), transparent 55%);
+      opacity: 0.35;
+      pointer-events: none;
     }
 
-    .action-button {
-      border: none;
-      border-radius: 6px;
+    :is(.card, .category-btn, .email-item, .status-pill, .action-bar, .calendar-item) > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: grid;
+      gap: 4px;
+    }
+
+    .brand-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+
+    .brand-sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .status-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
       padding: 4px 10px;
-      margin-right: 6px;
-      font-size: 0.85em;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-pill.connected {
+      background: linear-gradient(135deg, rgba(42, 157, 143, 0.28), rgba(255, 255, 255, 0.2));
+      color: #1f6f64;
+      border-color: rgba(42, 157, 143, 0.35);
+    }
+
+    .status-pill.disconnected {
+      background: linear-gradient(135deg, rgba(108, 117, 125, 0.2), rgba(255, 255, 255, 0.2));
+      color: #56606b;
+      border-color: rgba(108, 117, 125, 0.3);
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.05s ease, opacity 0.2s ease;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .primary {
+      background: linear-gradient(135deg, #1d7dd8 0%, #4aa5ff 100%);
       color: #fff;
+      box-shadow: 0 8px 18px rgba(29, 125, 216, 0.28);
+    }
+
+    .ghost {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.35));
+      color: var(--ink);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr) 320px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .sidebar,
+    .main,
+    .rightbar {
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel-title {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+
+    .category-buttons {
+      display: grid;
+      gap: 8px;
+    }
+
+    .category-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .category-btn.active {
+      border-color: rgba(29, 125, 216, 0.6);
+      box-shadow: 0 4px 18px rgba(29, 125, 216, 0.18);
+      color: var(--accent);
+    }
+
+    .count-pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      background: rgba(0, 0, 0, 0.07);
+    }
+
+    .email-list {
+      display: grid;
+      gap: 10px;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .email-item {
+      display: grid;
+      gap: 6px;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 12px;
       cursor: pointer;
     }
-    .action-button:hover {
-      opacity: 0.9;
+
+    .email-item.active {
+      border-color: rgba(29, 125, 216, 0.6);
+      box-shadow: 0 4px 18px rgba(29, 125, 216, 0.18);
+    }
+
+    .email-item small {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .email-title {
+      font-weight: 700;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .chip.urgent {
+      background: rgba(230, 57, 70, 0.2);
+      color: var(--urgent);
+    }
+
+    .chip.medium {
+      background: rgba(244, 162, 97, 0.22);
+      color: #a3541f;
+    }
+
+    .chip.low {
+      background: rgba(42, 157, 143, 0.22);
+      color: #1f6f64;
+    }
+
+    .chip.spam {
+      background: rgba(108, 117, 125, 0.2);
+      color: #4c5257;
+    }
+
+    .focus-header,
+    .detail-header,
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .focus-body {
+      display: grid;
+      gap: 10px;
+    }
+
+    .focus-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .focus-title {
+      margin: 0;
+      color: var(--urgent);
+    }
+
+    .action-bar {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      position: sticky;
+      bottom: 12px;
+    }
+
+    .detail-content {
+      display: grid;
+      gap: 10px;
+    }
+
+    .detail-meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    .summary-block {
+      display: grid;
+      gap: 10px;
+    }
+
+    .summary-block p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .summary-highlight {
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .calendar-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .calendar-item {
+      display: grid;
+      gap: 4px;
+      padding: 10px;
+      border-radius: 12px;
+    }
+
+    .calendar-item small {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .demo-actions {
+      display: grid;
+      gap: 8px;
+    }
+
+    .trial-details {
+      display: grid;
+      gap: 10px;
+    }
+
+    .bulk-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.25));
+      border: 1px solid rgba(255, 255, 255, 0.7);
+    }
+
+    .bulk-bar.hidden {
+      display: none;
+    }
+
+    .bulk-bar label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .bulk-count {
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    .email-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .email-select {
+      accent-color: var(--accent);
+    }
+
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .glass-input,
+    .brief-text {
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.25));
+      padding: 8px 10px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 0.85rem;
+      color: var(--ink);
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(16px) saturate(160%);
+      -webkit-backdrop-filter: blur(16px) saturate(160%);
+    }
+
+    .glass-input.small {
+      width: 70px;
+    }
+
+    .stack-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .stack-item {
+      display: grid;
+      gap: 4px;
+      padding: 10px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.25));
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      font-size: 0.85rem;
+    }
+
+    .stack-item small {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .rule-item {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .rule-item button {
+      padding: 6px 10px;
+      font-size: 0.75rem;
+    }
+
+    .brief-text {
+      min-height: 140px;
+      width: 100%;
+      resize: vertical;
+    }
+
+    .toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 999;
+      max-width: 320px;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 1100px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Fyxer Clone Email Assistant</h1>
-  <!-- Intro and account linking section -->
-  <p>Connect your email account and manage your inbox.  Sign in with your email provider to fetch real messages (integration placeholders are provided since no API access is available).</p>
-  <div id="account-links" class="card glass">
-    <button id="connectOutlook" class="auth-button">Sign in with Outlook</button>
-    <button id="connectGmail" class="auth-button">Sign in with Gmail</button>
+  <div class="app">
+    <header class="card topbar">
+      <div class="brand">
+        <div class="brand-title">Fyxer Style AI Inbox</div>
+        <div class="brand-sub">AI sorts mail and calendar to keep urgent items in focus.</div>
+      </div>
+      <div class="status-group">
+        <span id="gmailStatus" class="status-pill disconnected"><span class="dot"></span>Gmail</span>
+        <span id="outlookStatus" class="status-pill disconnected"><span class="dot"></span>Outlook</span>
+        <span id="notifyStatus" class="status-pill disconnected"><span class="dot"></span>Notifications</span>
+      </div>
+      <div class="top-actions">
+        <button id="connectGoogle" class="primary">Connect Google</button>
+        <button id="connectOutlook" class="primary">Connect Outlook</button>
+        <button id="connectApple" class="ghost">Connect Apple Calendar</button>
+        <button id="syncInbox" class="ghost">Sync inbox</button>
+        <button id="syncCalendars" class="ghost">Sync calendars</button>
+        <button id="enableNotifications" class="ghost">Enable notifications</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <section class="card">
+          <h3 class="panel-title">Priority lanes</h3>
+          <div id="categoryButtons" class="category-buttons"></div>
+        </section>
+
+        <section class="card">
+          <div class="focus-header">
+            <h3 class="panel-title" id="listTitle">Urgent inbox</h3>
+            <span id="listCount" class="count-pill">0</span>
+          </div>
+          <div id="bulkBar" class="bulk-bar hidden">
+            <label><input type="checkbox" id="selectAll" class="email-select"> Select all</label>
+            <span id="bulkCount" class="bulk-count">0 selected</span>
+            <button id="bulkArchive" class="ghost">Archive</button>
+            <button id="bulkDelete" class="ghost">Delete</button>
+            <button id="bulkJunk" class="ghost">Report junk</button>
+            <select id="bulkAssign" class="glass-input"></select>
+            <button id="bulkAssignBtn" class="ghost">Assign</button>
+          </div>
+          <div id="emailList" class="email-list"></div>
+        </section>
+
+        <section class="card">
+          <h3 class="panel-title">Demo tools</h3>
+          <div class="demo-actions">
+            <button id="loadSample" class="ghost">Load sample inbox</button>
+            <button id="simulateEmail" class="ghost">Simulate new email</button>
+            <button id="clearLocal" class="ghost">Reset local data</button>
+          </div>
+        </section>
+      </aside>
+
+      <main class="main">
+        <section class="card">
+          <div class="focus-header">
+            <div>
+              <h2>Urgent Focus</h2>
+              <div class="brand-sub">Open urgent messages one by one.</div>
+            </div>
+            <div class="top-actions">
+              <button id="prevUrgent" class="ghost">Previous</button>
+              <button id="nextUrgent" class="ghost">Next</button>
+            </div>
+          </div>
+          <div id="focusEmpty" class="empty">No urgent emails right now.</div>
+          <div id="focusView" class="focus-body">
+            <div class="focus-meta">
+              <span id="focusFrom"></span>
+              <span id="focusReceived"></span>
+              <span id="focusProvider" class="chip"></span>
+            </div>
+            <h3 id="focusSubject" class="focus-title"></h3>
+            <p id="focusReason" class="summary-highlight"></p>
+            <p id="focusPreview"></p>
+          </div>
+          <div id="focusActions" class="action-bar">
+            <button data-action="archive" class="ghost">Archive</button>
+            <button data-action="delete" class="ghost">Delete</button>
+            <button data-action="junk" class="ghost">Report junk</button>
+            <button data-action="read" class="ghost">Mark read</button>
+            <button data-action="reply" class="ghost">Draft reply</button>
+            <button data-action="open" class="ghost">Open in list</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h2>Message detail</h2>
+            <div class="top-actions">
+              <button id="detailArchive" class="ghost">Archive</button>
+              <button id="detailDelete" class="ghost">Delete</button>
+              <button id="detailJunk" class="ghost">Report junk</button>
+              <button id="detailRead" class="ghost">Mark read</button>
+              <button id="detailReply" class="ghost">Draft reply</button>
+            </div>
+          </div>
+          <div id="detailEmpty" class="empty">Select an email to view details.</div>
+          <div id="detailView" class="detail-content">
+            <div class="detail-meta" id="detailMeta"></div>
+            <h3 id="detailSubject"></h3>
+            <pre id="detailBody"></pre>
+          </div>
+        </section>
+      </main>
+
+      <aside class="rightbar">
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">AI summary</h3>
+            <span id="summaryCategory" class="chip">No selection</span>
+          </div>
+          <div class="summary-block">
+            <p><span class="summary-highlight">Why:</span> <span id="summaryReason"></span></p>
+            <p><span class="summary-highlight">Summary:</span> <span id="summaryText"></span></p>
+            <p><span class="summary-highlight">Suggested next:</span> <span id="summaryAction"></span></p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">Integration settings</h3>
+            <button id="saveClientIds" class="ghost">Save</button>
+          </div>
+          <div class="stack-list">
+            <input id="googleClientIdInput" class="glass-input" type="text" placeholder="Google client ID">
+            <input id="outlookClientIdInput" class="glass-input" type="text" placeholder="Outlook client ID">
+            <p class="brand-sub">These are stored locally in your browser.</p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">Automation & rules</h3>
+            <button id="runRules" class="ghost">Run rules</button>
+          </div>
+          <div class="stack-list">
+            <label class="form-row"><input type="checkbox" id="autoArchiveSpam" class="email-select"> Auto-archive ads/spam</label>
+            <label class="form-row">Auto-archive low after <input id="autoArchiveLowDays" class="glass-input small" type="number" min="1" value="7"> days</label>
+            <label class="form-row"><input type="checkbox" id="autoSchedule" class="email-select"> Auto-schedule meeting requests</label>
+          </div>
+          <div class="stack-list">
+            <div class="form-row">
+              <select id="ruleField" class="glass-input">
+                <option value="subject">Subject</option>
+                <option value="sender">Sender</option>
+                <option value="body">Body</option>
+                <option value="category">Category</option>
+              </select>
+              <select id="ruleOperator" class="glass-input">
+                <option value="contains">contains</option>
+                <option value="equals">equals</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <input id="ruleValue" class="glass-input" type="text" placeholder="keyword or email">
+            </div>
+            <div class="form-row">
+              <select id="ruleAction" class="glass-input">
+                <option value="archive">Archive</option>
+                <option value="assign">Assign to</option>
+                <option value="delegate">Delegate to</option>
+                <option value="followup">Set follow-up (days)</option>
+              </select>
+              <input id="ruleActionValue" class="glass-input" type="text" placeholder="Assignee or days">
+              <button id="addRule" class="ghost">Add rule</button>
+            </div>
+          </div>
+          <div id="ruleList" class="stack-list"></div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">Follow-ups & SLA</h3>
+            <button id="refreshSla" class="ghost">Refresh</button>
+          </div>
+          <div class="form-row">
+            <input id="followUpDays" class="glass-input small" type="number" min="1" value="2">
+            <button id="setFollowUp" class="ghost">Set follow-up for selected</button>
+          </div>
+          <div id="followUpList" class="stack-list"></div>
+          <div id="slaList" class="stack-list"></div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">Team & delegation</h3>
+            <button id="clearAssign" class="ghost">Clear</button>
+          </div>
+          <div class="form-row">
+            <select id="assignSelect" class="glass-input"></select>
+            <button id="assignBtn" class="ghost">Assign</button>
+          </div>
+          <div class="form-row">
+            <select id="delegateSelect" class="glass-input"></select>
+            <button id="delegateBtn" class="ghost">Delegate</button>
+          </div>
+          <p id="assignmentInfo" class="brand-sub"></p>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">Compose & send</h3>
+            <button id="useSelectedEmail" class="ghost">Use selected</button>
+          </div>
+          <div class="stack-list">
+            <select id="sendProvider" class="glass-input"></select>
+            <input id="sendTo" class="glass-input" type="email" placeholder="Recipient email">
+            <input id="sendSubject" class="glass-input" type="text" placeholder="Subject">
+            <textarea id="sendBody" class="brief-text" placeholder="Write your message..."></textarea>
+            <button id="sendEmail" class="primary">Send email</button>
+            <p id="sendStatus" class="brand-sub"></p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">Daily brief</h3>
+            <button id="generateBrief" class="ghost">Generate</button>
+          </div>
+          <div class="form-row">
+            <button id="copyBrief" class="ghost">Copy</button>
+          </div>
+          <textarea id="briefText" class="brief-text" readonly></textarea>
+        </section>
+
+        <section class="card">
+          <div class="detail-header">
+            <h3 class="panel-title">Billing</h3>
+            <span id="trialStatus" class="chip">Trial inactive</span>
+          </div>
+          <div class="trial-details">
+            <p class="brand-sub">Start a 7-day free trial. Card required to activate access.</p>
+            <button id="startTrial" class="primary">Start free trial</button>
+            <p id="trialNote" class="brand-sub"></p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="calendar-header">
+            <h3 class="panel-title">Upcoming events</h3>
+            <button id="calendarRefresh" class="ghost">Refresh</button>
+          </div>
+          <div class="chip-row">
+            <span id="googleCalStatus" class="status-pill disconnected"><span class="dot"></span>Google Cal</span>
+            <span id="outlookCalStatus" class="status-pill disconnected"><span class="dot"></span>Outlook Cal</span>
+            <span id="appleCalStatus" class="status-pill disconnected"><span class="dot"></span>Apple Cal</span>
+          </div>
+          <div id="calendarList" class="calendar-list"></div>
+          <div class="summary-block">
+            <p class="summary-highlight">Scheduling suggestions</p>
+          </div>
+          <div id="scheduleSuggestions" class="stack-list"></div>
+        </section>
+      </aside>
+    </div>
   </div>
 
-  <!-- Inbox container -->
-  <div id="inbox"></div>
+  <div id="toast" class="toast"></div>
 
   <script>
-    // OAuth configuration. Replace the placeholders below with your own client IDs
-    // and ensure the redirect URI matches the location from which this page is served.
     const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID';
-    // Use the client ID you registered in Azure AD.  This must match the
-    // Application (client) ID in your app registration or the login will fail.
-    const OUTLOOK_CLIENT_ID = 'ecf692e9-9c6e-40c3-97dc-62d957200e33';
+    const OUTLOOK_CLIENT_ID = 'YOUR_OUTLOOK_CLIENT_ID';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
-    const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
-    // Request both profile and mail read access from Microsoft Graph.  The
-    // implicit grant flow expects space‑separated scopes (not full URLs).
-    // See https://learn.microsoft.com/entra/identity-platform/scopes-oidc for details.
-    const OUTLOOK_SCOPES = 'User.Read Mail.Read';
+    const GOOGLE_SCOPES = [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/calendar.readonly'
+    ].join(' ');
+    const OUTLOOK_SCOPES = 'User.Read Mail.Read Mail.Send Calendars.Read';
 
-    // Sample data used when the user hasn't connected their account.  Once a user
-    // signs in via OAuth, this array will be replaced with real messages fetched
-    // from Gmail or Outlook.  Feel free to extend or modify these examples.
-    const sampleEmails = [
-      {
-        sender: 'boss@example.com',
-        subject: 'Urgent: invoice overdue',
-        body: 'Hi team, we need to pay the invoice ASAP. Please handle it urgently as this invoice was due last week.',
-        read: false,
-        archived: false,
-        snoozedUntil: null,
-        flagged: false,
-        reportedSpam: false,
-        deleted: false
-      },
-      {
-        sender: 'newsletter@company.com',
-        subject: 'Weekly newsletter',
-        body: "Hello, this is our weekly newsletter. Don't forget to update your preferences.",
-        read: false,
-        archived: false,
-        snoozedUntil: null,
-        flagged: false,
-        reportedSpam: false,
-        deleted: false
-      },
-      {
-        sender: 'client@example.com',
-        subject: 'Meeting next week',
-        body: 'Let\'s schedule a meeting next week to discuss the project progress and timeline.',
-        read: false,
-        archived: false,
-        snoozedUntil: null,
-        flagged: false,
-        reportedSpam: false,
-        deleted: false
-      },
-      {
-        sender: 'sales@vendor.com',
-        subject: 'Proposal for pricing',
-        body: 'Hi, I\'m sending you a proposal for our product pricing. Please review it and let me know if you have any questions.',
-        read: false,
-        archived: false,
-        snoozedUntil: null,
-        flagged: false,
-        reportedSpam: false,
-        deleted: false
-      }
-    ];
+    const STORAGE_KEY = 'ai_email_sorter_emails_v1';
+    const ACTIVE_EMAIL_KEY = 'ai_email_sorter_active_email';
+    const NOTIFY_KEY = 'ai_email_sorter_notifications';
+    const TRIAL_STATUS_KEY = 'ai_email_sorter_trial_status';
+    const TRIAL_START_KEY = 'ai_email_sorter_trial_start';
+    const SETTINGS_KEY = 'ai_email_sorter_settings';
+    const RULES_KEY = 'ai_email_sorter_rules';
+    const LOCAL_EVENTS_KEY = 'ai_email_sorter_local_events';
+    const GOOGLE_CLIENT_ID_KEY = 'ai_email_sorter_google_client_id';
+    const OUTLOOK_CLIENT_ID_KEY = 'ai_email_sorter_outlook_client_id';
+    const APPLE_CAL_URL_KEY = 'ai_email_sorter_apple_cal_url';
+    const APPLE_CAL_ICS_KEY = 'ai_email_sorter_apple_cal_ics';
 
-    // The main emails array used by the UI.  Initially seeded with sample data,
-    // but replaced with real messages after a user signs in.
-    let emails = [...sampleEmails];
-
-    // Category definitions and keywords
-    const categories = {
-      Important: ['invoice', 'urgent', 'immediate', 'asap'],
-      Sales: ['proposal', 'quote', 'pricing'],
-      Meetings: ['calendar', 'schedule', 'meeting'],
-      Spam: ['unsubscribe', 'newsletter', 'marketing', 'update']
+    const CATEGORY_LABELS = {
+      urgent: 'Urgent',
+      medium: 'Medium importance',
+      low: 'Low importance',
+      spam: 'Ads/Spam'
     };
 
-    // Classify an email based on keywords
-    function classifyEmail(subject, body) {
-      const text = (subject + ' ' + body).toLowerCase();
-      for (const [category, keywords] of Object.entries(categories)) {
-        for (const kw of keywords) {
-          if (text.includes(kw)) {
-            return category;
+    const VISIBLE_CATEGORIES = ['urgent', 'medium', 'low', 'spam'];
+
+    const TEAM_MEMBERS = [
+      { name: 'Avery Lane', email: 'avery@company.com' },
+      { name: 'Jordan Kim', email: 'jordan@company.com' },
+      { name: 'Priya Shah', email: 'priya@company.com' },
+      { name: 'Sam Torres', email: 'sam@company.com' }
+    ];
+
+    let emails = [];
+    let selectedCategory = 'urgent';
+    let selectedEmailId = null;
+    let urgentQueue = [];
+    let urgentIndex = 0;
+    let calendarEvents = [];
+    let localEvents = [];
+    let selectedIds = new Set();
+    let settings = null;
+    let rules = [];
+
+    const sampleEmails = (() => {
+      const now = Date.now();
+      return [
+        createEmail({
+          id: 'sample-urgent-1',
+          provider: 'sample',
+          sender: 'accounts@vendor.com',
+          subject: 'Invoice overdue - action required',
+          body: 'We still need payment for invoice 4894. Please send today to avoid service interruption.',
+          receivedAt: now - 1000 * 60 * 45
+        }),
+        createEmail({
+          id: 'sample-urgent-2',
+          provider: 'sample',
+          sender: 'security@company.com',
+          subject: 'Security alert: password reset needed',
+          body: 'We detected a sign-in attempt. Please reset your password within 24 hours.',
+          receivedAt: now - 1000 * 60 * 90
+        }),
+        createEmail({
+          id: 'sample-medium-1',
+          provider: 'sample',
+          sender: 'client@startup.com',
+          subject: 'Proposal review for Q2 rollout',
+          body: 'Can you review the proposal and share feedback by Friday?',
+          receivedAt: now - 1000 * 60 * 180
+        }),
+        createEmail({
+          id: 'sample-low-1',
+          provider: 'sample',
+          sender: 'team@company.com',
+          subject: 'Weekly project update',
+          body: 'FYI, here is a summary of the project status and next steps.',
+          receivedAt: now - 1000 * 60 * 240
+        }),
+        createEmail({
+          id: 'sample-spam-1',
+          provider: 'sample',
+          sender: 'promo@shopnow.com',
+          subject: 'Limited time offer - 70 percent off',
+          body: 'Shop today and save big. Unsubscribe anytime.',
+          receivedAt: now - 1000 * 60 * 300
+        })
+      ];
+    })();
+
+    function createEmail(data) {
+      return {
+        id: data.id || makeId(),
+        provider: data.provider || 'local',
+        sender: data.sender || '',
+        subject: data.subject || '(no subject)',
+        body: data.body || '',
+        receivedAt: data.receivedAt || Date.now(),
+        read: Boolean(data.read),
+        archived: Boolean(data.archived),
+        deleted: Boolean(data.deleted),
+        reportedSpam: Boolean(data.reportedSpam),
+        category: data.category || '',
+        categoryReason: data.categoryReason || '',
+        assignedTo: data.assignedTo || '',
+        delegatedTo: data.delegatedTo || '',
+        followUpAt: data.followUpAt || null,
+        followUpNote: data.followUpNote || '',
+        scheduled: Boolean(data.scheduled),
+        appliedRules: Array.isArray(data.appliedRules) ? data.appliedRules : []
+      };
+    }
+
+    function makeId() {
+      if (window.crypto && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    }
+
+    function saveEmails() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(emails));
+    }
+
+    function loadEmails() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          emails = parsed.map(createEmail);
+          return;
+        } catch (err) {
+          console.warn('Failed to parse stored emails', err);
+        }
+      }
+      emails = sampleEmails.map(createEmail);
+      saveEmails();
+    }
+
+    function loadSettings() {
+      const defaults = {
+        autoArchiveSpam: true,
+        autoArchiveLowDays: 7,
+        autoSchedule: true,
+        slaHours: { urgent: 4, medium: 24, low: 72 }
+      };
+      const stored = localStorage.getItem(SETTINGS_KEY);
+      if (!stored) return defaults;
+      try {
+        return { ...defaults, ...JSON.parse(stored) };
+      } catch (err) {
+        return defaults;
+      }
+    }
+
+    function saveSettings() {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    }
+
+    function loadRules() {
+      const defaults = [
+        {
+          id: makeId(),
+          field: 'subject',
+          operator: 'contains',
+          value: 'invoice',
+          action: 'assign',
+          actionValue: 'Avery Lane',
+          enabled: true
+        },
+        {
+          id: makeId(),
+          field: 'category',
+          operator: 'equals',
+          value: 'spam',
+          action: 'archive',
+          actionValue: '',
+          enabled: true
+        }
+      ];
+      const stored = localStorage.getItem(RULES_KEY);
+      if (!stored) return defaults;
+      try {
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) && parsed.length ? parsed : defaults;
+      } catch (err) {
+        return defaults;
+      }
+    }
+
+    function saveRules() {
+      localStorage.setItem(RULES_KEY, JSON.stringify(rules));
+    }
+
+    function loadLocalEvents() {
+      const stored = localStorage.getItem(LOCAL_EVENTS_KEY);
+      if (!stored) return [];
+      try {
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function saveLocalEvents() {
+      localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(localEvents));
+    }
+
+    const SIGNALS = {
+      urgent: [
+        { term: 'urgent', weight: 3 },
+        { term: 'asap', weight: 3 },
+        { term: 'immediate', weight: 2 },
+        { term: 'action required', weight: 3 },
+        { term: 'deadline', weight: 2 },
+        { term: 'past due', weight: 3 },
+        { term: 'overdue', weight: 3 },
+        { term: 'invoice', weight: 2 },
+        { term: 'payment', weight: 2 },
+        { term: 'security', weight: 2 },
+        { term: 'outage', weight: 2 },
+        { term: 'incident', weight: 2 },
+        { term: 'reset', weight: 1 }
+      ],
+      medium: [
+        { term: 'proposal', weight: 2 },
+        { term: 'review', weight: 2 },
+        { term: 'meeting', weight: 2 },
+        { term: 'schedule', weight: 2 },
+        { term: 'project', weight: 2 },
+        { term: 'timeline', weight: 2 },
+        { term: 'feedback', weight: 2 },
+        { term: 'client', weight: 1 },
+        { term: 'follow up', weight: 1 },
+        { term: 'contract', weight: 2 }
+      ],
+      low: [
+        { term: 'fyi', weight: 1 },
+        { term: 'update', weight: 1 },
+        { term: 'summary', weight: 1 },
+        { term: 'newsletter', weight: 1 },
+        { term: 'info', weight: 1 }
+      ],
+      spam: [
+        { term: 'unsubscribe', weight: 3 },
+        { term: 'promo', weight: 2 },
+        { term: 'sale', weight: 2 },
+        { term: 'limited time', weight: 2 },
+        { term: 'offer', weight: 2 },
+        { term: 'discount', weight: 2 },
+        { term: 'free', weight: 2 },
+        { term: 'buy now', weight: 3 },
+        { term: 'sponsored', weight: 2 },
+        { term: 'marketing', weight: 2 },
+        { term: 'advertisement', weight: 2 }
+      ]
+    };
+
+    function classifyEmail(email) {
+      if (email.deleted) {
+        return { category: 'trash', reason: 'Deleted' };
+      }
+      if (email.archived) {
+        return { category: 'archived', reason: 'Archived' };
+      }
+      if (email.reportedSpam) {
+        return { category: 'spam', reason: 'Reported as junk' };
+      }
+
+      const text = (email.subject + ' ' + email.body + ' ' + email.sender).toLowerCase();
+      let urgentScore = 0;
+      let mediumScore = 0;
+      let lowScore = 0;
+      let spamScore = 0;
+      const reasons = [];
+
+      function applySignals(list, scoreSetter, label) {
+        list.forEach(signal => {
+          if (text.includes(signal.term)) {
+            scoreSetter(signal.weight);
+            reasons.push(label + ': ' + signal.term);
+          }
+        });
+      }
+
+      applySignals(SIGNALS.urgent, weight => { urgentScore += weight; }, 'Urgent');
+      applySignals(SIGNALS.medium, weight => { mediumScore += weight; }, 'Medium');
+      applySignals(SIGNALS.low, weight => { lowScore += weight; }, 'Low');
+      applySignals(SIGNALS.spam, weight => { spamScore += weight; }, 'Spam');
+
+      if (email.sender.toLowerCase().includes('no-reply')) {
+        spamScore += 2;
+        reasons.push('Spam: no-reply sender');
+      }
+
+      if (email.subject.includes('!')) {
+        urgentScore += 1;
+      }
+
+      let category = 'low';
+      if (spamScore >= 5 && urgentScore < 4) {
+        category = 'spam';
+      } else if (urgentScore >= 6 || (urgentScore >= 4 && mediumScore >= 2)) {
+        category = 'urgent';
+      } else if (mediumScore >= 3 || urgentScore >= 3) {
+        category = 'medium';
+      }
+
+      if (category === 'spam' && spamScore === 0 && lowScore > 0) {
+        category = 'low';
+      }
+
+      const reason = reasons.slice(0, 2).join(' | ') || 'General content signal';
+      return { category, reason };
+    }
+
+    function ruleMatches(email, rule) {
+      const value = (rule.value || '').toLowerCase().trim();
+      if (!value) return false;
+      let fieldText = '';
+      if (rule.field === 'subject') fieldText = email.subject;
+      if (rule.field === 'sender') fieldText = email.sender;
+      if (rule.field === 'body') fieldText = email.body;
+      if (rule.field === 'category') fieldText = email.category;
+      const text = (fieldText || '').toLowerCase();
+
+      if (rule.operator === 'equals') return text === value;
+      return text.includes(value);
+    }
+
+    function applyRuleAction(email, rule) {
+      if (rule.action === 'archive') {
+        email.archived = true;
+      } else if (rule.action === 'assign') {
+        email.assignedTo = rule.actionValue || email.assignedTo;
+      } else if (rule.action === 'delegate') {
+        email.delegatedTo = rule.actionValue || email.delegatedTo;
+      } else if (rule.action === 'followup') {
+        const days = Number(rule.actionValue) || 2;
+        email.followUpAt = Date.now() + days * 86400000;
+      }
+    }
+
+    function applySmartRulesToEmail(email) {
+      if (!Array.isArray(email.appliedRules)) {
+        email.appliedRules = [];
+      }
+      rules.forEach(rule => {
+        if (!rule.enabled) return;
+        if (email.appliedRules.includes(rule.id)) return;
+        if (ruleMatches(email, rule)) {
+          applyRuleAction(email, rule);
+          email.appliedRules.push(rule.id);
+        }
+      });
+    }
+
+    function applyAutomation() {
+      let changed = false;
+      const now = Date.now();
+      emails.forEach(email => {
+        const classification = classifyEmail(email);
+        email.category = classification.category;
+        email.categoryReason = classification.reason;
+
+        if (settings.autoArchiveSpam && email.category === 'spam' && !email.archived) {
+          email.archived = true;
+          changed = true;
+        }
+
+        if (settings.autoArchiveLowDays > 0 && email.category === 'low' && !email.archived) {
+          const ageDays = (now - email.receivedAt) / 86400000;
+          if (ageDays >= settings.autoArchiveLowDays) {
+            email.archived = true;
+            changed = true;
           }
         }
-      }
-      return 'Other';
-    }
 
-    // Action handlers for managing messages
-    function markAsRead(idx) {
-      emails[idx].read = true;
-      buildInbox();
-    }
-    function archiveEmail(idx) {
-      emails[idx].archived = true;
-      buildInbox();
-    }
-    function snoozeEmail(idx) {
-      const daysStr = prompt('Snooze for how many days?', '1');
-      const days = parseInt(daysStr);
-      if (!isNaN(days) && days > 0) {
-        const now = new Date();
-        emails[idx].snoozedUntil = now.getTime() + days * 24 * 60 * 60 * 1000;
-      }
-      buildInbox();
-    }
-    function deleteEmail(idx) {
-      if (confirm('Are you sure you want to delete this email?')) {
-        emails[idx].deleted = true;
-        buildInbox();
-      }
-    }
-    function flagEmail(idx) {
-      emails[idx].flagged = !emails[idx].flagged;
-      buildInbox();
-    }
-    function reportSpam(idx) {
-      if (!emails[idx].reportedSpam) {
-        emails[idx].reportedSpam = true;
-        emails[idx].category = 'Spam';
-      }
-      buildInbox();
-    }
-
-    // Shorten the body for display in the inbox
-    function makeSnippet(text, maxLength = 80) {
-      if (text.length <= maxLength) return text;
-      return text.slice(0, maxLength).trim() + '…';
-    }
-
-    function groupEmails() {
-      const grouped = { Important: [], Sales: [], Meetings: [], Spam: [], Archived: [], Other: [] };
-      const now = Date.now();
-      emails.forEach((email, idx) => {
-        email.idx = idx;
-        // Skip deleted emails
-        if (email.deleted) return;
-        // Skip snoozed emails until due date
-        if (email.snoozedUntil && email.snoozedUntil > now) return;
-        // Determine category unless archived or reported spam
-        let category = email.category;
-        if (!category) {
-          category = classifyEmail(email.subject, email.body);
-        }
-        if (email.reportedSpam) {
-          category = 'Spam';
-        }
-        if (email.archived) {
-          category = 'Archived';
-        }
-        email.category = category;
-        email.snippet = makeSnippet(email.body);
-        if (!grouped[category]) grouped[category] = [];
-        grouped[category].push(email);
+        applySmartRulesToEmail(email);
       });
+
+      return changed;
+    }
+
+    function groupByCategory() {
+      const grouped = {
+        urgent: [],
+        medium: [],
+        low: [],
+        spam: []
+      };
+
+      emails.forEach(email => {
+        const classification = classifyEmail(email);
+        email.category = classification.category;
+        email.categoryReason = classification.reason;
+        if (grouped[classification.category]) {
+          grouped[classification.category].push(email);
+        }
+      });
+
+      Object.keys(grouped).forEach(key => {
+        grouped[key].sort((a, b) => b.receivedAt - a.receivedAt);
+      });
+
       return grouped;
     }
 
-    function buildInbox() {
-      const container = document.getElementById('inbox');
-      container.innerHTML = '';
-      const grouped = groupEmails();
-      for (const category of ['Important', 'Sales', 'Meetings', 'Spam', 'Archived', 'Other']) {
-        const list = grouped[category];
-        const h2 = document.createElement('h2');
-        h2.textContent = category;
-        container.appendChild(h2);
-        if (!list || list.length === 0) {
-          const p = document.createElement('p');
-          p.textContent = 'No emails in this category.';
-          container.appendChild(p);
-          continue;
-        }
-        list.forEach(email => {
-          const div = document.createElement('div');
-          div.className = 'email';
-          const subjectDiv = document.createElement('div');
-          subjectDiv.className = 'subject';
-          subjectDiv.textContent = email.subject + (email.flagged ? ' ★' : '');
-          if (email.read) {
-            subjectDiv.style.opacity = '0.7';
-          }
-          div.appendChild(subjectDiv);
-          const snippetDiv = document.createElement('div');
-          snippetDiv.className = 'snippet';
-          snippetDiv.textContent = email.snippet;
-          div.appendChild(snippetDiv);
-          // Actions
-          const actionsDiv = document.createElement('div');
-          actionsDiv.style.marginTop = '8px';
-          // Draft reply as a button
-          const draftBtn = document.createElement('button');
-          draftBtn.className = 'action-button';
-          draftBtn.textContent = 'Draft Reply';
-          draftBtn.style.backgroundColor = '#33c0dd';
-          draftBtn.onclick = () => {
-            window.location.href = 'reply.html?idx=' + email.idx;
-          };
-          actionsDiv.appendChild(draftBtn);
-          // Additional action buttons with specific colours
-          const actions = [
-            { label: email.read ? '✓ Read' : 'Mark Read', handler: () => markAsRead(email.idx), color: '#38a169' },
-            { label: 'Archive', handler: () => archiveEmail(email.idx), color: '#6c757d' },
-            { label: 'Snooze', handler: () => snoozeEmail(email.idx), color: '#f6b26b' },
-            { label: 'Delete', handler: () => deleteEmail(email.idx), color: '#e63946' },
-            { label: email.flagged ? 'Unflag' : 'Flag', handler: () => flagEmail(email.idx), color: '#9b5de5' },
-            { label: 'Report Spam', handler: () => reportSpam(email.idx), color: '#dd2c00' }
-          ];
-          actions.forEach(action => {
-            const btn = document.createElement('button');
-            btn.className = 'action-button';
-            btn.textContent = action.label;
-            btn.style.backgroundColor = action.color;
-            btn.onclick = action.handler;
-            actionsDiv.appendChild(btn);
-          });
-          div.appendChild(actionsDiv);
-          container.appendChild(div);
-        });
+    function ensureSelectedCategory(grouped) {
+      if (!VISIBLE_CATEGORIES.includes(selectedCategory)) {
+        selectedCategory = 'urgent';
+      }
+      if (grouped[selectedCategory].length === 0) {
+        const fallback = VISIBLE_CATEGORIES.find(key => grouped[key].length > 0);
+        selectedCategory = fallback || 'urgent';
       }
     }
 
-    // ============================
-    // OAuth helper functions
-    // ============================
+    function updateView() {
+      applyAutomation();
+      selectedIds = new Set(
+        Array.from(selectedIds).filter(id => {
+          const email = emails.find(item => item.id === id);
+          return email && !email.deleted;
+        })
+      );
+      const grouped = groupByCategory();
+      ensureSelectedCategory(grouped);
+      renderCategoryButtons(grouped);
+      renderEmailList(grouped);
+      renderFocus(grouped);
+      renderDetail();
+      renderSummary();
+      updateConnectionStatus();
+      updateTrialUI();
+      renderFollowUps();
+      renderSlaTimers();
+      renderAssignments();
+      renderAutomationPanel();
+      renderIntegrationSettings();
+      renderSendProvider();
+      renderScheduleSuggestions();
+      saveEmails();
+    }
 
-    // Generate a random string for the OAuth state parameter to mitigate CSRF
+    function renderCategoryButtons(grouped) {
+      const container = document.getElementById('categoryButtons');
+      container.innerHTML = '';
+      VISIBLE_CATEGORIES.forEach(key => {
+        const btn = document.createElement('button');
+        btn.className = 'category-btn' + (selectedCategory === key ? ' active' : '');
+        btn.innerHTML = '<span>' + CATEGORY_LABELS[key] + '</span><span class="count-pill">' + grouped[key].length + '</span>';
+        btn.addEventListener('click', () => {
+          selectedCategory = key;
+          updateView();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function renderEmailList(grouped) {
+      const list = grouped[selectedCategory];
+      const listTitle = document.getElementById('listTitle');
+      const listCount = document.getElementById('listCount');
+      const container = document.getElementById('emailList');
+      const bulkBar = document.getElementById('bulkBar');
+      const bulkCount = document.getElementById('bulkCount');
+      const selectAll = document.getElementById('selectAll');
+      const listIdSet = new Set(list.map(email => email.id));
+      selectedIds = new Set(Array.from(selectedIds).filter(id => listIdSet.has(id)));
+      container.innerHTML = '';
+
+      listTitle.textContent = CATEGORY_LABELS[selectedCategory] + ' inbox';
+      listCount.textContent = list.length;
+
+      if (list.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No emails in this lane.';
+        container.appendChild(empty);
+        selectedEmailId = null;
+        selectedIds.clear();
+        bulkBar.classList.add('hidden');
+        return;
+      }
+
+      if (!selectedEmailId || !list.some(item => item.id === selectedEmailId)) {
+        selectedEmailId = list[0].id;
+      }
+
+      list.forEach(email => {
+        const item = document.createElement('div');
+        item.className = 'email-item' + (email.id === selectedEmailId ? ' active' : '');
+        item.setAttribute('role', 'button');
+        item.setAttribute('tabindex', '0');
+
+        const row = document.createElement('div');
+        row.className = 'email-row';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'email-select';
+        checkbox.checked = selectedIds.has(email.id);
+        checkbox.addEventListener('click', event => {
+          event.stopPropagation();
+        });
+        checkbox.addEventListener('change', event => {
+          event.stopPropagation();
+          if (event.target.checked) {
+            selectedIds.add(email.id);
+          } else {
+            selectedIds.delete(email.id);
+          }
+          updateBulkBar(list);
+        });
+
+        const title = document.createElement('div');
+        title.className = 'email-title';
+        title.textContent = email.subject;
+
+        row.appendChild(checkbox);
+        row.appendChild(title);
+
+        const meta = document.createElement('small');
+        meta.textContent = (email.sender || 'Unknown sender') + ' · ' + formatTimestamp(email.receivedAt);
+
+        const reason = document.createElement('small');
+        reason.textContent = email.categoryReason;
+
+        const slaInfo = getSlaInfo(email);
+        const slaLine = document.createElement('small');
+        slaLine.textContent = slaInfo ? 'SLA: ' + slaInfo.label : '';
+
+        const chips = document.createElement('div');
+        chips.className = 'chip-row';
+        chips.appendChild(buildChip(CATEGORY_LABELS[email.category], email.category));
+        chips.appendChild(buildChip(email.provider || 'mail', ''));
+        if (email.assignedTo) {
+          chips.appendChild(buildChip('Assigned: ' + email.assignedTo, ''));
+        }
+        if (email.delegatedTo) {
+          chips.appendChild(buildChip('Delegated: ' + email.delegatedTo, ''));
+        }
+
+        item.appendChild(row);
+        item.appendChild(meta);
+        item.appendChild(reason);
+        if (slaInfo) item.appendChild(slaLine);
+        item.appendChild(chips);
+
+        item.addEventListener('click', () => {
+          selectedEmailId = email.id;
+          updateView();
+        });
+        item.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            selectedEmailId = email.id;
+            updateView();
+          }
+        });
+
+        container.appendChild(item);
+      });
+
+      updateBulkBar(list);
+      if (selectAll) {
+        selectAll.checked = list.length > 0 && list.every(email => selectedIds.has(email.id));
+      }
+    }
+
+    function updateBulkBar(list) {
+      const bulkBar = document.getElementById('bulkBar');
+      const bulkCount = document.getElementById('bulkCount');
+      const selectAll = document.getElementById('selectAll');
+      if (!bulkBar || !bulkCount) return;
+
+      const selectedInList = list.filter(email => selectedIds.has(email.id));
+      bulkCount.textContent = selectedIds.size + ' selected';
+      if (selectedIds.size === 0) {
+        bulkBar.classList.add('hidden');
+      } else {
+        bulkBar.classList.remove('hidden');
+      }
+
+      if (selectAll) {
+        selectAll.checked = list.length > 0 && selectedInList.length === list.length;
+      }
+    }
+
+    function buildChip(label, categoryKey) {
+      const chip = document.createElement('span');
+      chip.className = 'chip' + (categoryKey ? ' ' + categoryKey : '');
+      chip.textContent = label;
+      return chip;
+    }
+
+    function renderFocus(grouped) {
+      urgentQueue = grouped.urgent;
+      const focusEmpty = document.getElementById('focusEmpty');
+      const focusView = document.getElementById('focusView');
+      const prevBtn = document.getElementById('prevUrgent');
+      const nextBtn = document.getElementById('nextUrgent');
+
+      if (urgentQueue.length === 0) {
+        focusEmpty.style.display = 'block';
+        focusView.style.display = 'none';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        urgentIndex = 0;
+        return;
+      }
+
+      focusEmpty.style.display = 'none';
+      focusView.style.display = 'grid';
+
+      if (urgentIndex >= urgentQueue.length) {
+        urgentIndex = 0;
+      }
+
+      const email = urgentQueue[urgentIndex];
+      document.getElementById('focusFrom').textContent = email.sender || 'Unknown sender';
+      document.getElementById('focusReceived').textContent = formatTimestamp(email.receivedAt);
+      document.getElementById('focusProvider').textContent = email.provider || 'mail';
+      document.getElementById('focusSubject').textContent = email.subject;
+      document.getElementById('focusReason').textContent = email.categoryReason;
+      document.getElementById('focusPreview').textContent = summarize(email.body);
+
+      prevBtn.disabled = urgentQueue.length <= 1;
+      nextBtn.disabled = urgentQueue.length <= 1;
+
+      if (selectedCategory === 'urgent') {
+        selectedEmailId = email.id;
+      }
+    }
+
+    function renderDetail() {
+      const detailEmpty = document.getElementById('detailEmpty');
+      const detailView = document.getElementById('detailView');
+      const email = getSelectedEmail();
+
+      if (!email) {
+        detailEmpty.style.display = 'block';
+        detailView.style.display = 'none';
+        return;
+      }
+
+      detailEmpty.style.display = 'none';
+      detailView.style.display = 'grid';
+
+      const slaInfo = getSlaInfo(email);
+      const assignmentInfo = [];
+      if (email.assignedTo) assignmentInfo.push('Assigned: ' + email.assignedTo);
+      if (email.delegatedTo) assignmentInfo.push('Delegated: ' + email.delegatedTo);
+      if (slaInfo) assignmentInfo.push('SLA ' + slaInfo.label);
+
+      document.getElementById('detailMeta').textContent = (email.sender || 'Unknown sender') +
+        ' · ' + formatTimestamp(email.receivedAt) + ' · ' + (email.provider || 'mail') +
+        (assignmentInfo.length ? ' · ' + assignmentInfo.join(' · ') : '');
+      document.getElementById('detailSubject').textContent = email.subject;
+      document.getElementById('detailBody').textContent = email.body || '(No message body)';
+    }
+
+    function renderSummary() {
+      const email = getSelectedEmail();
+      const categoryEl = document.getElementById('summaryCategory');
+      const reasonEl = document.getElementById('summaryReason');
+      const summaryEl = document.getElementById('summaryText');
+      const actionEl = document.getElementById('summaryAction');
+
+      if (!email) {
+        categoryEl.textContent = 'No selection';
+        categoryEl.className = 'chip';
+        reasonEl.textContent = 'Select an email to see insights.';
+        summaryEl.textContent = '';
+        actionEl.textContent = '';
+        return;
+      }
+
+      categoryEl.textContent = CATEGORY_LABELS[email.category] || 'Other';
+      categoryEl.className = 'chip ' + email.category;
+      reasonEl.textContent = email.categoryReason;
+      summaryEl.textContent = summarize(email.body);
+      actionEl.textContent = suggestNextStep(email.category);
+    }
+
+    function renderAssignments() {
+      const info = document.getElementById('assignmentInfo');
+      const email = getSelectedEmail();
+      const assignSelect = document.getElementById('assignSelect');
+      const delegateSelect = document.getElementById('delegateSelect');
+      if (!info) return;
+      if (!email) {
+        info.textContent = 'Select an email to assign or delegate.';
+        if (assignSelect) assignSelect.value = '';
+        if (delegateSelect) delegateSelect.value = '';
+        return;
+      }
+      const assigned = email.assignedTo ? 'Assigned to ' + email.assignedTo : 'Unassigned';
+      const delegated = email.delegatedTo ? 'Delegated to ' + email.delegatedTo : 'Not delegated';
+      info.textContent = assigned + ' · ' + delegated;
+      if (assignSelect) assignSelect.value = email.assignedTo || '';
+      if (delegateSelect) delegateSelect.value = email.delegatedTo || '';
+    }
+
+    function renderAutomationPanel() {
+      const autoArchiveSpam = document.getElementById('autoArchiveSpam');
+      const autoArchiveLowDays = document.getElementById('autoArchiveLowDays');
+      const autoSchedule = document.getElementById('autoSchedule');
+
+      if (autoArchiveSpam) autoArchiveSpam.checked = Boolean(settings.autoArchiveSpam);
+      if (autoArchiveLowDays) autoArchiveLowDays.value = settings.autoArchiveLowDays || 7;
+      if (autoSchedule) autoSchedule.checked = Boolean(settings.autoSchedule);
+
+      renderRulesList();
+    }
+
+    function renderIntegrationSettings() {
+      const googleInput = document.getElementById('googleClientIdInput');
+      const outlookInput = document.getElementById('outlookClientIdInput');
+      if (googleInput) {
+        googleInput.value = localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || '';
+      }
+      if (outlookInput) {
+        outlookInput.value = localStorage.getItem(OUTLOOK_CLIENT_ID_KEY) || '';
+      }
+    }
+
+    function renderRulesList() {
+      const list = document.getElementById('ruleList');
+      if (!list) return;
+      list.innerHTML = '';
+      if (rules.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No smart rules configured.';
+        list.appendChild(empty);
+        return;
+      }
+
+      rules.forEach(rule => {
+        const item = document.createElement('div');
+        item.className = 'stack-item rule-item';
+
+        const text = document.createElement('div');
+        text.textContent = `${rule.field} ${rule.operator} "${rule.value}" → ${rule.action} ${rule.actionValue || ''}`.trim();
+
+        const toggle = document.createElement('button');
+        toggle.className = 'ghost';
+        toggle.textContent = rule.enabled ? 'Enabled' : 'Disabled';
+        toggle.addEventListener('click', () => {
+          rule.enabled = !rule.enabled;
+          saveRules();
+          renderRulesList();
+        });
+
+        const remove = document.createElement('button');
+        remove.className = 'ghost';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', () => {
+          rules = rules.filter(item => item.id !== rule.id);
+          saveRules();
+          renderRulesList();
+        });
+
+        item.appendChild(text);
+        item.appendChild(toggle);
+        item.appendChild(remove);
+        list.appendChild(item);
+      });
+    }
+
+    function renderFollowUps() {
+      const list = document.getElementById('followUpList');
+      if (!list) return;
+      list.innerHTML = '';
+      const items = getFollowUpItems();
+      if (items.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No follow-ups scheduled.';
+        list.appendChild(empty);
+        return;
+      }
+
+      items.forEach(email => {
+        const card = document.createElement('div');
+        card.className = 'stack-item';
+        const title = document.createElement('div');
+        title.textContent = email.subject;
+        const time = document.createElement('small');
+        const overdue = email.followUpAt < Date.now();
+        time.textContent = (overdue ? 'Overdue follow-up: ' : 'Follow-up on ') + formatTimestamp(email.followUpAt);
+        card.appendChild(title);
+        card.appendChild(time);
+        list.appendChild(card);
+      });
+    }
+
+    function renderSlaTimers() {
+      const list = document.getElementById('slaList');
+      if (!list) return;
+      list.innerHTML = '';
+      const items = getSlaItems();
+      if (items.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No active SLA timers.';
+        list.appendChild(empty);
+        return;
+      }
+
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'stack-item';
+        const title = document.createElement('div');
+        title.textContent = item.email.subject;
+        const time = document.createElement('small');
+        time.textContent = item.sla.label + ' · due ' + formatTimestamp(item.sla.dueAt);
+        card.appendChild(title);
+        card.appendChild(time);
+        list.appendChild(card);
+      });
+    }
+
+    function renderScheduleSuggestions() {
+      const container = document.getElementById('scheduleSuggestions');
+      if (!container) return;
+      container.innerHTML = '';
+      const suggestions = buildScheduleSuggestions();
+      if (suggestions.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = settings.autoSchedule ? 'No scheduling suggestions.' : 'Auto-scheduling is disabled.';
+        container.appendChild(empty);
+        return;
+      }
+
+      suggestions.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'stack-item';
+        const title = document.createElement('div');
+        title.textContent = item.title;
+        const time = document.createElement('small');
+        time.textContent = formatEventTime(item.start, item.end);
+        const btn = document.createElement('button');
+        btn.className = 'ghost';
+        btn.textContent = 'Add to calendar';
+        btn.addEventListener('click', () => {
+          const email = emails.find(e => e.id === item.emailId);
+          if (!email) return;
+          email.scheduled = true;
+          localEvents.push({
+            id: 'auto-' + email.id,
+            provider: 'auto',
+            title: item.title,
+            start: item.start,
+            end: item.end,
+            location: ''
+          });
+          saveLocalEvents();
+          syncCalendars();
+          updateView();
+          showToast('Scheduled follow-up added.');
+        });
+        card.appendChild(title);
+        card.appendChild(time);
+        card.appendChild(btn);
+        container.appendChild(card);
+      });
+    }
+
+    function populateTeamSelects() {
+      const selects = [
+        { el: document.getElementById('assignSelect'), placeholder: 'Assign to...' },
+        { el: document.getElementById('delegateSelect'), placeholder: 'Delegate to...' },
+        { el: document.getElementById('bulkAssign'), placeholder: 'Assign to...' }
+      ];
+
+      selects.forEach(item => {
+        if (!item.el) return;
+        item.el.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = item.placeholder;
+        item.el.appendChild(placeholder);
+        TEAM_MEMBERS.forEach(member => {
+          const option = document.createElement('option');
+          option.value = member.name;
+          option.textContent = member.name + ' (' + member.email + ')';
+          item.el.appendChild(option);
+        });
+      });
+    }
+
+    function getCurrentList() {
+      const grouped = groupByCategory();
+      return grouped[selectedCategory] || [];
+    }
+
+    function generateDailyBrief() {
+      const grouped = groupByCategory();
+      const urgentCount = grouped.urgent.length;
+      const mediumCount = grouped.medium.length;
+      const lowCount = grouped.low.length;
+      const spamCount = grouped.spam.length;
+
+      const slaItems = getSlaItems();
+      const followUps = getFollowUpItems();
+      const upcomingEvents = calendarEvents.slice(0, 3);
+
+      let brief = 'Daily Brief — ' + new Date().toLocaleDateString() + '\n';
+      brief += 'Top priorities:\n';
+      if (urgentCount > 0) {
+        const topUrgent = slaItems.find(item => item.email.category === 'urgent');
+        if (topUrgent) {
+          brief += '- Urgent: ' + urgentCount + ' messages. Next up: ' + topUrgent.email.subject + ' (' + topUrgent.sla.label + ')\n';
+        } else {
+          brief += '- Urgent: ' + urgentCount + ' messages.\n';
+        }
+      } else {
+        brief += '- No urgent items right now.\n';
+      }
+
+      brief += '\nFollow-ups:\n';
+      if (followUps.length > 0) {
+        followUps.forEach(email => {
+          brief += '- ' + email.subject + ' due ' + formatTimestamp(email.followUpAt) + '\n';
+        });
+      } else {
+        brief += '- None scheduled.\n';
+      }
+
+      brief += '\nToday\'s schedule:\n';
+      if (upcomingEvents.length > 0) {
+        upcomingEvents.forEach(event => {
+          brief += '- ' + event.title + ' at ' + formatEventTime(event.start, event.end) + '\n';
+        });
+      } else {
+        brief += '- No upcoming events.\n';
+      }
+
+      brief += '\nInbox snapshot: ' + mediumCount + ' medium, ' + lowCount + ' low, ' + spamCount + ' spam.\n';
+      brief += 'Automation: spam auto-archive ' + (settings.autoArchiveSpam ? 'on' : 'off');
+      brief += ', auto-schedule ' + (settings.autoSchedule ? 'on' : 'off') + '.';
+      return brief;
+    }
+
+    function getSelectedEmail() {
+      if (!selectedEmailId) return null;
+      return emails.find(item => item.id === selectedEmailId) || null;
+    }
+
+    function suggestNextStep(category) {
+      if (category === 'urgent') return 'Reply today or schedule a follow-up.';
+      if (category === 'medium') return 'Plan a response within 1-2 days.';
+      if (category === 'low') return 'Review later or archive.';
+      if (category === 'spam') return 'Report junk or delete.';
+      return 'Review the message.';
+    }
+
+    function summarize(text) {
+      if (!text) return '';
+      if (text.length <= 160) return text;
+      return text.slice(0, 157).trim() + '...';
+    }
+
+    function formatTimestamp(ts) {
+      const date = new Date(ts);
+      return date.toLocaleString();
+    }
+
+    function formatDuration(ms) {
+      const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      if (hours > 0) return hours + 'h ' + minutes + 'm';
+      return minutes + 'm';
+    }
+
+    function getSlaInfo(email) {
+      if (!email) return null;
+      if (!['urgent', 'medium', 'low'].includes(email.category)) return null;
+      const hours = settings.slaHours[email.category] || 24;
+      const dueAt = email.receivedAt + hours * 3600000;
+      const remaining = dueAt - Date.now();
+      const overdue = remaining < 0;
+      return {
+        dueAt,
+        remaining,
+        overdue,
+        label: overdue ? 'Overdue by ' + formatDuration(Math.abs(remaining)) : 'Due in ' + formatDuration(remaining)
+      };
+    }
+
+    function getFollowUpItems() {
+      return emails
+        .filter(email => email.followUpAt && !email.archived && !email.deleted)
+        .sort((a, b) => a.followUpAt - b.followUpAt)
+        .slice(0, 6);
+    }
+
+    function getSlaItems() {
+      const items = emails
+        .filter(email => !email.archived && !email.deleted)
+        .map(email => ({ email, sla: getSlaInfo(email) }))
+        .filter(item => item.sla)
+        .sort((a, b) => a.sla.dueAt - b.sla.dueAt);
+      return items.slice(0, 6);
+    }
+
+    function getNextScheduleSlot(offset = 0) {
+      const now = new Date();
+      const slot = new Date(now.getTime());
+      slot.setDate(slot.getDate() + 1);
+      slot.setHours(10, 0, 0, 0);
+      slot.setHours(slot.getHours() + offset * 2);
+      return slot.getTime();
+    }
+
+    function buildScheduleSuggestions() {
+      if (!settings.autoSchedule) return [];
+      const keywords = ['meeting', 'schedule', 'calendar', 'call', 'demo', 'intro'];
+      return emails
+        .filter(email => !email.archived && !email.deleted && !email.scheduled)
+        .filter(email => {
+          const text = (email.subject + ' ' + email.body).toLowerCase();
+          return keywords.some(term => text.includes(term));
+        })
+        .slice(0, 4)
+        .map((email, index) => {
+          const start = getNextScheduleSlot(index);
+          return {
+            emailId: email.id,
+            title: 'Follow-up: ' + email.subject,
+            start,
+            end: start + 3600000
+          };
+        });
+    }
+
+    function markRead(id) {
+      const email = emails.find(item => item.id === id);
+      if (email) {
+        email.read = true;
+        updateView();
+      }
+    }
+
+    function archiveEmail(id) {
+      const email = emails.find(item => item.id === id);
+      if (email) {
+        email.archived = true;
+        updateView();
+        showToast('Archived email.');
+      }
+    }
+
+    function deleteEmail(id) {
+      const email = emails.find(item => item.id === id);
+      if (email) {
+        email.deleted = true;
+        updateView();
+        showToast('Moved email to trash.');
+      }
+    }
+
+    function reportJunk(id) {
+      const email = emails.find(item => item.id === id);
+      if (email) {
+        email.reportedSpam = true;
+        updateView();
+        showToast('Reported as junk.');
+      }
+    }
+
+    function draftReply(id) {
+      localStorage.setItem(ACTIVE_EMAIL_KEY, id);
+      window.location.href = 'reply.html?id=' + encodeURIComponent(id);
+    }
+
+    function extractEmailAddress(value) {
+      if (!value) return '';
+      const match = value.match(/<([^>]+)>/);
+      return match ? match[1] : value;
+    }
+
+    function base64UrlEncode(text) {
+      const bytes = new TextEncoder().encode(text);
+      let binary = '';
+      bytes.forEach(byte => {
+        binary += String.fromCharCode(byte);
+      });
+      const base64 = btoa(binary);
+      return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function renderSendProvider() {
+      const select = document.getElementById('sendProvider');
+      const sendButton = document.getElementById('sendEmail');
+      if (!select) return;
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
+
+      select.innerHTML = '';
+      const providers = [];
+      if (googleToken) providers.push({ value: 'google', label: 'Gmail' });
+      if (outlookToken) providers.push({ value: 'outlook', label: 'Outlook' });
+
+      if (providers.length > 1) {
+        const autoOption = document.createElement('option');
+        autoOption.value = 'auto';
+        autoOption.textContent = 'Auto (preferred)';
+        select.appendChild(autoOption);
+      }
+
+      providers.forEach(provider => {
+        const option = document.createElement('option');
+        option.value = provider.value;
+        option.textContent = provider.label;
+        select.appendChild(option);
+      });
+
+      if (providers.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Connect Gmail or Outlook';
+        select.appendChild(option);
+        if (sendButton) sendButton.disabled = true;
+      } else if (sendButton) {
+        sendButton.disabled = false;
+      }
+    }
+
+    async function sendEmailMessage() {
+      const providerSelect = document.getElementById('sendProvider');
+      const toInput = document.getElementById('sendTo');
+      const subjectInput = document.getElementById('sendSubject');
+      const bodyInput = document.getElementById('sendBody');
+      const status = document.getElementById('sendStatus');
+
+      if (!providerSelect || !toInput || !subjectInput || !bodyInput) return;
+      const to = toInput.value.trim();
+      const subject = subjectInput.value.trim();
+      const body = bodyInput.value.trim();
+
+      if (!to || !subject || !body) {
+        showToast('Fill in To, Subject, and Message.');
+        return;
+      }
+
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
+      let provider = providerSelect.value;
+
+      if (provider === 'auto') {
+        provider = googleToken ? 'google' : 'outlook';
+      }
+
+      if (provider === 'google' && !googleToken) {
+        showToast('Connect Google with send scope.');
+        return;
+      }
+      if (provider === 'outlook' && !outlookToken) {
+        showToast('Connect Outlook with Mail.Send scope.');
+        return;
+      }
+
+      if (status) status.textContent = 'Sending...';
+
+      try {
+        if (provider === 'google') {
+          const message = [
+            'To: ' + to,
+            'Subject: ' + subject,
+            'Content-Type: text/plain; charset="UTF-8"',
+            '',
+            body
+          ].join('\r\n');
+          const raw = base64UrlEncode(message);
+          const resp = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + googleToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ raw })
+          });
+          if (!resp.ok) throw new Error('Gmail send failed');
+        } else if (provider === 'outlook') {
+          const resp = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + outlookToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: {
+                subject,
+                body: { contentType: 'Text', content: body },
+                toRecipients: [{ emailAddress: { address: to } }]
+              },
+              saveToSentItems: true
+            })
+          });
+          if (!resp.ok) throw new Error('Outlook send failed');
+        }
+
+        if (status) status.textContent = 'Message sent.';
+        showToast('Email sent.');
+        toInput.value = '';
+        subjectInput.value = '';
+        bodyInput.value = '';
+      } catch (err) {
+        console.error(err);
+        if (status) status.textContent = 'Send failed. Check token scopes.';
+        showToast('Send failed. Check token scopes.');
+      }
+    }
+
+    function assignEmail(id, assignee) {
+      const email = emails.find(item => item.id === id);
+      if (email) {
+        email.assignedTo = assignee || '';
+      }
+    }
+
+    function delegateEmail(id, assignee) {
+      const email = emails.find(item => item.id === id);
+      if (email) {
+        email.delegatedTo = assignee || '';
+      }
+    }
+
+    function setFollowUp(id, days) {
+      const email = emails.find(item => item.id === id);
+      if (email) {
+        const daysNumber = Math.max(1, Number(days) || 1);
+        email.followUpAt = Date.now() + daysNumber * 86400000;
+      }
+    }
+
+    function clearAssignments(id) {
+      const email = emails.find(item => item.id === id);
+      if (email) {
+        email.assignedTo = '';
+        email.delegatedTo = '';
+      }
+    }
+
+    function applyBulkAction(action, value) {
+      selectedIds.forEach(id => {
+        const email = emails.find(item => item.id === id);
+        if (!email) return;
+        if (action === 'archive') email.archived = true;
+        if (action === 'delete') email.deleted = true;
+        if (action === 'junk') email.reportedSpam = true;
+        if (action === 'assign') email.assignedTo = value || '';
+      });
+      selectedIds.clear();
+      updateView();
+    }
+
+    function handleFocusAction(action) {
+      if (urgentQueue.length === 0) return;
+      const current = urgentQueue[urgentIndex];
+      if (!current) return;
+
+      if (action === 'archive') archiveEmail(current.id);
+      if (action === 'delete') deleteEmail(current.id);
+      if (action === 'junk') reportJunk(current.id);
+      if (action === 'read') markRead(current.id);
+      if (action === 'reply') draftReply(current.id);
+      if (action === 'open') {
+        selectedCategory = 'urgent';
+        selectedEmailId = current.id;
+        updateView();
+        document.getElementById('emailList').scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function handleUrgentNav(direction) {
+      if (urgentQueue.length <= 1) return;
+      if (direction === 'next') {
+        urgentIndex = (urgentIndex + 1) % urgentQueue.length;
+      } else {
+        urgentIndex = (urgentIndex - 1 + urgentQueue.length) % urgentQueue.length;
+      }
+      updateView();
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      window.clearTimeout(toast.hideTimer);
+      toast.hideTimer = window.setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2800);
+    }
+
+    function setStatusPill(el, connected, label) {
+      el.classList.toggle('connected', connected);
+      el.classList.toggle('disconnected', !connected);
+      if (label) {
+        el.innerHTML = '<span class="dot"></span>' + label;
+      }
+    }
+
+    function updateConnectionStatus() {
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
+      const notifyEnabled = localStorage.getItem(NOTIFY_KEY) === 'true';
+
+      setStatusPill(document.getElementById('gmailStatus'), Boolean(googleToken), 'Gmail');
+      setStatusPill(document.getElementById('outlookStatus'), Boolean(outlookToken), 'Outlook');
+      setStatusPill(document.getElementById('notifyStatus'), notifyEnabled, 'Notifications');
+
+      const appleConnected = Boolean(localStorage.getItem(APPLE_CAL_URL_KEY) || localStorage.getItem(APPLE_CAL_ICS_KEY));
+      setStatusPill(document.getElementById('googleCalStatus'), Boolean(googleToken), 'Google Cal');
+      setStatusPill(document.getElementById('outlookCalStatus'), Boolean(outlookToken), 'Outlook Cal');
+      setStatusPill(document.getElementById('appleCalStatus'), appleConnected, 'Apple Cal');
+    }
+
+    function getTrialInfo() {
+      const status = localStorage.getItem(TRIAL_STATUS_KEY);
+      const started = Number(localStorage.getItem(TRIAL_START_KEY));
+      if (status === 'active' && started) {
+        const elapsedDays = Math.floor((Date.now() - started) / 86400000);
+        const daysLeft = Math.max(0, 7 - elapsedDays);
+        if (daysLeft === 0) {
+          return { state: 'ended', elapsedDays, daysLeft };
+        }
+        return { state: 'active', elapsedDays, daysLeft };
+      }
+      return { state: 'inactive', elapsedDays: 0, daysLeft: 7 };
+    }
+
+    function updateTrialUI() {
+      const statusEl = document.getElementById('trialStatus');
+      const noteEl = document.getElementById('trialNote');
+      const buttonEl = document.getElementById('startTrial');
+      if (!statusEl || !noteEl || !buttonEl) return;
+
+      const info = getTrialInfo();
+      if (info.state === 'active') {
+        statusEl.textContent = 'Trial day ' + Math.min(info.elapsedDays + 1, 7);
+        statusEl.className = 'chip low';
+        noteEl.textContent = info.daysLeft + ' day(s) left in your trial.';
+        buttonEl.textContent = 'Trial active';
+        buttonEl.disabled = true;
+        return;
+      }
+
+      if (info.state === 'ended') {
+        statusEl.textContent = 'Trial ended';
+        statusEl.className = 'chip spam';
+        noteEl.textContent = 'Trial ended. Add a subscription to keep access.';
+        buttonEl.textContent = 'Trial ended';
+        buttonEl.disabled = true;
+        return;
+      }
+
+      statusEl.textContent = 'Trial inactive';
+      statusEl.className = 'chip';
+      noteEl.textContent = '7-day free trial with card required. Configure Stripe keys in .env to enable checkout.';
+      buttonEl.textContent = 'Start free trial';
+      buttonEl.disabled = false;
+    }
+
+    async function startTrialCheckout() {
+      const buttonEl = document.getElementById('startTrial');
+      const noteEl = document.getElementById('trialNote');
+      if (buttonEl) buttonEl.disabled = true;
+
+      try {
+        if (window.location.protocol === 'file:') {
+          showToast('Stripe checkout requires the app to be served (run npm start).');
+          if (noteEl) noteEl.textContent = 'Start the local server to enable checkout.';
+          if (buttonEl) buttonEl.disabled = false;
+          return;
+        }
+        const resp = await fetch('/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: 'trial' })
+        });
+
+        if (!resp.ok) {
+          const error = await resp.json().catch(() => ({}));
+          const message = error.error || 'Unable to start checkout. Check Stripe env vars.';
+          showToast(message);
+          if (noteEl) noteEl.textContent = message;
+          if (buttonEl) buttonEl.disabled = false;
+          return;
+        }
+
+        const data = await resp.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          showToast('Checkout unavailable.');
+          if (noteEl) noteEl.textContent = 'Checkout URL missing. Check the server logs.';
+          if (buttonEl) buttonEl.disabled = false;
+        }
+      } catch (err) {
+        console.error('Checkout error', err);
+        showToast('Checkout failed.');
+        if (noteEl) noteEl.textContent = 'Checkout failed. Ensure the server is running.';
+        if (buttonEl) buttonEl.disabled = false;
+      }
+    }
+
+    function requestNotifications() {
+      if (!('Notification' in window)) {
+        showToast('Notifications are not supported in this browser.');
+        return;
+      }
+
+      Notification.requestPermission().then(permission => {
+        const enabled = permission === 'granted';
+        localStorage.setItem(NOTIFY_KEY, String(enabled));
+        updateConnectionStatus();
+        showToast(enabled ? 'Notifications enabled.' : 'Notifications blocked.');
+      });
+    }
+
+    function sendNotification(title, body) {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      new Notification(title, { body });
+    }
+
+    function notifyForNewEmails(newIds) {
+      const enabled = localStorage.getItem(NOTIFY_KEY) === 'true';
+      if (!enabled) return;
+
+      const newEmails = emails.filter(email => newIds.includes(email.id));
+      const urgentNew = newEmails.filter(email => email.category === 'urgent');
+      const spamNew = newEmails.filter(email => email.category === 'spam');
+
+      if (urgentNew.length > 0) {
+        sendNotification('Urgent email received', urgentNew.length + ' urgent message(s) need attention.');
+        showToast('Urgent email received.');
+      }
+
+      if (spamNew.length > 0) {
+        sendNotification('Spam filtered', spamNew.length + ' ads/spam message(s) filtered.');
+        showToast('Ads/Spam filtered.');
+      }
+    }
+
+    function mergeEmails(existing, incoming) {
+      const map = new Map(existing.map(email => [email.id, email]));
+      const newIds = [];
+
+      incoming.forEach(email => {
+        const prev = map.get(email.id);
+        if (prev) {
+          map.set(email.id, {
+            ...email,
+            archived: prev.archived,
+            deleted: prev.deleted,
+            reportedSpam: prev.reportedSpam,
+            read: prev.read || email.read
+          });
+        } else {
+          map.set(email.id, email);
+          newIds.push(email.id);
+        }
+      });
+
+      return { merged: Array.from(map.values()), newIds };
+    }
+
+    function ingestEmails(incoming) {
+      const result = mergeEmails(emails, incoming);
+      emails = result.merged;
+      updateView();
+      notifyForNewEmails(result.newIds);
+    }
+
+    function simulateEmail() {
+      const now = Date.now();
+      const options = [
+        {
+          sender: 'alerts@service.com',
+          subject: 'Urgent: service outage in region',
+          body: 'Our monitoring detected an outage. Please acknowledge immediately.'
+        },
+        {
+          sender: 'marketing@store.com',
+          subject: 'Promo: new arrivals this week',
+          body: 'Limited time offer. Unsubscribe any time.'
+        },
+        {
+          sender: 'pm@company.com',
+          subject: 'Project timeline check-in',
+          body: 'Can you confirm the delivery timeline for next month?'
+        },
+        {
+          sender: 'team@company.com',
+          subject: 'FYI: sprint recap',
+          body: 'Sharing a quick summary of the sprint results.'
+        }
+      ];
+
+      const pick = options[Math.floor(Math.random() * options.length)];
+      const newEmail = createEmail({
+        provider: 'simulated',
+        sender: pick.sender,
+        subject: pick.subject,
+        body: pick.body,
+        receivedAt: now
+      });
+
+      ingestEmails([newEmail]);
+      showToast('Simulated a new email.');
+    }
+
+    async function syncInbox() {
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
+
+      if (!googleToken && !outlookToken) {
+        showToast('Connect Google or Outlook first.');
+        return;
+      }
+
+      const incoming = [];
+      if (googleToken) {
+        const gmailMessages = await fetchGmailMessages();
+        incoming.push(...gmailMessages);
+      }
+      if (outlookToken) {
+        const outlookMessages = await fetchOutlookMessages();
+        incoming.push(...outlookMessages);
+      }
+
+      if (incoming.length === 0) {
+        showToast('No new messages found.');
+        return;
+      }
+
+      ingestEmails(incoming);
+      showToast('Inbox synced.');
+    }
+
     function generateRandomString(length = 16) {
       const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
       let result = '';
-      for (let i = 0; i < length; i++) {
+      for (let i = 0; i < length; i += 1) {
         result += charset.charAt(Math.floor(Math.random() * charset.length));
       }
       return result;
     }
 
-    // Begin Google OAuth (implicit grant). Redirects the user to Google's
-    // authorization endpoint with the appropriate parameters. After the user
-    // completes the consent flow, Google will redirect back with an access token
-    // in the URL hash (#access_token=...).
-    function authenticateGmail() {
+    function getGoogleClientId() {
+      return localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || GOOGLE_CLIENT_ID;
+    }
+
+    function getOutlookClientId() {
+      return localStorage.getItem(OUTLOOK_CLIENT_ID_KEY) || OUTLOOK_CLIENT_ID;
+    }
+
+    function authenticateGoogle() {
+      const clientId = getGoogleClientId();
+      if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID') {
+        showToast('Set your Google client ID in Integration settings.');
+        return;
+      }
       const state = generateRandomString();
-      localStorage.setItem('gmail_state', state);
+      localStorage.setItem('google_state', state);
       const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' +
-        '?client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID) +
+        '?client_id=' + encodeURIComponent(clientId) +
         '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
         '&response_type=token' +
-        '&scope=' + encodeURIComponent(GMAIL_SCOPES) +
-        '&state=' + encodeURIComponent(state);
+        '&scope=' + encodeURIComponent(GOOGLE_SCOPES) +
+        '&state=' + encodeURIComponent(state) +
+        '&prompt=consent';
       window.location.href = authUrl;
     }
 
-    // Begin Outlook (Microsoft) OAuth (implicit grant). Redirects the user to
-    // Microsoft’s authorization endpoint. After consent, an access token will
-    // arrive in the URL hash (#access_token=...).
     function authenticateOutlook() {
+      const clientId = getOutlookClientId();
+      if (!clientId || clientId === 'YOUR_OUTLOOK_CLIENT_ID') {
+        showToast('Set your Outlook client ID in Integration settings.');
+        return;
+      }
       const state = generateRandomString();
       localStorage.setItem('outlook_state', state);
       const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize' +
-        '?client_id=' + encodeURIComponent(OUTLOOK_CLIENT_ID) +
+        '?client_id=' + encodeURIComponent(clientId) +
         '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
         '&response_type=token' +
         '&scope=' + encodeURIComponent(OUTLOOK_SCOPES) +
@@ -373,124 +2406,624 @@
       window.location.href = authUrl;
     }
 
-    // Parse the URL fragment returned from the OAuth servers and store access
-    // tokens accordingly. Once tokens are saved, trigger message fetches.
     function handleAuthResponse() {
       const fragment = window.location.hash.substring(1);
-      if (!fragment) return;
+      if (!fragment) return false;
       const params = new URLSearchParams(fragment);
       const accessToken = params.get('access_token');
       const state = params.get('state');
-      if (!accessToken || !state) return;
-      // Clear the fragment to avoid exposing the token
+      if (!accessToken || !state) return false;
+
       window.history.replaceState({}, document.title, window.location.pathname);
-      // Identify which provider returned the token based on the stored state
-      if (state === localStorage.getItem('gmail_state')) {
-        localStorage.setItem('gmail_access_token', accessToken);
-        fetchGmailMessages();
-      } else if (state === localStorage.getItem('outlook_state')) {
-        localStorage.setItem('outlook_access_token', accessToken);
-        fetchOutlookMessages();
+
+      if (state === localStorage.getItem('google_state') || state === localStorage.getItem('gmail_state')) {
+        localStorage.setItem('google_access_token', accessToken);
+        showToast('Google connected.');
+        return true;
       }
+      if (state === localStorage.getItem('outlook_state')) {
+        localStorage.setItem('outlook_access_token', accessToken);
+        showToast('Outlook connected.');
+        return true;
+      }
+      return false;
     }
 
-    // Retrieve a batch of recent messages from the Gmail API using the stored
-    // access token.  This function populates the global `emails` array and
-    // rebuilds the inbox UI.  It fetches only a handful of messages for demo
-    // purposes; in a production app you might implement pagination.
     async function fetchGmailMessages() {
-      const token = localStorage.getItem('gmail_access_token');
-      if (!token) return;
+      const token = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      if (!token) return [];
+
       try {
-        // List message IDs
         const listResp = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=10', {
           headers: { 'Authorization': 'Bearer ' + token }
         });
         const listData = await listResp.json();
-        if (!listData.messages) {
-          console.warn('No Gmail messages returned.');
-          return;
-        }
+        if (!listData.messages) return [];
+
         const messages = [];
         for (const msg of listData.messages) {
-          const detailResp = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/' + msg.id + '?format=metadata&metadataHeaders=Subject&metadataHeaders=From', {
-            headers: { 'Authorization': 'Bearer ' + token }
-          });
+          const detailResp = await fetch(
+            'https://www.googleapis.com/gmail/v1/users/me/messages/' + msg.id +
+            '?format=metadata&metadataHeaders=Subject&metadataHeaders=From',
+            { headers: { 'Authorization': 'Bearer ' + token } }
+          );
           const detail = await detailResp.json();
-          // Extract subject and sender from the headers
-          const headers = detail.payload.headers || [];
-          const subjHeader = headers.find(h => h.name === 'Subject');
+          const headers = detail.payload ? detail.payload.headers || [] : [];
+          const subjectHeader = headers.find(h => h.name === 'Subject');
           const fromHeader = headers.find(h => h.name === 'From');
-          const subject = subjHeader ? subjHeader.value : '(no subject)';
-          const sender = fromHeader ? fromHeader.value : '';
-          // Gmail API provides a snippet summary for each message
-          const body = detail.snippet || '';
-          messages.push({
-            sender: sender,
-            subject: subject,
-            body: body,
-            read: false,
-            archived: false,
-            snoozedUntil: null,
-            flagged: false,
-            reportedSpam: false,
-            deleted: false
-          });
+          messages.push(createEmail({
+            id: 'gmail-' + detail.id,
+            provider: 'gmail',
+            sender: fromHeader ? fromHeader.value : '',
+            subject: subjectHeader ? subjectHeader.value : '(no subject)',
+            body: detail.snippet || '',
+            receivedAt: detail.internalDate ? Number(detail.internalDate) : Date.now(),
+            read: false
+          }));
         }
-        // Replace the global emails array with fetched messages
-        emails = messages;
-        buildInbox();
+        return messages;
       } catch (err) {
-        console.error('Error fetching Gmail messages:', err);
+        console.error('Gmail fetch failed', err);
+        showToast('Failed to fetch Gmail messages.');
+        return [];
       }
     }
 
-    // Retrieve a batch of recent messages from the Microsoft Graph API.  This
-    // function requires that the Mail.Read scope be granted and populates the
-    // `emails` array accordingly.
     async function fetchOutlookMessages() {
       const token = localStorage.getItem('outlook_access_token');
-      if (!token) return;
+      if (!token) return [];
+
       try {
-        // Use the standard messages endpoint.  With the Mail.Read scope we
-        // can read messages directly from the signed‑in user’s mailbox.
-        const resp = await fetch('https://graph.microsoft.com/v1.0/me/messages?$top=10', {
+        const resp = await fetch('https://graph.microsoft.com/v1.0/me/messages?$top=10&$select=subject,bodyPreview,receivedDateTime,from,isRead', {
           headers: { 'Authorization': 'Bearer ' + token }
         });
         const data = await resp.json();
-        if (!data.value) {
-          console.warn('No Outlook messages returned.');
-          return;
-        }
-        const messages = data.value.map(item => {
-          return {
-            sender: item.from && item.from.emailAddress ? item.from.emailAddress.address : '',
-            subject: item.subject || '(no subject)',
-            body: item.bodyPreview || '',
-            read: item.isRead || false,
-            archived: false,
-            snoozedUntil: null,
-            flagged: item.flag && item.flag.flagStatus === 'flagged',
-            reportedSpam: false,
-            deleted: false
-          };
-        });
-        emails = messages;
-        buildInbox();
+        if (!data.value) return [];
+
+        return data.value.map(item => createEmail({
+          id: 'outlook-' + item.id,
+          provider: 'outlook',
+          sender: item.from && item.from.emailAddress ? item.from.emailAddress.address : '',
+          subject: item.subject || '(no subject)',
+          body: item.bodyPreview || '',
+          receivedAt: item.receivedDateTime ? Date.parse(item.receivedDateTime) : Date.now(),
+          read: Boolean(item.isRead)
+        }));
       } catch (err) {
-        console.error('Error fetching Outlook messages:', err);
+        console.error('Outlook fetch failed', err);
+        showToast('Failed to fetch Outlook messages.');
+        return [];
       }
     }
 
-    // Attach OAuth functions to the sign-in buttons
-    document.getElementById('connectOutlook').addEventListener('click', authenticateOutlook);
-    document.getElementById('connectGmail').addEventListener('click', authenticateGmail);
+    async function fetchGoogleCalendarEvents() {
+      const token = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      if (!token) return [];
+      const timeMin = new Date().toISOString();
+      const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events' +
+        '?maxResults=6&singleEvents=true&orderBy=startTime&timeMin=' + encodeURIComponent(timeMin);
 
-    // On page load, check if we're returning from an OAuth redirect and handle
-    // any tokens in the URL fragment.  Then build the inbox with either the
-    // sample data or previously fetched messages.
-    handleAuthResponse();
-    buildInbox();
+      try {
+        const resp = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await resp.json();
+        if (!data.items) return [];
+        return data.items.map(item => ({
+          id: 'gcal-' + item.id,
+          provider: 'google',
+          title: item.summary || '(no title)',
+          start: item.start && (item.start.dateTime || item.start.date) ? Date.parse(item.start.dateTime || item.start.date) : Date.now(),
+          end: item.end && (item.end.dateTime || item.end.date) ? Date.parse(item.end.dateTime || item.end.date) : Date.now(),
+          location: item.location || ''
+        }));
+      } catch (err) {
+        console.error('Google Calendar fetch failed', err);
+        showToast('Failed to fetch Google Calendar events.');
+        return [];
+      }
+    }
+
+    async function fetchOutlookCalendarEvents() {
+      const token = localStorage.getItem('outlook_access_token');
+      if (!token) return [];
+
+      try {
+        const url = 'https://graph.microsoft.com/v1.0/me/events?$top=6&$orderby=start/dateTime&$select=subject,start,end,location';
+        const resp = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await resp.json();
+        if (!data.value) return [];
+        return data.value.map(item => ({
+          id: 'ocal-' + item.id,
+          provider: 'outlook',
+          title: item.subject || '(no title)',
+          start: item.start && item.start.dateTime ? Date.parse(item.start.dateTime) : Date.now(),
+          end: item.end && item.end.dateTime ? Date.parse(item.end.dateTime) : Date.now(),
+          location: item.location && item.location.displayName ? item.location.displayName : ''
+        }));
+      } catch (err) {
+        console.error('Outlook Calendar fetch failed', err);
+        showToast('Failed to fetch Outlook Calendar events.');
+        return [];
+      }
+    }
+
+    function parseIcsEvents(raw, provider) {
+      if (!raw) return [];
+      const lines = [];
+      const rawLines = raw.split(/\r?\n/);
+      rawLines.forEach(line => {
+        if (line.startsWith(' ') || line.startsWith('\t')) {
+          if (lines.length > 0) {
+            lines[lines.length - 1] += line.trim();
+          }
+        } else {
+          lines.push(line.trim());
+        }
+      });
+
+      const events = [];
+      let current = null;
+      lines.forEach(line => {
+        if (line === 'BEGIN:VEVENT') {
+          current = {};
+        } else if (line === 'END:VEVENT') {
+          if (current && current.start) {
+            events.push({
+              id: 'apple-' + (current.uid || makeId()),
+              provider: provider || 'apple',
+              title: current.summary || '(no title)',
+              start: current.start,
+              end: current.end || current.start,
+              location: current.location || ''
+            });
+          }
+          current = null;
+        } else if (current) {
+          if (line.startsWith('SUMMARY')) {
+            current.summary = line.split(':').slice(1).join(':');
+          }
+          if (line.startsWith('DTSTART')) {
+            const value = line.split(':').slice(1).join(':');
+            current.start = parseIcsDate(value);
+          }
+          if (line.startsWith('DTEND')) {
+            const value = line.split(':').slice(1).join(':');
+            current.end = parseIcsDate(value);
+          }
+          if (line.startsWith('LOCATION')) {
+            current.location = line.split(':').slice(1).join(':');
+          }
+          if (line.startsWith('UID')) {
+            current.uid = line.split(':').slice(1).join(':');
+          }
+        }
+      });
+
+      return events;
+    }
+
+    function parseIcsDate(value) {
+      if (!value) return Date.now();
+      const cleaned = value.replace('Z', '');
+      if (/^\d{8}$/.test(cleaned)) {
+        const year = Number(cleaned.slice(0, 4));
+        const month = Number(cleaned.slice(4, 6)) - 1;
+        const day = Number(cleaned.slice(6, 8));
+        return new Date(year, month, day).getTime();
+      }
+      if (/^\d{8}T\d{6}$/.test(cleaned)) {
+        const year = Number(cleaned.slice(0, 4));
+        const month = Number(cleaned.slice(4, 6)) - 1;
+        const day = Number(cleaned.slice(6, 8));
+        const hour = Number(cleaned.slice(9, 11));
+        const minute = Number(cleaned.slice(11, 13));
+        const second = Number(cleaned.slice(13, 15));
+        return new Date(year, month, day, hour, minute, second).getTime();
+      }
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? Date.now() : parsed;
+    }
+
+    async function fetchAppleCalendarEvents() {
+      const ics = localStorage.getItem(APPLE_CAL_ICS_KEY);
+      const url = localStorage.getItem(APPLE_CAL_URL_KEY);
+
+      if (ics) {
+        return parseIcsEvents(ics, 'apple');
+      }
+
+      if (!url) return [];
+
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Fetch failed');
+        const text = await resp.text();
+        return parseIcsEvents(text, 'apple');
+      } catch (err) {
+        console.error('Apple Calendar fetch failed', err);
+        showToast('Apple calendar fetch failed. Try pasting the ICS text.');
+        return [];
+      }
+    }
+
+    async function syncCalendars() {
+      const events = [];
+      const googleEvents = await fetchGoogleCalendarEvents();
+      const outlookEvents = await fetchOutlookCalendarEvents();
+      const appleEvents = await fetchAppleCalendarEvents();
+
+      events.push(...googleEvents, ...outlookEvents, ...appleEvents);
+      events.push(...localEvents);
+
+      calendarEvents = events
+        .filter(event => event.start)
+        .sort((a, b) => a.start - b.start)
+        .slice(0, 8);
+
+      renderCalendarEvents();
+      updateConnectionStatus();
+
+      if (calendarEvents.length === 0) {
+        showToast('No upcoming events found.');
+      } else {
+        showToast('Calendar events updated.');
+      }
+    }
+
+    function renderCalendarEvents() {
+      const list = document.getElementById('calendarList');
+      list.innerHTML = '';
+
+      if (calendarEvents.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No upcoming events.';
+        list.appendChild(empty);
+        return;
+      }
+
+      calendarEvents.forEach(event => {
+        const item = document.createElement('div');
+        item.className = 'calendar-item';
+
+        const title = document.createElement('div');
+        title.textContent = event.title;
+
+        const time = document.createElement('small');
+        time.textContent = formatEventTime(event.start, event.end);
+
+        const location = document.createElement('small');
+        location.textContent = (event.location || '').trim();
+
+        const chipRow = document.createElement('div');
+        chipRow.className = 'chip-row';
+        chipRow.appendChild(buildChip(event.provider + ' calendar', ''));
+
+        item.appendChild(title);
+        item.appendChild(time);
+        if (event.location) {
+          item.appendChild(location);
+        }
+        item.appendChild(chipRow);
+        list.appendChild(item);
+      });
+    }
+
+    function formatEventTime(start, end) {
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      return startDate.toLocaleString() + ' - ' + endDate.toLocaleTimeString();
+    }
+
+    function connectAppleCalendar() {
+      const url = prompt('Paste your public iCloud calendar URL (or leave blank to paste raw ICS):', '');
+      if (url) {
+        localStorage.setItem(APPLE_CAL_URL_KEY, url);
+        localStorage.removeItem(APPLE_CAL_ICS_KEY);
+        showToast('Apple calendar URL saved.');
+        return;
+      }
+      const ics = prompt('Paste the raw .ics calendar content:', '');
+      if (ics) {
+        localStorage.setItem(APPLE_CAL_ICS_KEY, ics);
+        localStorage.removeItem(APPLE_CAL_URL_KEY);
+        showToast('Apple calendar ICS saved.');
+      }
+    }
+
+    function hasCalendarConnection() {
+      const googleToken = localStorage.getItem('google_access_token') || localStorage.getItem('gmail_access_token');
+      const outlookToken = localStorage.getItem('outlook_access_token');
+      const appleConnected = Boolean(localStorage.getItem(APPLE_CAL_URL_KEY) || localStorage.getItem(APPLE_CAL_ICS_KEY));
+      return Boolean(googleToken || outlookToken || appleConnected);
+    }
+
+    function resetLocalData() {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(ACTIVE_EMAIL_KEY);
+      localStorage.removeItem('google_access_token');
+      localStorage.removeItem('gmail_access_token');
+      localStorage.removeItem('outlook_access_token');
+      localStorage.removeItem('google_state');
+      localStorage.removeItem('gmail_state');
+      localStorage.removeItem('outlook_state');
+      localStorage.removeItem(APPLE_CAL_URL_KEY);
+      localStorage.removeItem(APPLE_CAL_ICS_KEY);
+      localStorage.removeItem(NOTIFY_KEY);
+      localStorage.removeItem(TRIAL_STATUS_KEY);
+      localStorage.removeItem(TRIAL_START_KEY);
+      localStorage.removeItem(SETTINGS_KEY);
+      localStorage.removeItem(RULES_KEY);
+      localStorage.removeItem(LOCAL_EVENTS_KEY);
+      loadEmails();
+      settings = loadSettings();
+      rules = loadRules();
+      localEvents = loadLocalEvents();
+      selectedIds = new Set();
+      updateView();
+      renderCalendarEvents();
+      updateConnectionStatus();
+      showToast('Local data reset.');
+    }
+
+    function init() {
+      loadEmails();
+      settings = loadSettings();
+      rules = loadRules();
+      localEvents = loadLocalEvents();
+      populateTeamSelects();
+      const authed = handleAuthResponse();
+      updateConnectionStatus();
+      updateView();
+      calendarEvents = localEvents
+        .filter(event => event.start)
+        .sort((a, b) => a.start - b.start)
+        .slice(0, 8);
+      renderCalendarEvents();
+
+      document.getElementById('connectGoogle').addEventListener('click', authenticateGoogle);
+      document.getElementById('connectOutlook').addEventListener('click', authenticateOutlook);
+      document.getElementById('connectApple').addEventListener('click', connectAppleCalendar);
+      document.getElementById('syncInbox').addEventListener('click', syncInbox);
+      document.getElementById('syncCalendars').addEventListener('click', syncCalendars);
+      document.getElementById('calendarRefresh').addEventListener('click', syncCalendars);
+      document.getElementById('enableNotifications').addEventListener('click', requestNotifications);
+      document.getElementById('startTrial').addEventListener('click', startTrialCheckout);
+
+      document.getElementById('saveClientIds').addEventListener('click', () => {
+        const googleInput = document.getElementById('googleClientIdInput');
+        const outlookInput = document.getElementById('outlookClientIdInput');
+        if (googleInput) {
+          localStorage.setItem(GOOGLE_CLIENT_ID_KEY, googleInput.value.trim());
+        }
+        if (outlookInput) {
+          localStorage.setItem(OUTLOOK_CLIENT_ID_KEY, outlookInput.value.trim());
+        }
+        showToast('Client IDs saved.');
+      });
+
+      document.getElementById('sendEmail').addEventListener('click', sendEmailMessage);
+      document.getElementById('useSelectedEmail').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (!email) {
+          showToast('Select an email first.');
+          return;
+        }
+        const toInput = document.getElementById('sendTo');
+        const subjectInput = document.getElementById('sendSubject');
+        const bodyInput = document.getElementById('sendBody');
+        if (toInput) toInput.value = extractEmailAddress(email.sender);
+        if (subjectInput) subjectInput.value = 'Re: ' + email.subject;
+        if (bodyInput) bodyInput.value = '\n\n---\n' + (email.body || '');
+        showToast('Compose prefilled from selected email.');
+      });
+
+      document.getElementById('selectAll').addEventListener('change', event => {
+        const list = getCurrentList();
+        if (event.target.checked) {
+          list.forEach(email => selectedIds.add(email.id));
+        } else {
+          list.forEach(email => selectedIds.delete(email.id));
+        }
+        updateView();
+      });
+      document.getElementById('bulkArchive').addEventListener('click', () => {
+        applyBulkAction('archive');
+        showToast('Bulk archived.');
+      });
+      document.getElementById('bulkDelete').addEventListener('click', () => {
+        applyBulkAction('delete');
+        showToast('Bulk deleted.');
+      });
+      document.getElementById('bulkJunk').addEventListener('click', () => {
+        applyBulkAction('junk');
+        showToast('Bulk junk report.');
+      });
+      document.getElementById('bulkAssignBtn').addEventListener('click', () => {
+        const value = document.getElementById('bulkAssign').value;
+        if (!value) {
+          showToast('Select an assignee.');
+          return;
+        }
+        applyBulkAction('assign', value);
+        showToast('Bulk assigned to ' + value + '.');
+      });
+
+      document.getElementById('autoArchiveSpam').addEventListener('change', event => {
+        settings.autoArchiveSpam = event.target.checked;
+        saveSettings();
+        updateView();
+      });
+      document.getElementById('autoArchiveLowDays').addEventListener('change', event => {
+        settings.autoArchiveLowDays = Math.max(1, Number(event.target.value) || 7);
+        saveSettings();
+        updateView();
+      });
+      document.getElementById('autoSchedule').addEventListener('change', event => {
+        settings.autoSchedule = event.target.checked;
+        saveSettings();
+        updateView();
+      });
+      document.getElementById('runRules').addEventListener('click', () => {
+        emails.forEach(email => {
+          email.appliedRules = [];
+          applySmartRulesToEmail(email);
+        });
+        updateView();
+        showToast('Smart rules applied.');
+      });
+      document.getElementById('addRule').addEventListener('click', () => {
+        const field = document.getElementById('ruleField').value;
+        const operator = document.getElementById('ruleOperator').value;
+        const value = document.getElementById('ruleValue').value.trim();
+        const action = document.getElementById('ruleAction').value;
+        const actionValue = document.getElementById('ruleActionValue').value.trim();
+
+        if (!value) {
+          showToast('Enter a rule value.');
+          return;
+        }
+
+        rules.push({
+          id: makeId(),
+          field,
+          operator,
+          value,
+          action,
+          actionValue,
+          enabled: true
+        });
+        saveRules();
+        document.getElementById('ruleValue').value = '';
+        document.getElementById('ruleActionValue').value = '';
+        renderRulesList();
+        showToast('Rule added.');
+      });
+
+      document.getElementById('setFollowUp').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (!email) {
+          showToast('Select an email first.');
+          return;
+        }
+        const days = Number(document.getElementById('followUpDays').value) || 2;
+        setFollowUp(email.id, days);
+        updateView();
+        showToast('Follow-up set.');
+      });
+      document.getElementById('refreshSla').addEventListener('click', () => {
+        updateView();
+      });
+
+      document.getElementById('assignBtn').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        const assignee = document.getElementById('assignSelect').value;
+        if (!email || !assignee) {
+          showToast('Select an email and assignee.');
+          return;
+        }
+        assignEmail(email.id, assignee);
+        updateView();
+        showToast('Assigned to ' + assignee + '.');
+      });
+      document.getElementById('delegateBtn').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        const assignee = document.getElementById('delegateSelect').value;
+        if (!email || !assignee) {
+          showToast('Select an email and delegate.');
+          return;
+        }
+        delegateEmail(email.id, assignee);
+        updateView();
+        showToast('Delegated to ' + assignee + '.');
+      });
+      document.getElementById('clearAssign').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (!email) {
+          showToast('Select an email first.');
+          return;
+        }
+        clearAssignments(email.id);
+        updateView();
+        showToast('Assignment cleared.');
+      });
+
+      document.getElementById('generateBrief').addEventListener('click', () => {
+        const brief = generateDailyBrief();
+        document.getElementById('briefText').value = brief;
+        showToast('Daily brief generated.');
+      });
+      document.getElementById('copyBrief').addEventListener('click', async () => {
+        const brief = document.getElementById('briefText').value;
+        if (!brief) {
+          showToast('Generate the brief first.');
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(brief);
+          showToast('Brief copied.');
+        } catch (err) {
+          showToast('Copy failed.');
+        }
+      });
+
+      document.getElementById('loadSample').addEventListener('click', () => {
+        emails = sampleEmails.map(createEmail);
+        updateView();
+        showToast('Sample inbox loaded.');
+      });
+      document.getElementById('simulateEmail').addEventListener('click', simulateEmail);
+      document.getElementById('clearLocal').addEventListener('click', resetLocalData);
+
+      document.getElementById('prevUrgent').addEventListener('click', () => handleUrgentNav('prev'));
+      document.getElementById('nextUrgent').addEventListener('click', () => handleUrgentNav('next'));
+
+      document.getElementById('focusActions').addEventListener('click', event => {
+        if (event.target.tagName !== 'BUTTON') return;
+        const action = event.target.getAttribute('data-action');
+        handleFocusAction(action);
+      });
+
+      document.getElementById('detailArchive').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) archiveEmail(email.id);
+      });
+      document.getElementById('detailDelete').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) deleteEmail(email.id);
+      });
+      document.getElementById('detailJunk').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) reportJunk(email.id);
+      });
+      document.getElementById('detailRead').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) markRead(email.id);
+      });
+      document.getElementById('detailReply').addEventListener('click', () => {
+        const email = getSelectedEmail();
+        if (email) draftReply(email.id);
+      });
+
+      if (authed) {
+        syncInbox();
+        syncCalendars();
+      } else if (hasCalendarConnection()) {
+        syncCalendars();
+      }
+
+      setInterval(() => {
+        renderSlaTimers();
+        renderFollowUps();
+        renderSummary();
+        renderDetail();
+      }, 60000);
+    }
+
+    init();
   </script>
 </body>
 </html>
