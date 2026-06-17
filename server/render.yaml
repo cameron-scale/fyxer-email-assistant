@@ -1,0 +1,20 @@
+# Render Blueprint — lets you deploy the Brisk backend in a few clicks.
+# In Render: New → Blueprint → pick this repo. It reads this file.
+# You'll be prompted to fill in the secret env vars (they're not stored in git).
+services:
+  - type: web
+    name: brisk-server
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: AI_MODEL
+        value: claude-haiku-4-5
+      - key: MS_CLIENT_ID
+        sync: false
+      - key: MS_CLIENT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

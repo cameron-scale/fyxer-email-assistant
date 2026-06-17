@@ -4,32 +4,68 @@ import {
   View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { useProviders } from '../auth/useProviders';
 import { isConfigured } from '../auth/authConfig';
+import { isBackendConfigured, microsoftLoginUrl } from '../lib/backend';
 
-export default function ConnectScreen({ goBack }) {
-  const { accounts, loadAccount, disconnect } = useStore();
-  const { connectGoogle, connectMicrosoft } = useProviders();
+export default function ConnectScreen({ goBack, navigate }) {
+  const { accounts, prefs, loadAccount, connectOutlook, disconnect } = useStore();
+  const { connectGoogle } = useProviders();
   const [busy, setBusy] = useState(null);
+  const backendReady = isBackendConfigured(prefs.serverUrl);
 
-  const handle = async (provider, connectFn) => {
-    setBusy(provider);
+  // Gmail stays an on-device flow (when its client ID is set).
+  const handleGmail = async () => {
+    setBusy('google');
     try {
-      const token = await connectFn();
-      await loadAccount(provider === 'google' ? 'gmail' : 'outlook', token);
-      Alert.alert('Connected 🎉', 'Your mail is loading, sorted by priority.');
+      const token = await connectGoogle();
+      await loadAccount('gmail', token);
+      Alert.alert('Connected 🎉', 'Your Gmail is loading, sorted by priority.');
       goBack();
     } catch (e) {
       if (e.message === 'not-configured') {
-        Alert.alert(
-          'One quick setup step',
-          `To use a real ${provider} account you first need to paste a free Client ID into src/auth/authConfig.js. See README.md → "Turn on real logins". Until then, enjoy demo mode!`
-        );
+        Alert.alert('One quick setup step', 'Paste a free Google Client ID into src/auth/authConfig.js. See README.');
       } else if (e.message !== 'cancelled') {
         Alert.alert('Sign-in failed', e.message || 'Please try again.');
       }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Outlook goes through your backend (real Microsoft 365 login + AI summaries).
+  const handleOutlook = async () => {
+    if (!backendReady) {
+      Alert.alert(
+        'Add your server first',
+        'To connect Outlook, paste your backend URL in Settings → "Backend server URL". See server/README.md for the 15-minute setup.',
+        [{ text: 'Open Settings', onPress: () => navigate && navigate('Settings') }, { text: 'OK' }]
+      );
+      return;
+    }
+    setBusy('outlook');
+    try {
+      // Where the server should send us back — exp:// in Expo Go, brisk:// in a build.
+      const returnUrl = AuthSession.makeRedirectUri({ scheme: 'brisk', path: 'auth' });
+      const result = await WebBrowser.openAuthSessionAsync(
+        microsoftLoginUrl(prefs.serverUrl, returnUrl),
+        returnUrl
+      );
+      if (result.type !== 'success' || !result.url) return; // user cancelled
+      const params = new URLSearchParams(result.url.split('?')[1] || '');
+      const err = params.get('error');
+      const refresh = params.get('refresh');
+      if (err) throw new Error(err);
+      if (!refresh) throw new Error('No token returned');
+      await connectOutlook(refresh);
+      Alert.alert('Connected 🎉', 'Your Outlook is loading, sorted by priority with AI summaries.');
+      goBack();
+    } catch (e) {
+      Alert.alert('Outlook sign-in failed', e.message || 'Please try again.');
     } finally {
       setBusy(null);
     }
@@ -62,18 +98,18 @@ export default function ConnectScreen({ goBack }) {
           subtitle={accounts.gmail ? 'Connected' : isConfigured.google() ? 'Tap to sign in' : 'Needs 1-time setup'}
           connected={accounts.gmail}
           busy={busy === 'google'}
-          onPress={() => handle('google', connectGoogle)}
+          onPress={handleGmail}
           onDisconnect={() => disconnect('gmail')}
         />
 
         <ProviderCard
           icon="mail"
           color="#0A84FF"
-          title="Outlook"
-          subtitle={accounts.outlook ? 'Connected' : isConfigured.microsoft() ? 'Tap to sign in' : 'Needs 1-time setup'}
+          title="Outlook / Microsoft 365"
+          subtitle={accounts.outlook ? 'Connected · AI summaries on' : backendReady ? 'Tap to sign in' : 'Set server URL in Settings'}
           connected={accounts.outlook}
           busy={busy === 'outlook'}
-          onPress={() => handle('outlook', connectMicrosoft)}
+          onPress={handleOutlook}
           onDisconnect={() => disconnect('outlook')}
         />
 

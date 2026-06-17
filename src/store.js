@@ -9,10 +9,10 @@ import React, {
 import { prioritize } from './lib/priority';
 import { demoEmails } from './data/demoEmails';
 import { fetchGmail } from './api/gmail';
-import { fetchOutlook } from './api/outlook';
+import { fetchInbox } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron' };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: '' };
 
 const StoreContext = createContext(null);
 
@@ -33,7 +33,10 @@ export function StoreProvider({ children }) {
   const [vips, setVips] = useState([]); // lowercased emails
   const [prefs, setPrefsState] = useState(DEFAULT_PREFS);
 
-  // Load saved VIPs + prefs once when the app starts.
+  // Microsoft refresh token (kept in the encrypted keychain) for backend login.
+  const [outlookRefresh, setOutlookRefresh] = useState(null);
+
+  // Load saved VIPs + prefs + tokens once when the app starts.
   useEffect(() => {
     (async () => {
       try {
@@ -41,6 +44,11 @@ export function StoreProvider({ children }) {
         if (v) setVips(JSON.parse(v));
         const p = await getToken('prefs');
         if (p) setPrefsState({ ...DEFAULT_PREFS, ...JSON.parse(p) });
+        const rt = await getToken('outlook_refresh');
+        if (rt) {
+          setOutlookRefresh(rt);
+          setAccounts((a) => ({ ...a, outlook: true, demo: false }));
+        }
       } catch (e) {}
     })();
   }, []);
@@ -119,63 +127,95 @@ export function StoreProvider({ children }) {
     });
   }, []);
 
-  // --- Connecting a real account ---
-  const loadAccount = useCallback(async (provider, token) => {
+  // Pull the latest Outlook mail (with AI summaries) from the backend.
+  const loadOutlook = useCallback(async (refreshToken) => {
+    const rt = refreshToken || outlookRefresh;
+    if (!rt) throw new Error('Outlook not connected');
+    const { emails: fetched, refreshToken: newRt } = await fetchInbox(prefs.serverUrl, rt);
+    if (newRt && newRt !== rt) {
+      await saveToken('outlook_refresh', newRt);
+      setOutlookRefresh(newRt);
+    }
+    // Replace demo + old outlook mail with the fresh batch.
+    setRaw((prev) => {
+      const others = prev.filter((e) => e.account !== 'outlook' && e.account !== 'demo');
+      return [...others, ...fetched];
+    });
+  }, [outlookRefresh, prefs.serverUrl]);
+
+  // Called after Microsoft login hands back a refresh token.
+  const connectOutlook = useCallback(async (refreshToken) => {
     setLoading(true);
     setError(null);
     try {
-      await saveToken(`token_${provider}`, token);
-      const fetched =
-        provider === 'gmail' ? await fetchGmail(token) : await fetchOutlook(token);
-      // Drop demo data the first time a real account connects.
-      setRaw((prev) => {
-        const noDemo = prev.filter((e) => e.account !== 'demo');
-        const ids = new Set(noDemo.map((e) => e.id));
-        return [...noDemo, ...fetched.filter((e) => !ids.has(e.id))];
-      });
-      setAccounts((a) => ({ ...a, [provider]: true, demo: false }));
+      await saveToken('outlook_refresh', refreshToken);
+      setOutlookRefresh(refreshToken);
+      setAccounts((a) => ({ ...a, outlook: true, demo: false }));
+      await loadOutlook(refreshToken);
     } catch (e) {
-      setError(e.message || 'Could not load mail');
+      setError(e.message || 'Could not load Outlook mail');
+      throw e;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadOutlook]);
 
-  // Re-fetch any connected real accounts (pull-to-refresh).
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      for (const provider of ['gmail', 'outlook']) {
-        if (!accounts[provider]) continue;
-        const token = await getToken(`token_${provider}`);
-        if (!token) continue;
-        const fetched =
-          provider === 'gmail' ? await fetchGmail(token) : await fetchOutlook(token);
+  // Connect Gmail (on-device, when its client ID is set). Outlook uses the backend.
+  const loadAccount = useCallback(async (provider, token) => {
+    if (provider === 'gmail') {
+      setLoading(true);
+      setError(null);
+      try {
+        await saveToken('token_gmail', token);
+        const fetched = await fetchGmail(token);
         setRaw((prev) => {
-          const others = prev.filter((e) => e.account !== provider);
+          const others = prev.filter((e) => e.account !== 'gmail' && e.account !== 'demo');
           return [...others, ...fetched];
         });
+        setAccounts((a) => ({ ...a, gmail: true, demo: false }));
+      } catch (e) {
+        setError(e.message || 'Could not load mail');
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  // Pull-to-refresh: re-fetch whatever real accounts are connected.
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (accounts.outlook && outlookRefresh) await loadOutlook();
+      if (accounts.gmail) {
+        const token = await getToken('token_gmail');
+        if (token) {
+          const fetched = await fetchGmail(token);
+          setRaw((prev) => {
+            const others = prev.filter((e) => e.account !== 'gmail');
+            return [...others, ...fetched];
+          });
+        }
       }
     } catch (e) {
       setError(e.message || 'Refresh failed');
     } finally {
       setLoading(false);
     }
-  }, [accounts]);
+  }, [accounts, outlookRefresh, loadOutlook]);
 
   const disconnect = useCallback(async (provider) => {
-    await clearToken(`token_${provider}`);
-    setRaw((prev) => prev.filter((e) => e.account !== provider));
+    await clearToken(provider === 'outlook' ? 'outlook_refresh' : 'token_gmail');
+    if (provider === 'outlook') setOutlookRefresh(null);
+    setRaw((prev) => {
+      const kept = prev.filter((e) => e.account !== provider);
+      return kept.length === 0 ? demoEmails : kept;
+    });
     setAccounts((a) => {
       const next = { ...a, [provider]: false };
-      const anyReal = next.gmail || next.outlook;
-      if (!anyReal) {
-        next.demo = true;
-        return next;
-      }
+      if (!next.gmail && !next.outlook) next.demo = true;
       return next;
     });
-    setRaw((prev) => (prev.length === 0 ? demoEmails : prev));
   }, []);
 
   const value = {
@@ -196,6 +236,8 @@ export function StoreProvider({ children }) {
     toggleVip,
     setPrefs,
     loadAccount,
+    connectOutlook,
+    outlookRefresh,
     refresh,
     disconnect,
   };

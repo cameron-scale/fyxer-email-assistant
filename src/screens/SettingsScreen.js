@@ -46,6 +46,25 @@ export default function SettingsScreen({ navigate }) {
           />
         </View>
 
+        {/* Backend server */}
+        <Text style={styles.sectionLabel}>Backend server URL</Text>
+        <Text style={styles.help}>
+          Paste your deployed server's address (e.g. https://brisk.onrender.com) to connect
+          Outlook and turn on AI summaries. See server/README.md.
+        </Text>
+        <View style={styles.group}>
+          <TextInput
+            style={styles.input}
+            value={prefs.serverUrl}
+            onChangeText={(t) => setPrefs({ serverUrl: t.trim() })}
+            placeholder="https://your-server.onrender.com"
+            placeholderTextColor={colors.ink4}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+        </View>
+
         {/* Default tone */}
         <Text style={styles.sectionLabel}>Default reply tone</Text>
         <View style={styles.chips}>

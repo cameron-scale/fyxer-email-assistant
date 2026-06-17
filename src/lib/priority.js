@@ -202,7 +202,8 @@ export function scoreEmail(email, options = {}) {
     reasons,
     senderName: sender.name,
     senderEmail: sender.email,
-    tldr: summarize(email.body || email.snippet || ''),
+    // Prefer a real AI summary from the backend when present; otherwise summarize on-device.
+    tldr: email.aiSummary || summarize(email.body || email.snippet || ''),
   };
 }
 

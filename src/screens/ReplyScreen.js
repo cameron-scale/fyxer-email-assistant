@@ -5,12 +5,13 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, SafeAreaView, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, Pressable, SafeAreaView, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { suggestReplies } from '../lib/drafts';
+import { aiDraft, sendReply, isBackendConfigured } from '../lib/backend';
 import { timeAgo } from '../lib/time';
 
 const TONES = [
@@ -25,9 +26,11 @@ function firstName(name = '') {
 }
 
 export default function ReplyScreen({ params, goBack }) {
-  const { emails, prefs, setPrefs } = useStore();
+  const { emails, prefs, setPrefs, accounts, outlookRefresh } = useStore();
   const email = emails.find((e) => e.id === params.id);
   const p = email?.priority;
+  const backendReady = isBackendConfigured(prefs.serverUrl);
+  const canSend = backendReady && accounts.outlook && email?.account === 'outlook';
 
   const drafts = useMemo(
     () => (email ? suggestReplies(email, prefs) : []),
@@ -38,6 +41,23 @@ export default function ReplyScreen({ params, goBack }) {
   const [body, setBody] = useState(
     email ? `Hi ${firstName(p.senderName)},\n\n` : ''
   );
+  const [aiBusy, setAiBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const writeWithAi = async () => {
+    setAiBusy(true);
+    try {
+      const { text } = await aiDraft(prefs.serverUrl, {
+        subject: email.subject, body: email.body,
+        senderName: p.senderName, tone: prefs.tone, signature: prefs.signature,
+      });
+      if (text) setBody(text);
+    } catch (e) {
+      Alert.alert('Could not draft', e.message || 'Check your server URL in Settings.');
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   if (!email) {
     return (
@@ -48,13 +68,33 @@ export default function ReplyScreen({ params, goBack }) {
     );
   }
 
-  const send = () =>
-    Alert.alert(
-      'Reply ready ✍️',
-      'Sending is off in this read-only preview — your reply is composed and ready. (Live sending arrives with the backend.)'
-    );
-
   const subject = /^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`;
+
+  const send = async () => {
+    if (!canSend) {
+      Alert.alert(
+        'Connect Outlook to send',
+        'Live sending works once your Outlook account is connected via the backend. Your reply is composed and ready to copy in the meantime.'
+      );
+      return;
+    }
+    setSending(true);
+    try {
+      await sendReply(prefs.serverUrl, {
+        refreshToken: outlookRefresh,
+        toEmail: p.senderEmail,
+        subject,
+        body,
+        inReplyToId: email.id,
+      });
+      Alert.alert('Sent ✓', `Your reply to ${firstName(p.senderName)} is on its way.`);
+      goBack();
+    } catch (e) {
+      Alert.alert('Send failed', e.message || 'Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -62,9 +102,15 @@ export default function ReplyScreen({ params, goBack }) {
       <View style={styles.header}>
         <Pressable onPress={goBack} hitSlop={10}><Text style={styles.cancel}>Cancel</Text></Pressable>
         <Text style={styles.title}>Reply</Text>
-        <Pressable onPress={send} style={styles.sendBtn}>
-          <Ionicons name="send" size={14} color="#fff" />
-          <Text style={styles.sendBtnText}>Send</Text>
+        <Pressable onPress={send} style={styles.sendBtn} disabled={sending}>
+          {sending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="send" size={14} color="#fff" />
+              <Text style={styles.sendBtnText}>Send</Text>
+            </>
+          )}
         </Pressable>
       </View>
 
@@ -100,6 +146,18 @@ export default function ReplyScreen({ params, goBack }) {
           </View>
           <Text style={styles.helper}>Start from a draft</Text>
           <View style={styles.chips}>
+            {backendReady && (
+              <Pressable onPress={writeWithAi} style={styles.aiChip} disabled={aiBusy}>
+                {aiBusy ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={13} color="#fff" />
+                    <Text style={styles.aiChipText}>Write with AI</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
             {drafts.map((d) => (
               <Pressable key={d.label} onPress={() => setBody(d.text)} style={styles.draftChip}>
                 <Text style={styles.draftChipText}>{d.label}</Text>
@@ -167,6 +225,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14,
   },
   draftChipText: { color: colors.blue, fontWeight: '700', fontSize: 12.5 },
+  aiChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 33,
+    backgroundColor: colors.blue, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14,
+  },
+  aiChipText: { color: '#fff', fontWeight: '800', fontSize: 12.5 },
   bodyInput: {
     fontFamily: 'Georgia', fontSize: 16, lineHeight: 26, color: colors.ink,
     marginTop: 18, minHeight: 220, textAlignVertical: 'top',

@@ -154,6 +154,20 @@ Brisk sorts and writes.
 
 ---
 
+## 🔌 Live mode (real Outlook + AI)
+
+Demo mode needs nothing. To pull in your **real Outlook / Microsoft 365** mail with
+**Claude AI summaries** and **real sending**, deploy the small included backend (free,
+~15 min) and paste its URL into **Settings → Backend server URL**. Full click-by-click
+guide: **[`server/README.md`](server/README.md)**.
+
+Once connected:
+- Your inbox loads for real, sorted by priority, with a one-line **AI summary** on each email.
+- The **Reply** screen gets a **"Write with AI"** button and the **Send** button actually sends.
+
+(Gmail can still connect on-device via a Client ID per the section above; iCloud needs
+the same backend with IMAP — a natural next step.)
+
 ## 🔒 Privacy
 
 Brisk only ever requests **read** access to your mail, stores access tokens in your
