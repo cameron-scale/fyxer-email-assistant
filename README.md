@@ -123,6 +123,28 @@ those emails rank higher). The change takes effect instantly.
 
 ---
 
+## 🧪 Running the tests
+
+The "brain" of the app (priority ranking, categories, VIP boosting, draft tones,
+time labels) is covered by automated tests:
+
+```bash
+npm test
+```
+
+These run instantly and don't need a phone or simulator — handy to confirm nothing
+broke after you tweak the word lists in `src/lib/priority.js`.
+
+---
+
+## ⚙️ Settings
+
+Tap the **gear icon** (top-right of the inbox) to manage your **signature**, your
+**default reply tone**, and your **VIP list** in one place — full control over how
+Brisk sorts and writes.
+
+---
+
 ## 🔒 Privacy
 
 Brisk only ever requests **read** access to your mail, stores access tokens in your

@@ -35,7 +35,8 @@ const NOISE_WORDS = [
 const NOISE_SENDER_HINTS = [
   'no-reply', 'noreply', 'donotreply', 'do-not-reply', 'notifications',
   'newsletter', 'mailer', 'marketing', 'updates@', 'info@', 'hello@',
-  'support@', 'team@', 'news@', 'digest',
+  'support@', 'team@', 'news@', 'digest', 'offers@', 'deals@', 'sales@',
+  'promo', 'no_reply',
 ];
 
 function countMatches(text, words) {
@@ -173,18 +174,24 @@ export function scoreEmail(email, options = {}) {
     bucket = 'fyi';
   }
 
-  // Promotional stuff is never "urgent" even if it screams it.
-  if ((noisySender || noiseHits >= 2) && bucket === 'urgent') bucket = 'noise';
-
-  // VIPs never get buried in Noise/FYI — bump them to at least Important.
-  if (isVip && (bucket === 'noise' || bucket === 'fyi')) bucket = 'important';
-
   const category = categorize(haystack, {
     noisySender,
     isQuestion,
     importantHits,
     looksHuman,
   });
+
+  // Promotional / newsletter mail is never urgent or important — it's noise,
+  // no matter how loudly it shouts ("Sale ends today!"). VIPs are exempt.
+  if ((category === 'Promotions' || category === 'Newsletter') && !isVip) {
+    bucket = 'noise';
+  }
+
+  // Extra guard: a noisy/automated sender shouldn't be urgent either.
+  if ((noisySender || noiseHits >= 2) && bucket === 'urgent' && !isVip) bucket = 'noise';
+
+  // VIPs never get buried in Noise/FYI — bump them to at least Important.
+  if (isVip && (bucket === 'noise' || bucket === 'fyi')) bucket = 'important';
 
   return {
     score,

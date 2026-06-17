@@ -1,5 +1,5 @@
 {
-  "name": "app-tmp",
+  "name": "brisk",
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
@@ -18,7 +18,18 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "jest"
   },
-  "private": true
+  "jest": {
+    "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ]
+  },
+  "private": true,
+  "devDependencies": {
+    "jest": "~29.7.0",
+    "jest-expo": "~56.0.5"
+  }
 }

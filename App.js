@@ -12,12 +12,14 @@ import InboxScreen from './src/screens/InboxScreen';
 import TriageScreen from './src/screens/TriageScreen';
 import DetailScreen from './src/screens/DetailScreen';
 import ConnectScreen from './src/screens/ConnectScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 const SCREENS = {
   Inbox: InboxScreen,
   Triage: TriageScreen,
   Detail: DetailScreen,
   Connect: ConnectScreen,
+  Settings: SettingsScreen,
 };
 
 export default function App() {

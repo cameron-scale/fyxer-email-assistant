@@ -63,9 +63,14 @@ export default function InboxScreen({ navigate }) {
                 <Text style={styles.hello}>{greeting()} 👋</Text>
                 <Text style={styles.h1}>Your priority inbox</Text>
               </View>
-              <Pressable style={styles.accountBtn} onPress={() => navigate('Connect')}>
-                <Ionicons name="person-circle-outline" size={30} color={colors.text} />
-              </Pressable>
+              <View style={styles.headerIcons}>
+                <Pressable style={styles.accountBtn} onPress={() => navigate('Settings')}>
+                  <Ionicons name="settings-outline" size={25} color={colors.text} />
+                </Pressable>
+                <Pressable style={styles.accountBtn} onPress={() => navigate('Connect')}>
+                  <Ionicons name="person-circle-outline" size={30} color={colors.text} />
+                </Pressable>
+              </View>
             </View>
 
             {/* Summary card */}
@@ -150,6 +155,7 @@ const styles = StyleSheet.create({
   },
   hello: { color: colors.textDim, fontSize: font.body },
   h1: { color: colors.text, fontSize: font.h1, fontWeight: '800', marginTop: 2 },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   accountBtn: { padding: 4 },
   summary: { borderRadius: radius.lg, padding: space.lg, marginBottom: space.lg },
   summaryBig: { color: '#fff', fontSize: font.h2, fontWeight: '800' },
