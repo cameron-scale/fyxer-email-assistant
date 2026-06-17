@@ -35,8 +35,11 @@ const AI_MODEL = process.env.AI_MODEL || 'claude-haiku-4-5';
 // Where Microsoft sends the user back, and where we then bounce them into the app.
 const APP_REDIRECT = 'brisk://auth';
 const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.Read', 'Mail.Read', 'Mail.Send'];
-const MS_AUTH = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
-const MS_TOKEN = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+// 'common' = any account (needs the Azure app set to multi-tenant). For a
+// single-tenant app, set MS_TENANT to your Directory (tenant) ID instead.
+const MS_TENANT = process.env.MS_TENANT || 'common';
+const MS_AUTH = `https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/authorize`;
+const MS_TOKEN = `https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/token`;
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
 function serverUrl(req) {
@@ -54,6 +57,7 @@ app.get('/health', (_req, res) =>
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
+    tenant: MS_TENANT,
   })
 );
 

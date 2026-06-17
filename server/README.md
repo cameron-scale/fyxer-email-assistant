@@ -25,6 +25,15 @@ registration, an Anthropic API key, and a Render account.
    **Delegated permissions** → add **`Mail.Read`**, **`Mail.Send`**, and
    **`offline_access`** (search for each, tick it, Add). `User.Read` is already there.
 
+> **Getting `AADSTS50194` (...not configured as a multi-tenant application)?** Your
+> app was registered single-tenant. Two easy fixes — pick one:
+> - **Make it multi-tenant (no redeploy):** App registration → **Authentication** →
+>   **Supported account types** → choose **"Accounts in any organizational directory
+>   and personal Microsoft accounts"** → Save. (If the radio is greyed out, edit the
+>   **Manifest** and set `"signInAudience": "AzureADandPersonalMicrosoftAccount"`.)
+> - **Keep it single-tenant:** in Render, add an env var **`MS_TENANT`** set to your
+>   **Directory (tenant) ID** (App registration → Overview), then redeploy.
+
 ## Step 2 — Get an Anthropic API key (for the AI summaries/drafts)
 
 1. Go to <https://console.anthropic.com> → **API Keys** → **Create Key**.

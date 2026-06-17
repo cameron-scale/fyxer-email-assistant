@@ -1,8 +1,12 @@
 // backend.js — talks to the Brisk server (Microsoft login, inbox, AI drafts, send).
-// The server URL is whatever you paste into Settings → "Backend server URL".
+// The server URL defaults to your deployed server below; you can still override it
+// in Settings → "Backend server URL" if you ever move it.
+
+export const DEFAULT_SERVER_URL = 'https://fyxer-email-assistant-1.onrender.com';
 
 function base(url) {
-  return (url || '').trim().replace(/\/$/, '');
+  const v = (url || '').trim();
+  return (v || DEFAULT_SERVER_URL).replace(/\/$/, '');
 }
 
 export function isBackendConfigured(serverUrl) {

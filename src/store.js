@@ -9,10 +9,10 @@ import React, {
 import { prioritize } from './lib/priority';
 import { demoEmails } from './data/demoEmails';
 import { fetchGmail } from './api/gmail';
-import { fetchInbox } from './lib/backend';
+import { fetchInbox, DEFAULT_SERVER_URL } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: '' };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL };
 
 const StoreContext = createContext(null);
 
