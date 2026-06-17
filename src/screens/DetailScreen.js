@@ -97,7 +97,7 @@ export default function DetailScreen({ params, goBack, navigate }) {
         <View style={styles.tldrCard}>
           <View style={styles.tldrHead}>
             <Ionicons name="sparkles" size={13} color={colors.blue} />
-            <Text style={styles.tldrLabel}>Brisk summary · {p.reason}</Text>
+            <Text style={styles.tldrLabel}>Scale Mail summary · {p.reason}</Text>
           </View>
           <Text style={styles.tldrText}>{p.tldr}</Text>
         </View>

@@ -7,7 +7,6 @@ import React, {
   createContext, useContext, useCallback, useMemo, useState, useEffect,
 } from 'react';
 import { prioritize } from './lib/priority';
-import { demoEmails } from './data/demoEmails';
 import { fetchGmail } from './api/gmail';
 import { fetchInbox, DEFAULT_SERVER_URL } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
@@ -17,9 +16,9 @@ const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: D
 const StoreContext = createContext(null);
 
 export function StoreProvider({ children }) {
-  // Raw emails keyed nothing fancy — just an array. Demo data to start.
-  const [raw, setRaw] = useState(demoEmails);
-  const [accounts, setAccounts] = useState({ demo: true });
+  // Raw emails — empty until a real account is connected.
+  const [raw, setRaw] = useState([]);
+  const [accounts, setAccounts] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -47,7 +46,7 @@ export function StoreProvider({ children }) {
         const rt = await getToken('outlook_refresh');
         if (rt) {
           setOutlookRefresh(rt);
-          setAccounts((a) => ({ ...a, outlook: true, demo: false }));
+          setAccounts((a) => ({ ...a, outlook: true }));
         }
       } catch (e) {}
     })();
@@ -136,9 +135,9 @@ export function StoreProvider({ children }) {
       await saveToken('outlook_refresh', newRt);
       setOutlookRefresh(newRt);
     }
-    // Replace demo + old outlook mail with the fresh batch.
+    // Replace old outlook mail with the fresh batch.
     setRaw((prev) => {
-      const others = prev.filter((e) => e.account !== 'outlook' && e.account !== 'demo');
+      const others = prev.filter((e) => e.account !== 'outlook');
       return [...others, ...fetched];
     });
   }, [outlookRefresh, prefs.serverUrl]);
@@ -150,7 +149,7 @@ export function StoreProvider({ children }) {
     try {
       await saveToken('outlook_refresh', refreshToken);
       setOutlookRefresh(refreshToken);
-      setAccounts((a) => ({ ...a, outlook: true, demo: false }));
+      setAccounts((a) => ({ ...a, outlook: true }));
       await loadOutlook(refreshToken);
     } catch (e) {
       setError(e.message || 'Could not load Outlook mail');
@@ -169,10 +168,10 @@ export function StoreProvider({ children }) {
         await saveToken('token_gmail', token);
         const fetched = await fetchGmail(token);
         setRaw((prev) => {
-          const others = prev.filter((e) => e.account !== 'gmail' && e.account !== 'demo');
+          const others = prev.filter((e) => e.account !== 'gmail');
           return [...others, ...fetched];
         });
-        setAccounts((a) => ({ ...a, gmail: true, demo: false }));
+        setAccounts((a) => ({ ...a, gmail: true }));
       } catch (e) {
         setError(e.message || 'Could not load mail');
       } finally {
@@ -209,11 +208,10 @@ export function StoreProvider({ children }) {
     if (provider === 'outlook') setOutlookRefresh(null);
     setRaw((prev) => {
       const kept = prev.filter((e) => e.account !== provider);
-      return kept.length === 0 ? demoEmails : kept;
+      return kept;
     });
     setAccounts((a) => {
       const next = { ...a, [provider]: false };
-      if (!next.gmail && !next.outlook) next.demo = true;
       return next;
     });
   }, []);

@@ -115,7 +115,7 @@ export default function SettingsScreen({ navigate }) {
         <View style={styles.privacy}>
           <Ionicons name="lock-closed" size={14} color="#2E7D32" />
           <Text style={styles.privacyText}>
-            Brisk sorts everything on your device and only ever requests read access. Your VIPs,
+            Scale Mail sorts everything on your device and only ever requests read access. Your VIPs,
             tone and signature stay private on this phone.
           </Text>
         </View>

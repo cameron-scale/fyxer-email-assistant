@@ -30,7 +30,8 @@ const FILTERS = [
 const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
 export default function InboxScreen({ navigate, starred, openSheet }) {
-  const { emails, counts, loading, refresh, markDone, archive } = useStore();
+  const { emails, counts, loading, refresh, markDone, archive, accounts } = useStore();
+  const connected = accounts.outlook || accounts.gmail;
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -169,12 +170,24 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <View style={styles.emptyIcon}>
-              <Ionicons name={starred ? 'star-outline' : 'checkmark-done'} size={28} color={colors.onDarkFaint} />
+              <Ionicons
+                name={starred ? 'star-outline' : connected ? 'checkmark-done' : 'mail-outline'}
+                size={28} color={colors.onDarkFaint}
+              />
             </View>
-            <Text style={styles.emptyTitle}>{starred ? 'No starred mail' : 'Inbox zero'}</Text>
-            <Text style={styles.emptySub}>
-              {starred ? 'Star a sender to keep them here.' : 'Nothing left to triage. Nice work.'}
+            <Text style={styles.emptyTitle}>
+              {starred ? 'No starred mail' : connected ? 'Inbox zero' : 'No inbox yet'}
             </Text>
+            <Text style={styles.emptySub}>
+              {starred ? 'Star a sender to keep them here.'
+                : connected ? 'Nothing left to triage. Nice work.'
+                : 'Tap the profile icon to connect your email.'}
+            </Text>
+            {!starred && !connected && (
+              <Pressable style={styles.connectBtn} onPress={() => navigate('Connect')}>
+                <Text style={styles.connectBtnText}>Connect email</Text>
+              </Pressable>
+            )}
           </View>
         }
       />
@@ -237,4 +250,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: 'rgba(255,255,255,0.7)' },
   emptySub: { fontSize: 14, color: 'rgba(255,255,255,0.32)', textAlign: 'center' },
+  connectBtn: { marginTop: 16, backgroundColor: colors.blue, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: 24 },
+  connectBtnText: { color: '#fff', fontWeight: '800', fontSize: font.body },
 });

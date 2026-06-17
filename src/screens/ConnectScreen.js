@@ -1,4 +1,4 @@
-// ConnectScreen.js — connect Gmail / Outlook / iCloud, or stay in demo mode.
+// ConnectScreen.js — connect Gmail / Outlook / iCloud.
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, Alert, ActivityIndicator,
@@ -87,7 +87,7 @@ export default function ConnectScreen({ goBack, navigate }) {
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.h1}>Connect your email</Text>
         <Text style={styles.sub}>
-          Brisk only ever asks to READ your mail so it can sort it. Your password is
+          Scale Mail only ever asks to READ your mail so it can sort it. Your password is
           never seen by this app.
         </Text>
 
@@ -123,14 +123,14 @@ export default function ConnectScreen({ goBack, navigate }) {
           onPress={iCloudInfo}
         />
 
-        <View style={styles.demoNote}>
-          <Ionicons name="sparkles" size={16} color={colors.brand} />
-          <Text style={styles.demoText}>
-            {accounts.demo
-              ? "You're in demo mode with sample emails — perfect for trying the swipe deck."
-              : 'Demo emails are hidden now that a real account is connected.'}
-          </Text>
-        </View>
+        {!accounts.outlook && !accounts.gmail && (
+          <View style={styles.demoNote}>
+            <Ionicons name="sparkles" size={16} color={colors.brand} />
+            <Text style={styles.demoText}>
+              Connect an account above to load your real inbox, sorted by priority with AI summaries.
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
