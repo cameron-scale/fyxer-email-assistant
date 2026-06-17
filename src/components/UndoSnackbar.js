@@ -42,7 +42,7 @@ export default function UndoSnackbar() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', left: 0, right: 0, bottom: 34, alignItems: 'center' },
+  wrap: { position: 'absolute', left: 0, right: 0, bottom: 100, alignItems: 'center' },
   bar: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: colors.bgElevated, borderRadius: radius.pill,

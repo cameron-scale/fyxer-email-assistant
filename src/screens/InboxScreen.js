@@ -1,150 +1,180 @@
-// InboxScreen.js — the home screen. Shows your inbox sorted by priority.
+// InboxScreen.js — the ScaleMail home screen. Navy background, logo lockup,
+// search pill, scrollable filter chips, and day-grouped white cards driven by
+// Brisk's priority engine. Doubles as the Starred tab via the `starred` prop.
+
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Pressable, RefreshControl, TextInput,
+  View, Text, StyleSheet, SectionList, Pressable, RefreshControl, TextInput, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, space, font, radius, gradients } from '../theme';
 import { useStore } from '../store';
-import EmailRow from '../components/EmailRow';
+import EmailCard from '../components/EmailCard';
 import SwipeableRow from '../components/SwipeableRow';
-import { BUCKETS } from '../lib/priority';
+import { dayBucket, longToday } from '../lib/time';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'vip', label: '⭐ VIP' },
+  { key: 'unread', label: 'Unread' },
   { key: 'urgent', label: 'Urgent' },
-  { key: 'important', label: 'Important' },
-  { key: 'fyi', label: 'FYI' },
-  { key: 'noise', label: 'Noise' },
+  { key: 'starred', label: 'Starred' },
+  { key: 'To Respond', label: 'To Respond' },
+  { key: 'Meeting', label: 'Meeting' },
+  { key: 'Notification', label: 'Notification' },
+  { key: 'Newsletter', label: 'Newsletter' },
+  { key: 'Promotions', label: 'Promotions' },
 ];
 
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
-}
+const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
-export default function InboxScreen({ navigate }) {
+export default function InboxScreen({ navigate, starred }) {
   const { emails, counts, loading, refresh, markDone, archive } = useStore();
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
 
   const q = query.trim().toLowerCase();
-  const shown = emails.filter((e) => {
-    if (filter === 'vip' && !e.priority.isVip) return false;
-    if (filter !== 'all' && filter !== 'vip' && e.priority.bucket !== filter) return false;
+  const base = starred ? emails.filter((e) => e.priority.isVip) : emails;
+
+  const shown = base.filter((e) => {
+    if (!starred) {
+      if (filter === 'unread' && e.read !== false) return false;
+      if (filter === 'urgent' && e.priority.bucket !== 'urgent') return false;
+      if (filter === 'starred' && !e.priority.isVip) return false;
+      if (['To Respond', 'Meeting', 'Notification', 'Newsletter', 'Promotions'].includes(filter) &&
+        e.priority.category !== filter) return false;
+    }
     if (q) {
       const hay = `${e.subject} ${e.priority.senderName} ${e.priority.senderEmail} ${e.priority.tldr}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
   });
-  const vipCount = emails.filter((e) => e.priority.isVip).length;
-  const topJob = counts.urgent + counts.important;
+
+  // Group into Today / Yesterday / Earlier sections.
+  const grouped = {};
+  shown.forEach((e) => {
+    const key = dayBucket(e.date);
+    (grouped[key] = grouped[key] || []).push(e);
+  });
+  const sections = SECTION_ORDER
+    .filter((k) => grouped[k]?.length)
+    .map((k) => ({ title: k === 'Today' ? `Today — ${longToday()}` : k, data: grouped[k] }));
+
+  const unreadCount = emails.filter((e) => e.read === false).length;
 
   return (
     <SafeAreaView style={styles.safe}>
-      <FlatList
-        data={shown}
+      {/* Navy header glow */}
+      <LinearGradient colors={gradients.header} style={styles.glow} pointerEvents="none" />
+
+      <SectionList
+        sections={sections}
         keyExtractor={(e) => `${e.account}-${e.id}`}
         contentContainerStyle={styles.list}
+        stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.brand} />
+          <RefreshControl refreshing={loading} onRefresh={refresh} tintColor="#fff" />
         }
         ListHeaderComponent={
-          <View>
-            {/* Header */}
-            <View style={styles.headerRow}>
+          <View style={styles.header}>
+            <View style={styles.topRow}>
               <View>
-                <Text style={styles.hello}>{greeting()} 👋</Text>
-                <Text style={styles.h1}>Your priority inbox</Text>
+                <Text style={styles.eyebrow}>{starred ? 'Mailbox' : "Cameron's Inbox"}</Text>
+                <View style={styles.logoRow}>
+                  <Text style={styles.logoScale}>Scale</Text>
+                  <Text style={styles.logoMail}>Mail</Text>
+                  {starred ? (
+                    <Text style={styles.logoSuffix}>  Starred</Text>
+                  ) : (
+                    <Text style={styles.logoCount}>{` ·${unreadCount}`}</Text>
+                  )}
+                </View>
               </View>
-              <View style={styles.headerIcons}>
-                <Pressable style={styles.accountBtn} onPress={() => navigate('Settings')}>
-                  <Ionicons name="settings-outline" size={25} color={colors.text} />
-                </Pressable>
-                <Pressable style={styles.accountBtn} onPress={() => navigate('Connect')}>
-                  <Ionicons name="person-circle-outline" size={30} color={colors.text} />
-                </Pressable>
-              </View>
+              <Pressable style={styles.avatar} onPress={() => navigate('Settings')}>
+                <LinearGradient colors={gradients.avatar} style={styles.avatarFill}>
+                  <Text style={styles.avatarText}>CG</Text>
+                </LinearGradient>
+              </Pressable>
             </View>
-
-            {/* Summary card */}
-            <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.summary}>
-              <Text style={styles.summaryBig}>
-                {topJob === 0 ? "You're all caught up 🎉" : `${topJob} email${topJob > 1 ? 's' : ''} need you`}
-              </Text>
-              <Text style={styles.summarySub}>
-                {counts.urgent} urgent · {counts.important} important · {counts.total} total
-              </Text>
-              {emails.length > 0 && (
-                <Pressable style={styles.zipBtn} onPress={() => navigate('Triage')}>
-                  <Ionicons name="flash" size={16} color={colors.brand} />
-                  <Text style={styles.zipText}>Zip through them</Text>
-                </Pressable>
-              )}
-            </LinearGradient>
 
             {/* Search */}
-            <View style={styles.search}>
-              <Ionicons name="search" size={17} color={colors.textFaint} />
-              <TextInput
-                style={styles.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search by sender, subject…"
-                placeholderTextColor={colors.textFaint}
-                returnKeyType="search"
-              />
-              {query.length > 0 && (
-                <Pressable hitSlop={8} onPress={() => setQuery('')}>
-                  <Ionicons name="close-circle" size={18} color={colors.textFaint} />
+            {searching ? (
+              <View style={styles.searchActive}>
+                <Ionicons name="search" size={16} color={colors.onDarkFaint} />
+                <TextInput
+                  style={styles.searchActiveInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search mail…"
+                  placeholderTextColor={colors.onDarkFaint}
+                  autoFocus
+                />
+                <Pressable hitSlop={8} onPress={() => { setSearching(false); setQuery(''); }}>
+                  <Text style={styles.cancel}>Cancel</Text>
                 </Pressable>
-              )}
-            </View>
+              </View>
+            ) : (
+              <Pressable style={styles.searchPill} onPress={() => setSearching(true)}>
+                <Ionicons name="search" size={15} color={colors.onDarkFaint} />
+                <Text style={styles.searchText}>Search mail…</Text>
+              </Pressable>
+            )}
 
-            {/* Filters */}
-            <View style={styles.filters}>
-              {FILTERS.map((f) => {
-                const active = filter === f.key;
-                const c =
-                  f.key === 'all' ? colors.brand
-                  : f.key === 'vip' ? colors.important
-                  : colors[BUCKETS[f.key].colorKey];
-                const count = f.key === 'vip' ? vipCount : counts[f.key];
-                return (
-                  <Pressable
-                    key={f.key}
-                    onPress={() => setFilter(f.key)}
-                    style={[styles.chip, active && { backgroundColor: c, borderColor: c }]}
-                  >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {f.label}
-                      {f.key !== 'all' && count > 0 ? ` ${count}` : ''}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {/* Filter chips */}
+            {!starred && !searching && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.chipsWrap}
+                contentContainerStyle={styles.chipsRow}
+              >
+                {FILTERS.map((f) => {
+                  const active = filter === f.key;
+                  let count = 0;
+                  if (f.key === 'unread') count = unreadCount;
+                  else if (counts[f.key] !== undefined) count = counts[f.key];
+                  return (
+                    <Pressable
+                      key={f.key}
+                      onPress={() => setFilter(f.key)}
+                      style={[styles.chip, active && styles.chipActive]}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                        {f.label}{f.key !== 'all' && count > 0 ? ` ${count}` : ''}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
         }
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionEyebrow}>{section.title}</Text>
+        )}
         renderItem={({ item }) => (
-          <SwipeableRow
-            onSwipeRight={() => markDone(item.id)}
-            onSwipeLeft={() => archive(item.id)}
-          >
-            <EmailRow email={item} onPress={() => navigate('Detail', { id: item.id })} />
-          </SwipeableRow>
+          <View style={styles.cardWrap}>
+            <SwipeableRow
+              onSwipeRight={() => markDone(item.id)}
+              onSwipeLeft={() => archive(item.id)}
+            >
+              <EmailCard email={item} onPress={() => navigate('Detail', { id: item.id })} />
+            </SwipeableRow>
+          </View>
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>🍃</Text>
-            <Text style={styles.emptyText}>Nothing here. Inbox zero feels good.</Text>
+            <View style={styles.emptyIcon}>
+              <Ionicons name={starred ? 'star-outline' : 'checkmark-done'} size={28} color={colors.onDarkFaint} />
+            </View>
+            <Text style={styles.emptyTitle}>{starred ? 'No starred mail' : 'Inbox zero'}</Text>
+            <Text style={styles.emptySub}>
+              {starred ? 'Star a sender to keep them here.' : 'Nothing left to triage. Nice work.'}
+            </Text>
           </View>
         }
       />
@@ -154,39 +184,57 @@ export default function InboxScreen({ navigate }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  list: { paddingHorizontal: space.lg, paddingBottom: 120 },
-  headerRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginTop: space.sm, marginBottom: space.md,
+  glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 230 },
+  list: { paddingHorizontal: 16, paddingBottom: 120 },
+  header: { paddingHorizontal: 6, paddingTop: 4 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  eyebrow: {
+    fontSize: 12, fontWeight: '500', letterSpacing: 0.7, textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.35)', marginBottom: 6,
   },
-  hello: { color: colors.textDim, fontSize: font.body },
-  h1: { color: colors.text, fontSize: font.h1, fontWeight: '800', marginTop: 2 },
-  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  accountBtn: { padding: 4 },
-  summary: { borderRadius: radius.lg, padding: space.lg, marginBottom: space.lg },
-  summaryBig: { color: '#fff', fontSize: font.h2, fontWeight: '800' },
-  summarySub: { color: 'rgba(255,255,255,0.85)', fontSize: font.small, marginTop: 6 },
-  zipBtn: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
-    backgroundColor: '#fff', borderRadius: radius.pill,
-    paddingVertical: 9, paddingHorizontal: 16, marginTop: space.md, gap: 6,
+  logoRow: { flexDirection: 'row', alignItems: 'baseline' },
+  logoScale: { fontSize: 32, fontWeight: '800', color: '#fff', letterSpacing: -1.3 },
+  logoMail: { fontSize: 32, fontWeight: '800', color: colors.blue, letterSpacing: -1.3 },
+  logoCount: { fontSize: 32, fontWeight: '800', color: colors.blue, letterSpacing: -1.3, opacity: 0.7 },
+  logoSuffix: { fontSize: 26, fontWeight: '800', color: colors.blue, letterSpacing: -1, opacity: 0.55 },
+  avatar: { marginTop: 4 },
+  avatarFill: {
+    width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
+    shadowColor: colors.blue, shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
   },
-  zipText: { color: colors.brand, fontWeight: '800', fontSize: font.small },
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: colors.bgElevated, borderRadius: radius.md,
-    paddingHorizontal: space.md, marginBottom: space.md,
-    borderWidth: 1, borderColor: colors.border,
+  avatarText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  searchPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 9,
+    backgroundColor: colors.onDarkFill, borderWidth: 1, borderColor: colors.onDarkBorder,
+    borderRadius: 14, paddingVertical: 12, paddingHorizontal: 15, marginBottom: 14,
   },
-  searchInput: { flex: 1, color: colors.text, fontSize: font.body, paddingVertical: 11 },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: space.md },
+  searchText: { fontSize: 14, color: 'rgba(255,255,255,0.3)' },
+  searchActive: {
+    flexDirection: 'row', alignItems: 'center', gap: 9,
+    backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12, paddingHorizontal: 12, marginBottom: 14,
+  },
+  searchActiveInput: { flex: 1, color: '#fff', fontSize: 15, paddingVertical: 11 },
+  cancel: { color: colors.blue, fontSize: 15, fontWeight: '500' },
+  chipsWrap: { marginBottom: 12, marginHorizontal: -6 },
+  chipsRow: { gap: 7, paddingHorizontal: 6, paddingRight: 24 },
   chip: {
-    paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.pill,
-    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgElevated,
+    paddingVertical: 6, paddingHorizontal: 14, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  chipText: { color: colors.textDim, fontWeight: '700', fontSize: font.small },
+  chipActive: { backgroundColor: colors.blue, borderColor: colors.blue },
+  chipText: { fontSize: 12.5, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
   chipTextActive: { color: '#fff' },
-  empty: { alignItems: 'center', paddingTop: 60 },
-  emptyEmoji: { fontSize: 44, marginBottom: 12 },
-  emptyText: { color: colors.textDim, fontSize: font.body },
+  sectionEyebrow: {
+    fontSize: 11, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.25)', paddingHorizontal: 6, paddingTop: 10, paddingBottom: 10,
+  },
+  cardWrap: { marginBottom: 10 },
+  empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
+  emptyIcon: {
+    width: 64, height: 64, borderRadius: 20, backgroundColor: colors.onDarkFill,
+    borderWidth: 1, borderColor: colors.onDarkBorder, alignItems: 'center', justifyContent: 'center',
+  },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: 'rgba(255,255,255,0.7)' },
+  emptySub: { fontSize: 14, color: 'rgba(255,255,255,0.32)', textAlign: 'center' },
 });

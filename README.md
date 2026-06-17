@@ -1,8 +1,14 @@
-# Brisk 📨⚡
+# Brisk 📨⚡ — “ScaleMail”
 
 A fun, fast **priority inbox** for your phone — built to replace the Outlook app.
 Brisk reads your email, figures out what actually matters, sorts it by priority,
 and lets you **zip through the pile** with simple swipes.
+
+The interface follows the **ScaleMail** design: a deep-navy home with clean white
+cards, each topped by a **colored band** whose color is chosen by Brisk's priority
+engine (red = Urgent, blue = To Respond, violet = Meeting, emerald = Notification,
+teal = Newsletter, amber = Promotions). A frosted bottom tab bar holds Inbox,
+Starred, a center Compose button, **Zip** (the swipe deck), and Settings.
 
 It runs on **Expo Go**, so you can test it on your iPhone in about 2 minutes with
 no App Store, no Xcode, and no Mac required.

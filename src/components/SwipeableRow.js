@@ -65,8 +65,8 @@ export default function SwipeableRow({ children, onSwipeRight, onSwipeLeft }) {
 const styles = StyleSheet.create({
   wrap: { position: 'relative' },
   bg: {
-    position: 'absolute', top: 0, bottom: space.sm + 2, left: 0, right: 0,
-    borderRadius: radius.md, paddingHorizontal: space.lg,
+    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+    borderRadius: radius.lg, paddingHorizontal: space.lg,
     flexDirection: 'row', alignItems: 'center', gap: 8,
   },
   bgDone: { backgroundColor: colors.done, justifyContent: 'flex-start' },

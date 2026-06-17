@@ -1,11 +1,13 @@
-// SettingsScreen.js — one place to control how Brisk behaves: your signature,
-// default reply tone, and the VIP senders you've taught it about.
+// SettingsScreen.js — profile + controls, styled like the ScaleMail profile sheet.
+// Manage your signature, default reply tone, VIP senders, and connected accounts.
+
 import React from 'react';
 import {
   View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, space, font, radius } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, space, font, radius, gradients } from '../theme';
 import { useStore } from '../store';
 
 const TONES = [
@@ -14,45 +16,44 @@ const TONES = [
   { key: 'brief', label: 'Brief' },
 ];
 
-export default function SettingsScreen({ goBack, navigate }) {
+export default function SettingsScreen({ navigate }) {
   const { prefs, setPrefs, vips, toggleVip, accounts } = useStore();
   const connected = ['gmail', 'outlook'].filter((a) => accounts[a]);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.topBar}>
-        <Pressable style={styles.backRow} onPress={goBack} hitSlop={10}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-          <Text style={styles.backText}>Inbox</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <Text style={styles.h1}>Settings</Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Profile header */}
+        <View style={styles.profileCard}>
+          <LinearGradient colors={gradients.avatar} style={styles.profileAv}>
+            <Text style={styles.profileAvText}>CG</Text>
+          </LinearGradient>
+          <View>
+            <Text style={styles.profileName}>Cameron Gallup</Text>
+            <Text style={styles.profileEmail}>cameron@scalembs.com</Text>
+          </View>
+        </View>
 
         {/* Signature */}
-        <Text style={styles.section}>Your signature</Text>
-        <Text style={styles.help}>Used to sign every quick reply.</Text>
-        <TextInput
-          style={styles.input}
-          value={prefs.signature}
-          onChangeText={(t) => setPrefs({ signature: t })}
-          placeholder="Your name"
-          placeholderTextColor={colors.textFaint}
-        />
+        <Text style={styles.sectionLabel}>Your signature</Text>
+        <View style={styles.group}>
+          <TextInput
+            style={styles.input}
+            value={prefs.signature}
+            onChangeText={(t) => setPrefs({ signature: t })}
+            placeholder="Your name"
+            placeholderTextColor={colors.ink4}
+          />
+        </View>
 
         {/* Default tone */}
-        <Text style={styles.section}>Default reply tone</Text>
-        <Text style={styles.help}>How your one-tap drafts sound by default.</Text>
+        <Text style={styles.sectionLabel}>Default reply tone</Text>
         <View style={styles.chips}>
           {TONES.map((t) => {
             const active = prefs.tone === t.key;
             return (
-              <Pressable
-                key={t.key}
-                onPress={() => setPrefs({ tone: t.key })}
-                style={[styles.chip, active && styles.chipActive]}
-              >
+              <Pressable key={t.key} onPress={() => setPrefs({ tone: t.key })}
+                style={[styles.chip, active && styles.chipActive]}>
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{t.label}</Text>
               </Pressable>
             );
@@ -60,42 +61,43 @@ export default function SettingsScreen({ goBack, navigate }) {
         </View>
 
         {/* VIPs */}
-        <Text style={styles.section}>VIP senders ⭐</Text>
-        <Text style={styles.help}>
-          Email from these people always jumps to the top. Tap the star on any email to add
-          someone.
-        </Text>
+        <Text style={styles.sectionLabel}>VIP senders ⭐</Text>
+        <Text style={styles.help}>Star a sender on any email and they always jump to the top.</Text>
         {vips.length === 0 ? (
-          <View style={styles.emptyVip}>
-            <Text style={styles.emptyVipText}>No VIPs yet. Star a sender to teach Brisk who matters.</Text>
-          </View>
+          <View style={styles.group}><Text style={styles.emptyVip}>No VIPs yet.</Text></View>
         ) : (
-          vips.map((email) => (
-            <View key={email} style={styles.vipRow}>
-              <Ionicons name="star" size={16} color={colors.important} />
-              <Text style={styles.vipEmail} numberOfLines={1}>{email}</Text>
-              <Pressable hitSlop={10} onPress={() => toggleVip(email)}>
-                <Ionicons name="close-circle" size={20} color={colors.textFaint} />
-              </Pressable>
-            </View>
-          ))
+          <View style={styles.group}>
+            {vips.map((email, i) => (
+              <View key={email} style={[styles.row, i < vips.length - 1 && styles.rowBorder]}>
+                <Ionicons name="star" size={16} color="#FF9F0A" />
+                <Text style={styles.rowText} numberOfLines={1}>{email}</Text>
+                <Pressable hitSlop={10} onPress={() => toggleVip(email)}>
+                  <Ionicons name="close-circle" size={20} color={colors.ink4} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
         )}
 
         {/* Accounts */}
-        <Text style={styles.section}>Accounts</Text>
-        <Pressable style={styles.linkRow} onPress={() => navigate('Connect')}>
-          <Ionicons name="person-circle-outline" size={22} color={colors.brand} />
-          <Text style={styles.linkText}>
-            {connected.length ? `Manage (${connected.join(', ')})` : 'Connect Gmail / Outlook'}
-          </Text>
-          <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
+        <Text style={styles.sectionLabel}>Accounts</Text>
+        <Pressable style={styles.group} onPress={() => navigate('Connect')}>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: '#E3F2FD' }]}>
+              <Ionicons name="person" size={16} color="#1565C0" />
+            </View>
+            <Text style={styles.rowTitle}>
+              {connected.length ? `Manage (${connected.join(', ')})` : 'Connect Gmail / Outlook'}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.ink4} />
+          </View>
         </Pressable>
 
         <View style={styles.privacy}>
-          <Ionicons name="lock-closed" size={15} color={colors.fyi} />
+          <Ionicons name="lock-closed" size={14} color="#2E7D32" />
           <Text style={styles.privacyText}>
-            Brisk sorts everything on your device and only ever requests read access. Your
-            VIPs, tone and signature are stored privately on this phone.
+            Brisk sorts everything on your device and only ever requests read access. Your VIPs,
+            tone and signature stay private on this phone.
           </Text>
         </View>
       </ScrollView>
@@ -104,50 +106,37 @@ export default function SettingsScreen({ goBack, navigate }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  topBar: { paddingHorizontal: space.md, paddingVertical: space.sm },
-  backRow: { flexDirection: 'row', alignItems: 'center' },
-  backText: { color: colors.text, fontSize: font.title, fontWeight: '600' },
-  body: { padding: space.lg, paddingBottom: 60 },
-  h1: { color: colors.text, fontSize: font.h1, fontWeight: '800', marginBottom: space.sm },
-  section: {
-    color: colors.text, fontSize: font.title, fontWeight: '800',
-    marginTop: space.xl, marginBottom: 4,
+  safe: { flex: 1, backgroundColor: colors.surface },
+  scroll: { padding: 22, paddingBottom: 120 },
+  profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 },
+  profileAv: {
+    width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center',
+    shadowColor: colors.blue, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
   },
-  help: { color: colors.textDim, fontSize: font.small, marginBottom: space.md, lineHeight: 19 },
-  input: {
-    backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1,
-    borderColor: colors.border, color: colors.text, fontSize: font.body,
-    paddingHorizontal: space.md, paddingVertical: 12,
+  profileAvText: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  profileName: { fontSize: 20, fontWeight: '700', color: colors.ink, letterSpacing: -0.4 },
+  profileEmail: { fontSize: 13, color: colors.ink3, marginTop: 3 },
+  sectionLabel: {
+    fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase',
+    color: colors.ink4, marginTop: 26, marginBottom: 8,
   },
+  help: { fontSize: 13, color: colors.ink3, marginBottom: 10, marginTop: -2, lineHeight: 18 },
+  group: { backgroundColor: colors.surface2, borderRadius: 14, overflow: 'hidden' },
+  input: { paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: colors.ink },
   chips: { flexDirection: 'row', gap: 8 },
-  chip: {
-    backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1,
-    borderRadius: radius.pill, paddingVertical: 9, paddingHorizontal: 16,
-  },
-  chipActive: { backgroundColor: colors.brandSoft, borderColor: colors.brand },
-  chipText: { color: colors.textDim, fontWeight: '700', fontSize: font.small },
-  chipTextActive: { color: colors.brand },
-  emptyVip: {
-    backgroundColor: colors.card, borderRadius: radius.md, padding: space.md,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  emptyVipText: { color: colors.textDim, fontSize: font.small, lineHeight: 19 },
-  vipRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: colors.card, borderRadius: radius.md, padding: space.md,
-    marginBottom: space.sm, borderWidth: 1, borderColor: colors.border,
-  },
-  vipEmail: { color: colors.text, fontSize: font.body, flex: 1 },
-  linkRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: colors.card, borderRadius: radius.md, padding: space.md,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  linkText: { color: colors.text, fontSize: font.body, fontWeight: '600', flex: 1 },
+  chip: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingVertical: 9, paddingHorizontal: 16 },
+  chipActive: { backgroundColor: colors.blueLight },
+  chipText: { color: colors.ink3, fontWeight: '700', fontSize: 13 },
+  chipTextActive: { color: colors.blue },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: colors.hairline },
+  rowIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  rowText: { flex: 1, fontSize: 14, color: colors.ink },
+  rowTitle: { flex: 1, fontSize: 15, color: colors.ink, fontWeight: '500' },
+  emptyVip: { padding: 16, color: colors.ink3, fontSize: 14 },
   privacy: {
     flexDirection: 'row', gap: 10, alignItems: 'flex-start',
-    backgroundColor: colors.fyiSoft, borderRadius: radius.md, padding: space.md, marginTop: space.xl,
+    backgroundColor: '#E8F8F1', borderRadius: 14, padding: 14, marginTop: 28,
   },
-  privacyText: { color: colors.textDim, fontSize: font.small, flex: 1, lineHeight: 19 },
+  privacyText: { flex: 1, color: colors.ink2, fontSize: 13, lineHeight: 19 },
 });

@@ -13,3 +13,22 @@ export function timeAgo(iso) {
   if (d < 7) return `${d}d`;
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
+
+// Which day-section an email belongs to, for the inbox eyebrows.
+export function dayBucket(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Earlier';
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const t = d.getTime();
+  if (t >= startOfToday) return 'Today';
+  if (t >= startOfToday - 86400000) return 'Yesterday';
+  return 'Earlier';
+}
+
+// A friendly long date like "Wednesday, June 17".
+export function longToday() {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
+}
