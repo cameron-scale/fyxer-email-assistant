@@ -50,14 +50,32 @@ function serverUrl(req) {
 const redirectUri = (req) => `${serverUrl(req)}/auth/microsoft/callback`;
 
 // ── Health check ─────────────────────────────────────────────────────────────
-app.get('/', (_req, res) => res.send('Brisk server is running ✅'));
+app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
+    version: 'debug-2',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
     tenant: MS_TENANT,
+  })
+);
+
+// No-login config check: shows the exact redirect URI the server computes, so we
+// can compare it character-for-character with what's registered in Azure.
+app.get('/debug', (req, res) =>
+  res.json({
+    version: 'debug-2',
+    computedRedirectUri: redirectUri(req),
+    tenant: MS_TENANT,
+    clientIdPrefix: MS_CLIENT_ID.slice(0, 8),
+    clientIdLength: MS_CLIENT_ID.length,
+    secretSet: Boolean(MS_CLIENT_SECRET),
+    secretLength: MS_CLIENT_SECRET.length,
+    serverUrlEnv: process.env.SERVER_URL || null,
+    host: req.get('host'),
+    forwardedProto: req.headers['x-forwarded-proto'] || null,
   })
 );
 
@@ -126,7 +144,10 @@ app.get('/auth/microsoft/callback', async (req, res) => {
       `Refresh token received (length ${String(tokens.refresh_token || '').length}).`
     );
   } catch (e) {
-    return finish(`error=${encodeURIComponent(e.message)}`, false, e.message);
+    const full = e.detail
+      ? `${e.message}\n\nredirect_uri used: ${redirectUri(req)}\ntenant: ${MS_TENANT}\n\nFull Microsoft response:\n${JSON.stringify(e.detail, null, 2)}`
+      : e.message;
+    return finish(`error=${encodeURIComponent(e.message)}`, false, full);
   }
 });
 
@@ -144,7 +165,11 @@ async function msToken(extra) {
     body,
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error_description || data.error || 'token exchange failed');
+  if (!r.ok) {
+    const err = new Error(data.error_description || data.error || 'token exchange failed');
+    err.detail = data; // full Microsoft error JSON for debugging
+    throw err;
+  }
   return data; // { access_token, refresh_token, expires_in, ... }
 }
 
