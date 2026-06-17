@@ -73,11 +73,30 @@ export function summarize(body = '', maxLen = 110) {
   return pick;
 }
 
+// Work out a Fyxer-style category label (what KIND of email this is).
+// This is separate from priority (how URGENT it is) so you get both:
+// e.g. "Important · To Respond" or "Noise · Promotions".
+function categorize(haystack, signals) {
+  const { noisySender, isQuestion, importantHits, looksHuman } = signals;
+  if (/(% off|sale|discount|\bdeal\b|promo|limited time|shop now|offer|coupon)/.test(haystack))
+    return 'Promotions';
+  if (/(unsubscribe|newsletter|digest|weekly recap|view in browser|read more|this week)/.test(haystack))
+    return 'Newsletter';
+  if (/(meeting|\bcall\b|schedule|reschedule|calendar|invite|catch up|\bsync\b|availability|book a)/.test(haystack))
+    return 'Meeting';
+  if (noisySender && !isQuestion) return 'Notification';
+  if (isQuestion || importantHits > 0 || looksHuman) return 'To Respond';
+  return 'FYI';
+}
+
 // The main scorer. Give it a normalized email, get back priority info.
-export function scoreEmail(email) {
+// options.vips = array of lowercased sender emails you've marked as VIP.
+export function scoreEmail(email, options = {}) {
+  const vips = options.vips || [];
   const sender = parseSender(email.from || email.sender || '');
   const haystack = `${email.subject || ''} ${email.body || email.snippet || ''}`.toLowerCase();
   const senderStr = `${sender.name} ${sender.email}`.toLowerCase();
+  const isVip = vips.includes(sender.email);
 
   let score = 0;
   const reasons = [];
@@ -96,9 +115,16 @@ export function scoreEmail(email) {
   }
 
   // A direct question usually wants a reply.
-  if ((email.subject + ' ' + (email.body || '')).includes('?')) {
+  const isQuestion = `${email.subject} ${email.body || ''}`.includes('?');
+  if (isQuestion) {
     score += 12;
     reasons.push('Asks a question');
+  }
+
+  // VIP senders you've taught Brisk about always float to the top.
+  if (isVip) {
+    score += 60;
+    reasons.unshift('⭐ VIP sender');
   }
 
   // Addressed to you personally (your first name appears) — lightweight check.
@@ -150,9 +176,21 @@ export function scoreEmail(email) {
   // Promotional stuff is never "urgent" even if it screams it.
   if ((noisySender || noiseHits >= 2) && bucket === 'urgent') bucket = 'noise';
 
+  // VIPs never get buried in Noise/FYI — bump them to at least Important.
+  if (isVip && (bucket === 'noise' || bucket === 'fyi')) bucket = 'important';
+
+  const category = categorize(haystack, {
+    noisySender,
+    isQuestion,
+    importantHits,
+    looksHuman,
+  });
+
   return {
     score,
     bucket,
+    category,
+    isVip,
     reason: reasons[0] || 'General message',
     reasons,
     senderName: sender.name,
@@ -170,9 +208,10 @@ export const BUCKETS = {
 };
 
 // Take raw emails -> attach priority -> sort best-first.
-export function prioritize(rawEmails) {
+// vips = array of lowercased sender emails the user marked important.
+export function prioritize(rawEmails, vips = []) {
   return rawEmails
-    .map((e) => ({ ...e, priority: scoreEmail(e) }))
+    .map((e) => ({ ...e, priority: scoreEmail(e, { vips }) }))
     .sort((a, b) => {
       const ord =
         BUCKETS[a.priority.bucket].order - BUCKETS[b.priority.bucket].order;

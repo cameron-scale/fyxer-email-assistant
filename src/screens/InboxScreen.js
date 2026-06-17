@@ -1,7 +1,7 @@
 // InboxScreen.js — the home screen. Shows your inbox sorted by priority.
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Pressable, RefreshControl,
+  View, Text, StyleSheet, FlatList, Pressable, RefreshControl, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { BUCKETS } from '../lib/priority';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
+  { key: 'vip', label: '⭐ VIP' },
   { key: 'urgent', label: 'Urgent' },
   { key: 'important', label: 'Important' },
   { key: 'fyi', label: 'FYI' },
@@ -27,10 +28,21 @@ function greeting() {
 }
 
 export default function InboxScreen({ navigate }) {
-  const { emails, counts, loading, refresh, accounts } = useStore();
+  const { emails, counts, loading, refresh } = useStore();
   const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
 
-  const shown = filter === 'all' ? emails : emails.filter((e) => e.priority.bucket === filter);
+  const q = query.trim().toLowerCase();
+  const shown = emails.filter((e) => {
+    if (filter === 'vip' && !e.priority.isVip) return false;
+    if (filter !== 'all' && filter !== 'vip' && e.priority.bucket !== filter) return false;
+    if (q) {
+      const hay = `${e.subject} ${e.priority.senderName} ${e.priority.senderEmail} ${e.priority.tldr}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const vipCount = emails.filter((e) => e.priority.isVip).length;
   const topJob = counts.urgent + counts.important;
 
   return (
@@ -72,11 +84,33 @@ export default function InboxScreen({ navigate }) {
               )}
             </LinearGradient>
 
+            {/* Search */}
+            <View style={styles.search}>
+              <Ionicons name="search" size={17} color={colors.textFaint} />
+              <TextInput
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search by sender, subject…"
+                placeholderTextColor={colors.textFaint}
+                returnKeyType="search"
+              />
+              {query.length > 0 && (
+                <Pressable hitSlop={8} onPress={() => setQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={colors.textFaint} />
+                </Pressable>
+              )}
+            </View>
+
             {/* Filters */}
             <View style={styles.filters}>
               {FILTERS.map((f) => {
                 const active = filter === f.key;
-                const c = f.key === 'all' ? colors.brand : colors[BUCKETS[f.key].colorKey];
+                const c =
+                  f.key === 'all' ? colors.brand
+                  : f.key === 'vip' ? colors.important
+                  : colors[BUCKETS[f.key].colorKey];
+                const count = f.key === 'vip' ? vipCount : counts[f.key];
                 return (
                   <Pressable
                     key={f.key}
@@ -85,7 +119,7 @@ export default function InboxScreen({ navigate }) {
                   >
                     <Text style={[styles.chipText, active && styles.chipTextActive]}>
                       {f.label}
-                      {f.key !== 'all' && counts[f.key] > 0 ? ` ${counts[f.key]}` : ''}
+                      {f.key !== 'all' && count > 0 ? ` ${count}` : ''}
                     </Text>
                   </Pressable>
                 );
@@ -126,6 +160,13 @@ const styles = StyleSheet.create({
     paddingVertical: 9, paddingHorizontal: 16, marginTop: space.md, gap: 6,
   },
   zipText: { color: colors.brand, fontWeight: '800', fontSize: font.small },
+  search: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: colors.bgElevated, borderRadius: radius.md,
+    paddingHorizontal: space.md, marginBottom: space.md,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  searchInput: { flex: 1, color: colors.text, fontSize: font.body, paddingVertical: 11 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: space.md },
   chip: {
     paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.pill,

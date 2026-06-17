@@ -136,7 +136,12 @@ export default function TriageScreen({ navigate, goBack }) {
                     </Text>
                   </View>
                 </View>
-                <PriorityPill bucket={current.priority.bucket} />
+                <View style={styles.pillRow}>
+                  <PriorityPill bucket={current.priority.bucket} />
+                  <View style={styles.cat}>
+                    <Text style={styles.catText}>{current.priority.category}</Text>
+                  </View>
+                </View>
                 <Text style={styles.cardSubject}>{current.subject}</Text>
                 <Text style={styles.cardBody}>{current.priority.tldr}</Text>
                 <View style={styles.why}>
@@ -206,6 +211,12 @@ const styles = StyleSheet.create({
   cardHead: { flexDirection: 'row', alignItems: 'center', marginBottom: space.md },
   cardSender: { color: colors.text, fontSize: font.title, fontWeight: '800' },
   cardEmail: { color: colors.textFaint, fontSize: font.small, marginTop: 2 },
+  pillRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cat: {
+    backgroundColor: colors.bgElevated, borderRadius: radius.pill,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  catText: { color: colors.textDim, fontSize: font.tiny, fontWeight: '700' },
   cardSubject: { color: colors.text, fontSize: font.h2, fontWeight: '800', marginTop: space.md },
   cardBody: { color: colors.textDim, fontSize: font.body, lineHeight: 22, marginTop: space.sm },
   why: { flexDirection: 'row', alignItems: 'center', marginTop: space.md, gap: 6 },

@@ -3,12 +3,16 @@
 // without passing props down through ten layers. Uses React Context — think of it
 // as one shared box of data the whole app can reach into.
 
-import React, { createContext, useContext, useCallback, useMemo, useState } from 'react';
+import React, {
+  createContext, useContext, useCallback, useMemo, useState, useEffect,
+} from 'react';
 import { prioritize } from './lib/priority';
 import { demoEmails } from './data/demoEmails';
 import { fetchGmail } from './api/gmail';
 import { fetchOutlook } from './api/outlook';
 import { saveToken, getToken, clearToken } from './lib/storage';
+
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron' };
 
 const StoreContext = createContext(null);
 
@@ -22,6 +26,22 @@ export function StoreProvider({ children }) {
   // Per-email local state the user creates: archived / snoozed / done / read.
   const [overrides, setOverrides] = useState({}); // id -> { status, read, snoozedUntil }
 
+  // VIP senders the user has "taught" us, plus draft preferences. Both persist.
+  const [vips, setVips] = useState([]); // lowercased emails
+  const [prefs, setPrefsState] = useState(DEFAULT_PREFS);
+
+  // Load saved VIPs + prefs once when the app starts.
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await getToken('vips');
+        if (v) setVips(JSON.parse(v));
+        const p = await getToken('prefs');
+        if (p) setPrefsState({ ...DEFAULT_PREFS, ...JSON.parse(p) });
+      } catch (e) {}
+    })();
+  }, []);
+
   // Build the prioritized, filtered list the UI shows.
   const emails = useMemo(() => {
     const now = Date.now();
@@ -31,8 +51,8 @@ export function StoreProvider({ children }) {
       if (e.snoozedUntil && e.snoozedUntil > now) return false;
       return true;
     });
-    return prioritize(visible);
-  }, [raw, overrides]);
+    return prioritize(visible, vips);
+  }, [raw, overrides, vips]);
 
   const counts = useMemo(() => {
     const c = { urgent: 0, important: 0, fyi: 0, noise: 0, total: emails.length };
@@ -55,6 +75,28 @@ export function StoreProvider({ children }) {
     [setOverride]
   );
   const undo = useCallback((id) => setOverride(id, { status: undefined, snoozedUntil: undefined }), [setOverride]);
+
+  // --- Teach Brisk: mark/unmark a sender as VIP (persists on the device) ---
+  const toggleVip = useCallback((senderEmail) => {
+    const email = (senderEmail || '').toLowerCase();
+    if (!email) return;
+    setVips((list) => {
+      const next = list.includes(email)
+        ? list.filter((e) => e !== email)
+        : [...list, email];
+      saveToken('vips', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // --- Draft preferences: reply tone + signature (persists) ---
+  const setPrefs = useCallback((patch) => {
+    setPrefsState((p) => {
+      const next = { ...p, ...patch };
+      saveToken('prefs', JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   // --- Connecting a real account ---
   const loadAccount = useCallback(async (provider, token) => {
@@ -121,11 +163,15 @@ export function StoreProvider({ children }) {
     accounts,
     loading,
     error,
+    vips,
+    prefs,
     archive,
     markDone,
     markRead,
     snooze,
     undo,
+    toggleVip,
+    setPrefs,
     loadAccount,
     refresh,
     disconnect,

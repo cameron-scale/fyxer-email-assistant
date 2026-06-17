@@ -11,16 +11,25 @@ no App Store, no Xcode, and no Mac required.
 
 ## ✨ What it does
 
-- **Reads & parses every email** and sorts it into four buckets:
+- **Reads & parses every email** and sorts it into four priority buckets:
   🔴 **Urgent** · 🟠 **Important** · 🟢 **FYI** · ⚪ **Noise** (promos/newsletters)
+- **Fyxer-style category labels** on every email — **To Respond · Meeting ·
+  Notification · Newsletter · Promotions · FYI** — so you see at a glance what
+  _kind_ of email it is, not just how urgent.
 - **Tells you _why_** each email was ranked ("Asks a question", "From a real person",
-  "Looks automated").
+  "Looks automated") — full transparency, no mystery AI.
+- **Teach it your VIPs** ⭐ — tap the star on anyone and their emails always float
+  to the top from then on. It remembers, even after you close the app.
 - **Zip-through mode** — a swipe deck (like dating apps, but for your inbox):
   - 👉 swipe **right** = Done
   - 👈 swipe **left** = Archive
   - 👆 swipe **up** = Snooze 4h
 - **One-line TL;DR** for every email so you don't have to open them.
-- **One-tap reply drafts** that adapt to the email (Approve, Suggest a time, etc.).
+- **Tone-matched reply drafts** — pick **Professional / Friendly / Brief** and your
+  signature, and one-tap drafts (Approve, Suggest a time, Acknowledge…) rewrite
+  themselves to sound like you.
+- **Search** your whole inbox, and **multi-account badges** so you always know
+  which account (Gmail/Outlook) an email came from.
 - **Demo mode** with realistic sample emails so it's fun the instant you open it.
 - Sign in with **Gmail** and **Outlook**. (iCloud — see note below.)
 

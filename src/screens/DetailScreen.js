@@ -11,8 +11,14 @@ import PriorityPill from '../components/PriorityPill';
 import { suggestReplies } from '../lib/drafts';
 import { timeAgo } from '../lib/time';
 
+const TONES = [
+  { key: 'professional', label: 'Professional' },
+  { key: 'friendly', label: 'Friendly' },
+  { key: 'brief', label: 'Brief' },
+];
+
 export default function DetailScreen({ params, goBack }) {
-  const { emails, archive, snooze, markDone, markRead } = useStore();
+  const { emails, archive, snooze, markDone, markRead, prefs, setPrefs, toggleVip } = useStore();
   const email = emails.find((e) => e.id === params.id);
 
   // Mark as read the first time we open it.
@@ -20,7 +26,11 @@ export default function DetailScreen({ params, goBack }) {
     if (email && !email.read) markRead(email.id);
   }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const drafts = useMemo(() => (email ? suggestReplies(email) : []), [email?.id]); // eslint-disable-line
+  // Drafts re-generate when the email OR your tone/signature changes.
+  const drafts = useMemo(
+    () => (email ? suggestReplies(email, prefs) : []),
+    [email?.id, prefs.tone, prefs.signature] // eslint-disable-line
+  );
   const [reply, setReply] = useState('');
 
   if (!email) {
@@ -50,6 +60,13 @@ export default function DetailScreen({ params, goBack }) {
           <Text style={styles.backText}>Inbox</Text>
         </Pressable>
         <View style={styles.topActions}>
+          <Pressable hitSlop={10} onPress={() => toggleVip(p.senderEmail)}>
+            <Ionicons
+              name={p.isVip ? 'star' : 'star-outline'}
+              size={23}
+              color={p.isVip ? colors.important : colors.textDim}
+            />
+          </Pressable>
           <Pressable hitSlop={10} onPress={() => act(snooze)}>
             <Ionicons name="time-outline" size={23} color={colors.snooze} />
           </Pressable>
@@ -63,7 +80,18 @@ export default function DetailScreen({ params, goBack }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <PriorityPill bucket={p.bucket} />
+        <View style={styles.pillRow}>
+          <PriorityPill bucket={p.bucket} />
+          <View style={styles.category}>
+            <Text style={styles.categoryText}>{p.category}</Text>
+          </View>
+          {p.isVip && (
+            <View style={styles.vipTag}>
+              <Ionicons name="star" size={11} color={colors.important} />
+              <Text style={styles.vipTagText}>VIP</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.subject}>{email.subject}</Text>
 
         <View style={styles.senderRow}>
@@ -98,6 +126,23 @@ export default function DetailScreen({ params, goBack }) {
         <Text style={styles.label}>Full message</Text>
         <Text style={styles.full}>{email.body}</Text>
 
+        {/* Reply tone — drafts adapt to match how you write */}
+        <Text style={styles.label}>Reply tone</Text>
+        <View style={styles.chips}>
+          {TONES.map((tn) => {
+            const active = prefs.tone === tn.key;
+            return (
+              <Pressable
+                key={tn.key}
+                onPress={() => setPrefs({ tone: tn.key })}
+                style={[styles.toneChip, active && styles.toneChipActive]}
+              >
+                <Text style={[styles.toneText, active && styles.toneTextActive]}>{tn.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {/* Quick replies */}
         <Text style={styles.label}>Quick replies — tap to use</Text>
         <View style={styles.chips}>
@@ -116,6 +161,17 @@ export default function DetailScreen({ params, goBack }) {
           placeholder="Write or tap a quick reply above…"
           placeholderTextColor={colors.textFaint}
         />
+        <View style={styles.sigRow}>
+          <Text style={styles.sigLabel}>Sign as</Text>
+          <TextInput
+            style={styles.sigInput}
+            value={prefs.signature}
+            onChangeText={(t) => setPrefs({ signature: t })}
+            placeholder="Your name"
+            placeholderTextColor={colors.textFaint}
+          />
+        </View>
+
         <Pressable
           style={styles.sendBtn}
           onPress={() =>
@@ -143,7 +199,35 @@ const styles = StyleSheet.create({
   backText: { color: colors.text, fontSize: font.title, fontWeight: '600' },
   topActions: { flexDirection: 'row', gap: 20, paddingRight: space.sm },
   body: { padding: space.lg, paddingBottom: 60 },
-  subject: { color: colors.text, fontSize: font.h2, fontWeight: '800', marginTop: space.sm, marginBottom: space.md },
+  pillRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  category: {
+    backgroundColor: colors.bgElevated, borderRadius: radius.pill,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  categoryText: { color: colors.textDim, fontSize: font.tiny, fontWeight: '700' },
+  vipTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: colors.importantSoft, borderRadius: radius.pill,
+    paddingHorizontal: 9, paddingVertical: 4,
+  },
+  vipTagText: { color: colors.important, fontSize: font.tiny, fontWeight: '800' },
+  toneChip: {
+    backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1,
+    borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14,
+  },
+  toneChipActive: { backgroundColor: colors.brandSoft, borderColor: colors.brand },
+  toneText: { color: colors.textDim, fontWeight: '700', fontSize: font.small },
+  toneTextActive: { color: colors.brand },
+  sigRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: space.md,
+  },
+  sigLabel: { color: colors.textFaint, fontSize: font.small, fontWeight: '700' },
+  sigInput: {
+    flex: 1, backgroundColor: colors.card, borderRadius: radius.sm,
+    borderWidth: 1, borderColor: colors.border, color: colors.text,
+    paddingHorizontal: space.md, paddingVertical: 10, fontSize: font.body,
+  },
+  subject: { color: colors.text, fontSize: font.h2, fontWeight: '800', marginTop: space.md, marginBottom: space.md },
   senderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: space.lg },
   senderName: { color: colors.text, fontSize: font.body, fontWeight: '700' },
   senderEmail: { color: colors.textFaint, fontSize: font.small, marginTop: 1 },
