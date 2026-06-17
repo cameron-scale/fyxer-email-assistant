@@ -1,0 +1,184 @@
+// ReplyScreen.js — a full-screen, formal email reply composer (not a chat bubble).
+// Opened from an email's detail view. Shows the recipient, a "Re:" subject, the
+// tone selector + one-tap drafts, a large body area with your signature, and the
+// quoted original underneath — like a real mail client.
+
+import React, { useState, useMemo } from 'react';
+import {
+  View, Text, StyleSheet, Pressable, SafeAreaView, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, space, font, radius } from '../theme';
+import { useStore } from '../store';
+import { suggestReplies } from '../lib/drafts';
+import { timeAgo } from '../lib/time';
+
+const TONES = [
+  { key: 'professional', label: 'Professional' },
+  { key: 'friendly', label: 'Friendly' },
+  { key: 'brief', label: 'Brief' },
+];
+
+function firstName(name = '') {
+  const n = name.trim().split(/\s+/)[0];
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : 'there';
+}
+
+export default function ReplyScreen({ params, goBack }) {
+  const { emails, prefs, setPrefs } = useStore();
+  const email = emails.find((e) => e.id === params.id);
+  const p = email?.priority;
+
+  const drafts = useMemo(
+    () => (email ? suggestReplies(email, prefs) : []),
+    [email?.id, prefs.tone, prefs.signature] // eslint-disable-line
+  );
+
+  // Start with a polite greeting scaffold so it reads like an email from the first keystroke.
+  const [body, setBody] = useState(
+    email ? `Hi ${firstName(p.senderName)},\n\n` : ''
+  );
+
+  if (!email) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Text style={styles.gone}>This message was moved. 👋</Text>
+        <Pressable style={styles.send} onPress={goBack}><Text style={styles.sendText}>Back</Text></Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  const send = () =>
+    Alert.alert(
+      'Reply ready ✍️',
+      'Sending is off in this read-only preview — your reply is composed and ready. (Live sending arrives with the backend.)'
+    );
+
+  const subject = /^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`;
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      {/* Top bar */}
+      <View style={styles.header}>
+        <Pressable onPress={goBack} hitSlop={10}><Text style={styles.cancel}>Cancel</Text></Pressable>
+        <Text style={styles.title}>Reply</Text>
+        <Pressable onPress={send} style={styles.sendBtn}>
+          <Ionicons name="send" size={14} color="#fff" />
+          <Text style={styles.sendBtnText}>Send</Text>
+        </Pressable>
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          {/* Recipient + subject */}
+          <View style={styles.field}>
+            <Text style={styles.label}>To</Text>
+            <Text style={styles.value} numberOfLines={1}>
+              {p.senderName} <Text style={styles.muted}>&lt;{p.senderEmail}&gt;</Text>
+            </Text>
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Subject</Text>
+            <Text style={styles.value} numberOfLines={1}>{subject}</Text>
+          </View>
+
+          {/* Tone + one-tap drafts */}
+          <Text style={styles.helper}>Tone</Text>
+          <View style={styles.chips}>
+            {TONES.map((t) => {
+              const active = prefs.tone === t.key;
+              return (
+                <Pressable key={t.key} onPress={() => setPrefs({ tone: t.key })}
+                  style={[styles.toneChip, active && styles.toneChipActive]}>
+                  <Text style={[styles.toneText, active && styles.toneTextActive]}>{t.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.helper}>Start from a draft</Text>
+          <View style={styles.chips}>
+            {drafts.map((d) => (
+              <Pressable key={d.label} onPress={() => setBody(d.text)} style={styles.draftChip}>
+                <Text style={styles.draftChipText}>{d.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Formal body */}
+          <TextInput
+            style={styles.bodyInput}
+            value={body}
+            onChangeText={setBody}
+            multiline
+            placeholder="Write your reply…"
+            placeholderTextColor={colors.ink4}
+            autoFocus
+          />
+
+          {/* Quoted original */}
+          <View style={styles.quoteWrap}>
+            <Text style={styles.quoteHead}>
+              On {timeAgo(email.date)}, {p.senderName} wrote:
+            </Text>
+            <Text style={styles.quoteBody}>{email.body}</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.surface },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.hairline,
+  },
+  cancel: { color: colors.ink3, fontSize: 16, fontWeight: '500' },
+  title: { color: colors.ink, fontSize: 17, fontWeight: '700' },
+  sendBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: colors.blue, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16,
+    shadowColor: colors.blue, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+  },
+  sendBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  body: { padding: 20, paddingBottom: 60 },
+  field: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11,
+    borderBottomWidth: 1, borderBottomColor: colors.hairline,
+  },
+  label: { fontSize: 13, fontWeight: '600', color: colors.ink4, minWidth: 56 },
+  value: { flex: 1, fontSize: 15, color: colors.ink, fontWeight: '500' },
+  muted: { color: colors.ink3, fontWeight: '400' },
+  helper: {
+    fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase',
+    color: colors.ink4, marginTop: 18, marginBottom: 8,
+  },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  toneChip: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
+  toneChipActive: { backgroundColor: colors.blueLight },
+  toneText: { color: colors.ink3, fontWeight: '700', fontSize: 12.5 },
+  toneTextActive: { color: colors.blue },
+  draftChip: {
+    backgroundColor: '#fff', borderWidth: 1, borderColor: colors.blue,
+    borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14,
+  },
+  draftChipText: { color: colors.blue, fontWeight: '700', fontSize: 12.5 },
+  bodyInput: {
+    fontFamily: 'Georgia', fontSize: 16, lineHeight: 26, color: colors.ink,
+    marginTop: 18, minHeight: 220, textAlignVertical: 'top',
+  },
+  quoteWrap: {
+    marginTop: 20, paddingTop: 16, paddingLeft: 12,
+    borderTopWidth: 1, borderTopColor: colors.hairline,
+    borderLeftWidth: 3, borderLeftColor: colors.hairline,
+  },
+  quoteHead: { fontSize: 12, color: colors.ink4, marginBottom: 8 },
+  quoteBody: { fontFamily: 'Georgia', fontSize: 14, lineHeight: 22, color: colors.ink3 },
+  gone: { color: colors.ink3, textAlign: 'center', marginTop: 80, fontSize: 15 },
+  send: { backgroundColor: colors.blue, borderRadius: radius.md, paddingVertical: 14, margin: 20, alignItems: 'center' },
+  sendText: { color: '#fff', fontWeight: '800', fontSize: font.title },
+});

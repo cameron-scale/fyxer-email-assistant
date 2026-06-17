@@ -1,23 +1,16 @@
 // DetailScreen.js — ScaleMail email reader: colored hero band, white subject bar
-// with a category tag, a serif "letter" body, and a reply strip. Brisk's smart
-// quick-reply drafts (with tone) sit just above the reply pill.
+// with a category tag, a serif "letter" body, and a Brisk TL;DR callout. Replying
+// opens a full-screen formal composer (ReplyScreen), not an inline chat bubble.
 
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, SafeAreaView, TextInput, Alert,
+  View, Text, StyleSheet, ScrollView, Pressable, SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { bandFor } from '../lib/bands';
-import { suggestReplies } from '../lib/drafts';
-
-const TONES = [
-  { key: 'professional', label: 'Pro' },
-  { key: 'friendly', label: 'Friendly' },
-  { key: 'brief', label: 'Brief' },
-];
 
 function initials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -26,19 +19,13 @@ function initials(name = '') {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export default function DetailScreen({ params, goBack }) {
-  const { emails, archive, snooze, markRead, prefs, setPrefs, toggleVip } = useStore();
+export default function DetailScreen({ params, goBack, navigate }) {
+  const { emails, archive, snooze, markRead, toggleVip } = useStore();
   const email = emails.find((e) => e.id === params.id);
 
   React.useEffect(() => {
     if (email && email.read === false) markRead(email.id);
   }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const drafts = useMemo(
-    () => (email ? suggestReplies(email, prefs) : []),
-    [email?.id, prefs.tone, prefs.signature] // eslint-disable-line
-  );
-  const [reply, setReply] = useState('');
 
   if (!email) {
     return (
@@ -119,41 +106,11 @@ export default function DetailScreen({ params, goBack }) {
         ))}
       </ScrollView>
 
-      {/* Quick replies + tone */}
-      <View style={styles.replyHelp}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.helpRow}>
-          {TONES.map((t) => {
-            const active = prefs.tone === t.key;
-            return (
-              <Pressable key={t.key} onPress={() => setPrefs({ tone: t.key })} style={[styles.toneChip, active && styles.toneChipActive]}>
-                <Text style={[styles.toneText, active && styles.toneTextActive]}>{t.label}</Text>
-              </Pressable>
-            );
-          })}
-          <View style={styles.divider} />
-          {drafts.map((d) => (
-            <Pressable key={d.label} onPress={() => setReply(d.text)} style={styles.draftChip}>
-              <Text style={styles.draftChipText}>{d.label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Reply strip */}
-      <View style={styles.replyStrip}>
-        <TextInput
-          style={styles.replyPill}
-          value={reply}
-          onChangeText={setReply}
-          placeholder={`Reply to ${p.senderName.split(' ')[0]}…`}
-          placeholderTextColor={colors.ink4}
-          multiline
-        />
-        <Pressable
-          style={styles.send}
-          onPress={() => Alert.alert('Reply ready ✍️', 'Sending is off in this read-only preview — your draft is ready to copy into your mail app.')}
-        >
-          <Ionicons name="send" size={18} color="#fff" />
+      {/* Reply bar — opens the full-screen composer */}
+      <View style={styles.replyBar}>
+        <Pressable style={styles.replyBtn} onPress={() => navigate('Reply', { id: email.id })}>
+          <Ionicons name="arrow-undo" size={18} color="#fff" />
+          <Text style={styles.replyText}>Reply</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -194,29 +151,15 @@ const styles = StyleSheet.create({
   tldrText: { color: colors.ink2, fontSize: 14, lineHeight: 20 },
   para: { fontFamily: 'Georgia', fontSize: 16, lineHeight: 27, color: colors.ink2, marginBottom: 18 },
   salutation: { color: colors.ink },
-  replyHelp: { borderTopWidth: 1, borderTopColor: colors.hairline, backgroundColor: colors.surface, paddingVertical: 10 },
-  helpRow: { gap: 8, paddingHorizontal: 16, alignItems: 'center' },
-  toneChip: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingVertical: 7, paddingHorizontal: 13 },
-  toneChipActive: { backgroundColor: colors.blueLight },
-  toneText: { color: colors.ink3, fontWeight: '700', fontSize: 12 },
-  toneTextActive: { color: colors.blue },
-  divider: { width: 1, height: 22, backgroundColor: colors.hairline, marginHorizontal: 4 },
-  draftChip: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.blue, borderRadius: radius.pill, paddingVertical: 7, paddingHorizontal: 14 },
-  draftChipText: { color: colors.blue, fontWeight: '700', fontSize: 12 },
-  replyStrip: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+  replyBar: {
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28,
     borderTopWidth: 1, borderTopColor: colors.hairline, backgroundColor: colors.surface,
   },
-  replyPill: {
-    flex: 1, minHeight: 44, maxHeight: 120, backgroundColor: colors.surface2,
-    borderWidth: 1.5, borderColor: colors.hairline, borderRadius: 22,
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 14.5, color: colors.ink,
+  replyBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: colors.blue, borderRadius: radius.md, paddingVertical: 15,
+    shadowColor: colors.blue, shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
   },
-  send: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.blue,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: colors.blue, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-  },
+  replyText: { color: '#fff', fontSize: font.title, fontWeight: '800' },
   gone: { color: colors.ink3, textAlign: 'center', marginTop: 80, fontSize: 15 },
 });
