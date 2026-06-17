@@ -13,6 +13,7 @@ import TriageScreen from './src/screens/TriageScreen';
 import DetailScreen from './src/screens/DetailScreen';
 import ConnectScreen from './src/screens/ConnectScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import UndoSnackbar from './src/components/UndoSnackbar';
 
 const SCREENS = {
   Inbox: InboxScreen,
@@ -42,6 +43,8 @@ export default function App() {
       <View style={styles.root}>
         <StatusBar style="light" />
         <Screen navigate={navigate} goBack={goBack} params={top.params} />
+        {/* The deck has its own action buttons, so skip the snackbar there. */}
+        {top.name !== 'Triage' && <UndoSnackbar />}
       </View>
     </StoreProvider>
   );

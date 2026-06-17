@@ -26,6 +26,9 @@ export function StoreProvider({ children }) {
   // Per-email local state the user creates: archived / snoozed / done / read.
   const [overrides, setOverrides] = useState({}); // id -> { status, read, snoozedUntil }
 
+  // The most recent reversible action, powering the Undo snackbar.
+  const [recentAction, setRecentAction] = useState(null); // { id, label }
+
   // VIP senders the user has "taught" us, plus draft preferences. Both persist.
   const [vips, setVips] = useState([]); // lowercased emails
   const [prefs, setPrefsState] = useState(DEFAULT_PREFS);
@@ -66,15 +69,33 @@ export function StoreProvider({ children }) {
     setOverrides((o) => ({ ...o, [id]: { ...(o[id] || {}), ...patch } }));
   }, []);
 
-  // --- Actions used by swipes / buttons ---
-  const archive = useCallback((id) => setOverride(id, { status: 'archived' }), [setOverride]);
-  const markDone = useCallback((id) => setOverride(id, { status: 'done' }), [setOverride]);
+  // --- Actions used by swipes / buttons (each records an undoable "recent action") ---
+  const archive = useCallback((id) => {
+    setOverride(id, { status: 'archived' });
+    setRecentAction({ id, label: 'Archived' });
+  }, [setOverride]);
+
+  const markDone = useCallback((id) => {
+    setOverride(id, { status: 'done' });
+    setRecentAction({ id, label: 'Marked done' });
+  }, [setOverride]);
+
   const markRead = useCallback((id) => setOverride(id, { read: true }), [setOverride]);
-  const snooze = useCallback(
-    (id, hours = 4) => setOverride(id, { snoozedUntil: Date.now() + hours * 3600000 }),
-    [setOverride]
-  );
-  const undo = useCallback((id) => setOverride(id, { status: undefined, snoozedUntil: undefined }), [setOverride]);
+
+  const snooze = useCallback((id, hours = 4) => {
+    setOverride(id, { snoozedUntil: Date.now() + hours * 3600000 });
+    setRecentAction({ id, label: 'Snoozed 4h' });
+  }, [setOverride]);
+
+  // Revert whatever the snackbar is currently offering to undo.
+  const undoLast = useCallback(() => {
+    setRecentAction((cur) => {
+      if (cur) setOverride(cur.id, { status: undefined, snoozedUntil: undefined });
+      return null;
+    });
+  }, [setOverride]);
+
+  const dismissRecent = useCallback(() => setRecentAction(null), []);
 
   // --- Teach Brisk: mark/unmark a sender as VIP (persists on the device) ---
   const toggleVip = useCallback((senderEmail) => {
@@ -165,11 +186,13 @@ export function StoreProvider({ children }) {
     error,
     vips,
     prefs,
+    recentAction,
     archive,
     markDone,
     markRead,
     snooze,
-    undo,
+    undoLast,
+    dismissRecent,
     toggleVip,
     setPrefs,
     loadAccount,

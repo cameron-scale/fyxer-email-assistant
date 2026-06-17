@@ -20,7 +20,9 @@ no App Store, no Xcode, and no Mac required.
   "Looks automated") — full transparency, no mystery AI.
 - **Teach it your VIPs** ⭐ — tap the star on anyone and their emails always float
   to the top from then on. It remembers, even after you close the app.
-- **Zip-through mode** — a swipe deck (like dating apps, but for your inbox):
+- **Swipe right from the inbox list too** — 👉 right = Done, 👈 left = Archive,
+  with an **Undo** bar that pops up so a mistaken swipe is one tap to reverse.
+- **Zip-through mode** — a focused swipe deck (like dating apps, but for your inbox):
   - 👉 swipe **right** = Done
   - 👈 swipe **left** = Archive
   - 👆 swipe **up** = Snooze 4h

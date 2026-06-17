@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, space, font, radius, gradients } from '../theme';
 import { useStore } from '../store';
 import EmailRow from '../components/EmailRow';
+import SwipeableRow from '../components/SwipeableRow';
 import { BUCKETS } from '../lib/priority';
 
 const FILTERS = [
@@ -28,7 +29,7 @@ function greeting() {
 }
 
 export default function InboxScreen({ navigate }) {
-  const { emails, counts, loading, refresh } = useStore();
+  const { emails, counts, loading, refresh, markDone, archive } = useStore();
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
 
@@ -133,7 +134,12 @@ export default function InboxScreen({ navigate }) {
           </View>
         }
         renderItem={({ item }) => (
-          <EmailRow email={item} onPress={() => navigate('Detail', { id: item.id })} />
+          <SwipeableRow
+            onSwipeRight={() => markDone(item.id)}
+            onSwipeLeft={() => archive(item.id)}
+          >
+            <EmailRow email={item} onPress={() => navigate('Detail', { id: item.id })} />
+          </SwipeableRow>
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
