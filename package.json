@@ -4,15 +4,15 @@
   "main": "index.js",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
-    "expo": "~56.0.12",
-    "expo-auth-session": "~56.0.14",
-    "expo-crypto": "~56.0.4",
-    "expo-linear-gradient": "~56.0.4",
-    "expo-secure-store": "~56.0.4",
-    "expo-status-bar": "~56.0.4",
-    "expo-web-browser": "~56.0.5",
-    "react": "19.2.3",
-    "react-native": "0.85.3"
+    "expo": "^55.0.26",
+    "expo-auth-session": "~55.0.16",
+    "expo-crypto": "~55.0.15",
+    "expo-linear-gradient": "~55.0.14",
+    "expo-secure-store": "~55.0.14",
+    "expo-status-bar": "~55.0.6",
+    "expo-web-browser": "~55.0.16",
+    "react": "19.2.0",
+    "react-native": "0.83.6"
   },
   "scripts": {
     "start": "expo start",
@@ -30,6 +30,6 @@
   "private": true,
   "devDependencies": {
     "jest": "~29.7.0",
-    "jest-expo": "~56.0.5"
+    "jest-expo": "~55.0.18"
   }
 }
