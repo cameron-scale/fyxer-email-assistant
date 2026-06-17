@@ -8,7 +8,8 @@ The interface follows the **ScaleMail** design: a deep-navy home with clean whit
 cards, each topped by a **colored band** whose color is chosen by Brisk's priority
 engine (red = Urgent, blue = To Respond, violet = Meeting, emerald = Notification,
 teal = Newsletter, amber = Promotions). A frosted bottom tab bar holds Inbox,
-Starred, a center Compose button, **Zip** (the swipe deck), and Settings.
+Starred, **Zip** (the swipe deck), a center Compose button, Sent, Drafts and
+Settings. Compose and your profile open as slide-up sheets.
 
 It runs on **Expo Go**, so you can test it on your iPhone in about 2 minutes with
 no App Store, no Xcode, and no Mac required.

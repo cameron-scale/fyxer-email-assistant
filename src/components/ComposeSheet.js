@@ -1,15 +1,12 @@
-// ComposeScreen.js — the "New Message" composer (center tab button).
-// Styled like the ScaleMail compose sheet. Sending is disabled in this read-only
-// preview, so Send just confirms the draft is ready.
+// ComposeSheet.js — the "New Message" composer shown inside a BottomSheet.
+// Sending is disabled in this read-only preview, so Send just confirms the draft.
 
 import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, Pressable, SafeAreaView, TextInput, Alert, ScrollView,
-} from 'react-native';
-import { colors, space, font, radius } from '../theme';
+import { View, Text, StyleSheet, Pressable, TextInput, Alert, ScrollView } from 'react-native';
+import { colors } from '../theme';
 import { useStore } from '../store';
 
-export default function ComposeScreen({ goBack }) {
+export default function ComposeSheet({ onClose }) {
   const { prefs } = useStore();
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
@@ -21,19 +18,15 @@ export default function ComposeScreen({ goBack }) {
       return;
     }
     Alert.alert('Draft ready ✓', 'Sending is off in this read-only preview — your message is composed and ready.');
-    goBack();
+    onClose();
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.wrap}>
       <View style={styles.header}>
-        <Pressable onPress={goBack} hitSlop={10}>
-          <Text style={styles.cancel}>Cancel</Text>
-        </Pressable>
+        <Pressable onPress={onClose} hitSlop={10}><Text style={styles.cancel}>Cancel</Text></Pressable>
         <Text style={styles.title}>New Message</Text>
-        <Pressable onPress={send} style={styles.sendBtn}>
-          <Text style={styles.sendText}>Send</Text>
-        </Pressable>
+        <Pressable onPress={send} style={styles.sendBtn}><Text style={styles.sendText}>Send</Text></Pressable>
       </View>
 
       <View style={styles.field}>
@@ -48,22 +41,16 @@ export default function ComposeScreen({ goBack }) {
       </View>
 
       <ScrollView style={styles.bodyWrap} keyboardShouldPersistTaps="handled">
-        <TextInput
-          style={styles.body}
-          value={body}
-          onChangeText={setBody}
-          placeholder="Write your message…"
-          placeholderTextColor={colors.ink4}
-          multiline
-        />
+        <TextInput style={styles.body} value={body} onChangeText={setBody}
+          placeholder="Write your message…" placeholderTextColor={colors.ink4} multiline />
         <Text style={styles.sig}>{`\n${prefs.signature || 'Cameron'}`}</Text>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.surface },
+  wrap: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.hairline,
@@ -82,6 +69,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '500', color: colors.ink4, minWidth: 24 },
   input: { flex: 1, fontSize: 15, color: colors.ink },
   bodyWrap: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
-  body: { fontFamily: 'Georgia', fontSize: 16, lineHeight: 26, color: colors.ink2, minHeight: 180, textAlignVertical: 'top' },
+  body: { fontFamily: 'Georgia', fontSize: 16, lineHeight: 26, color: colors.ink2, minHeight: 160, textAlignVertical: 'top' },
   sig: { fontFamily: 'Georgia', fontSize: 15, color: colors.ink3, lineHeight: 24 },
 });

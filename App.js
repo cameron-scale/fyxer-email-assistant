@@ -1,8 +1,5 @@
-// App.js — entry point. Sets up the shared store, a tiny screen navigator, and
-// the ScaleMail bottom tab bar.
-//
-// Navigation is intentionally simple: a "stack" of screens in state. Tab buttons
-// reset the stack (switchTab); everything else pushes on top (navigate / goBack).
+// App.js — entry point. Sets up the shared store, a tiny screen navigator, the
+// ScaleMail bottom tab bar, and the slide-up Compose / Profile sheets.
 
 import React, { useState, useCallback } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -14,9 +11,12 @@ import TriageScreen from './src/screens/TriageScreen';
 import DetailScreen from './src/screens/DetailScreen';
 import ConnectScreen from './src/screens/ConnectScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import ComposeScreen from './src/screens/ComposeScreen';
+import MailboxScreen from './src/screens/MailboxScreen';
 import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
+import BottomSheet from './src/components/BottomSheet';
+import ComposeSheet from './src/components/ComposeSheet';
+import ProfileSheet from './src/components/ProfileSheet';
 
 const StarredScreen = (props) => <InboxScreen {...props} starred />;
 
@@ -27,29 +27,28 @@ const SCREENS = {
   Detail: DetailScreen,
   Connect: ConnectScreen,
   Settings: SettingsScreen,
-  Compose: ComposeScreen,
+  Sent: MailboxScreen,
+  Drafts: MailboxScreen,
 };
 
 // Screens that show the bottom tab bar and can be switched between as tabs.
-const TAB_SCREENS = ['Inbox', 'Starred', 'Settings'];
+const TAB_SCREENS = ['Inbox', 'Starred', 'Sent', 'Drafts', 'Settings'];
+const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts'];
 
 function AppShell() {
   const { emails } = useStore();
   const [stack, setStack] = useState([{ name: 'Inbox', params: {} }]);
+  const [sheet, setSheet] = useState(null); // 'compose' | 'profile' | null
 
-  const navigate = useCallback((name, params = {}) => {
-    setStack((s) => [...s, { name, params }]);
-  }, []);
-  const goBack = useCallback(() => {
-    setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
-  }, []);
-  const switchTab = useCallback((name) => {
-    setStack([{ name, params: {} }]);
-  }, []);
+  const navigate = useCallback((name, params = {}) => setStack((s) => [...s, { name, params }]), []);
+  const goBack = useCallback(() => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)), []);
+  const switchTab = useCallback((name) => setStack([{ name, params: {} }]), []);
+  const openSheet = useCallback((name) => setSheet(name), []);
+  const closeSheet = useCallback(() => setSheet(null), []);
 
   const onTabNavigate = useCallback((name) => {
     if (TAB_SCREENS.includes(name)) switchTab(name);
-    else navigate(name); // Triage / Compose push as full screens
+    else navigate(name); // Triage pushes as a full screen
   }, [switchTab, navigate]);
 
   const top = stack[stack.length - 1];
@@ -59,12 +58,35 @@ function AppShell() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style={top.name === 'Inbox' || top.name === 'Starred' || top.name === 'Triage' ? 'light' : 'dark'} />
-      <Screen navigate={navigate} goBack={goBack} params={top.params} />
+      <StatusBar style={DARK_SCREENS.includes(top.name) ? 'light' : 'dark'} />
+      <Screen
+        navigate={navigate}
+        goBack={goBack}
+        params={top.params}
+        route={top.name}
+        openSheet={openSheet}
+      />
       {top.name !== 'Triage' && <UndoSnackbar />}
       {showTabBar && (
-        <TabBar active={top.name} onNavigate={onTabNavigate} inboxBadge={inboxBadge} />
+        <TabBar
+          active={top.name}
+          onNavigate={onTabNavigate}
+          onCompose={() => openSheet('compose')}
+          inboxBadge={inboxBadge}
+        />
       )}
+
+      {/* Slide-up sheets */}
+      <BottomSheet visible={sheet === 'compose'} onClose={closeSheet} heightPct={0.9}>
+        <ComposeSheet onClose={closeSheet} />
+      </BottomSheet>
+      <BottomSheet visible={sheet === 'profile'} onClose={closeSheet} heightPct={0.72}>
+        <ProfileSheet
+          onClose={closeSheet}
+          onOpenSettings={() => switchTab('Settings')}
+          onOpenConnect={() => navigate('Connect')}
+        />
+      </BottomSheet>
     </View>
   );
 }

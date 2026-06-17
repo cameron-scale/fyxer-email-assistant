@@ -29,7 +29,7 @@ const FILTERS = [
 
 const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
-export default function InboxScreen({ navigate, starred }) {
+export default function InboxScreen({ navigate, starred, openSheet }) {
   const { emails, counts, loading, refresh, markDone, archive } = useStore();
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -94,7 +94,7 @@ export default function InboxScreen({ navigate, starred }) {
                   )}
                 </View>
               </View>
-              <Pressable style={styles.avatar} onPress={() => navigate('Settings')}>
+              <Pressable style={styles.avatar} onPress={() => openSheet && openSheet('profile')}>
                 <LinearGradient colors={gradients.avatar} style={styles.avatarFill}>
                   <Text style={styles.avatarText}>CG</Text>
                 </LinearGradient>
