@@ -81,18 +81,37 @@ app.get('/auth/microsoft/start', (req, res) => {
   res.redirect(`${MS_AUTH}?${params.toString()}`);
 });
 
-function backToApp(req, query) {
+function decodeAppRedirect(req) {
   const stateRaw = req.query.state ? String(req.query.state) : '';
-  let appRedirect = APP_REDIRECT;
-  try { if (stateRaw) appRedirect = Buffer.from(stateRaw, 'base64url').toString('utf8'); } catch (e) {}
-  const sep = appRedirect.includes('?') ? '&' : '?';
-  return `${appRedirect}${sep}${query}`;
+  try { if (stateRaw) return Buffer.from(stateRaw, 'base64url').toString('utf8'); } catch (e) {}
+  return APP_REDIRECT;
+}
+
+function debugPage(ok, detail) {
+  const color = ok ? '#0a7d33' : '#c0392b';
+  const title = ok ? '✅ Login worked!' : '❌ Login failed';
+  return `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+  <body style="font-family:-apple-system,Segoe UI,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;line-height:1.5">
+  <h2 style="color:${color}">${title}</h2>
+  <p>${ok
+    ? 'Your Azure app + server are configured correctly. The phone app should now sign in.'
+    : 'Microsoft returned this error during the server token exchange:'}</p>
+  <pre style="background:#f3f3f7;padding:14px;border-radius:10px;white-space:pre-wrap;word-break:break-word">${detail}</pre>
+  </body>`;
 }
 
 app.get('/auth/microsoft/callback', async (req, res) => {
+  const appRedirect = decodeAppRedirect(req);
+  const debug = appRedirect === 'debug';
+  const finish = (query, ok, detail) => {
+    if (debug) return res.send(debugPage(ok, detail || query));
+    const sep = appRedirect.includes('?') ? '&' : '?';
+    return res.redirect(`${appRedirect}${sep}${query}`);
+  };
+
   const { code, error, error_description } = req.query;
-  if (error) return res.redirect(backToApp(req, `error=${encodeURIComponent(error_description || error)}`));
-  if (!code) return res.redirect(backToApp(req, 'error=missing_code'));
+  if (error) return finish(`error=${encodeURIComponent(error_description || error)}`, false, String(error_description || error));
+  if (!code) return finish('error=missing_code', false, 'No authorization code was returned by Microsoft.');
   try {
     const tokens = await msToken({
       grant_type: 'authorization_code',
@@ -101,9 +120,13 @@ app.get('/auth/microsoft/callback', async (req, res) => {
     });
     // Hand the refresh token back to the app. The app stores it securely and sends
     // it to us on each request to mint a fresh access token.
-    res.redirect(backToApp(req, `provider=outlook&refresh=${encodeURIComponent(tokens.refresh_token)}`));
+    return finish(
+      `provider=outlook&refresh=${encodeURIComponent(tokens.refresh_token)}`,
+      true,
+      `Refresh token received (length ${String(tokens.refresh_token || '').length}).`
+    );
   } catch (e) {
-    res.redirect(backToApp(req, `error=${encodeURIComponent(e.message)}`));
+    return finish(`error=${encodeURIComponent(e.message)}`, false, e.message);
   }
 });
 
