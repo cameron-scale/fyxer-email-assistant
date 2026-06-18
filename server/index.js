@@ -56,7 +56,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-6',
+    version: 'debug-7',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -194,16 +194,45 @@ function codeFingerprint(code) {
 // Instead we stash the token here under a short random id, hand the app only that
 // id through the URL, and let the app trade it for the real token over HTTPS POST
 // (where nothing can mangle it). The id is single-use and expires in 5 minutes.
-const handoffs = new Map(); // id -> { refreshToken, at }
+//
+// We persist to DISK (not just memory) so the token survives any process recycle
+// between the callback and the claim — on Render's free tier those two requests
+// can otherwise land on a fresh process with an empty in-memory map.
 function newId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
+// A short id unique to THIS server process — if a stored vs claimed handoff show
+// different instances, we're being load-balanced and need shared storage.
+const INSTANCE_ID = newId().slice(0, 6);
+const HANDOFF_DIR = path.join(UPLOAD_DIR, '..', 'handoffs');
+try { fs.mkdirSync(HANDOFF_DIR, { recursive: true }); } catch (e) {}
+const handoffs = new Map(); // in-memory fast path; disk is the source of truth
+const HANDOFF_TTL = 5 * 60 * 1000;
+
 function makeHandoff(refreshToken) {
   const id = newId();
-  handoffs.set(id, { refreshToken, at: Date.now() });
-  setTimeout(() => handoffs.delete(id), 5 * 60 * 1000).unref?.();
+  const entry = { refreshToken, at: Date.now(), instance: INSTANCE_ID };
+  handoffs.set(id, entry);
+  try { fs.writeFileSync(path.join(HANDOFF_DIR, `${id}.json`), JSON.stringify(entry)); } catch (e) {}
+  setTimeout(() => { handoffs.delete(id); try { fs.unlinkSync(path.join(HANDOFF_DIR, `${id}.json`)); } catch (e) {} }, HANDOFF_TTL).unref?.();
   return id;
+}
+// Consume a handoff (single use): try memory, then disk. Returns entry or null.
+function takeHandoff(rawId) {
+  const id = path.basename(String(rawId || '')); // guard against path traversal
+  let entry = handoffs.get(id);
+  if (!entry) {
+    try {
+      const raw = fs.readFileSync(path.join(HANDOFF_DIR, `${id}.json`), 'utf8');
+      entry = JSON.parse(raw);
+    } catch (e) { entry = null; }
+  }
+  if (!entry) return null;
+  handoffs.delete(id);
+  try { fs.unlinkSync(path.join(HANDOFF_DIR, `${id}.json`)); } catch (e) {}
+  if (Date.now() - (entry.at || 0) > HANDOFF_TTL) return null;
+  return entry;
 }
 
 // Flight recorder: last few callback attempts (no secrets) so we can debug remotely.
@@ -212,7 +241,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-6', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-7', recentCallbacks }));
 
 app.get('/auth/microsoft/callback', async (req, res) => {
   const appRedirect = decodeAppRedirect(req);
@@ -240,7 +269,7 @@ app.get('/auth/microsoft/callback', async (req, res) => {
     // Hand the app a short id (safe through the deep link); it claims the real
     // token over HTTPS. This is what fixes the "malformed" inbox error.
     const session = makeHandoff(tokens.refresh_token);
-    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind, code: fp, duplicate, handoff: true });
+    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind, code: fp, duplicate, handoff: true, sid: session.slice(0, 10), instance: INSTANCE_ID });
     return finish(
       `provider=outlook&session=${encodeURIComponent(session)}`,
       true,
@@ -258,13 +287,13 @@ app.get('/auth/microsoft/callback', async (req, res) => {
 // The app trades its one-time session id for the real refresh token, over HTTPS.
 app.post('/auth/claim', (req, res) => {
   const { session } = req.body || {};
-  const entry = session ? handoffs.get(String(session)) : null;
+  const sid = String(session || '').slice(0, 10);
+  const entry = session ? takeHandoff(session) : null;
   if (!entry) {
-    record({ stage: 'claim_miss' });
+    record({ stage: 'claim_miss', sid, instance: INSTANCE_ID });
     return res.status(400).json({ error: 'This sign-in link expired. Please connect Outlook again.' });
   }
-  handoffs.delete(String(session)); // single use
-  record({ stage: 'claim_success', refreshLen: String(entry.refreshToken || '').length });
+  record({ stage: 'claim_success', refreshLen: String(entry.refreshToken || '').length, sid, storedOn: entry.instance, instance: INSTANCE_ID });
   res.json({ refreshToken: entry.refreshToken });
 });
 
