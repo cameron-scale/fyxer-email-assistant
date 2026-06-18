@@ -17,7 +17,7 @@ const { width } = Dimensions.get('window');
 const SWIPE = width * 0.28;
 
 export default function TriageScreen({ navigate, goBack }) {
-  const { emails, archive, markDone, markRead, snooze } = useStore();
+  const { emails, archive, markRead, snooze } = useStore();
   // Freeze the deck order when we enter so cards don't reshuffle as we act.
   const deck = useMemo(() => emails, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [index, setIndex] = useState(0);
@@ -27,8 +27,8 @@ export default function TriageScreen({ navigate, goBack }) {
 
   const finish = (direction) => {
     if (!current) return;
-    if (direction === 'right') markDone(current.id);
-    else if (direction === 'left') archive(current.id);
+    // Right = just mark as read (keeps it in the inbox). Left = archive, Up = snooze.
+    if (direction === 'left') archive(current.id);
     else if (direction === 'up') snooze(current.id, 4);
     markRead(current.id);
     pan.setValue({ x: 0, y: 0 });
@@ -115,7 +115,7 @@ export default function TriageScreen({ navigate, goBack }) {
               ]}
             >
               <Animated.View style={[styles.stamp, styles.stampDone, { opacity: doneOpacity }]}>
-                <Text style={[styles.stampText, { color: colors.done }]}>DONE</Text>
+                <Text style={[styles.stampText, { color: colors.done }]}>READ</Text>
               </Animated.View>
               <Animated.View style={[styles.stamp, styles.stampArchive, { opacity: archiveOpacity }]}>
                 <Text style={[styles.stampText, { color: colors.archive }]}>ARCHIVE</Text>
@@ -160,7 +160,7 @@ export default function TriageScreen({ navigate, goBack }) {
         <View style={styles.actions}>
           <ActionButton icon="archive-outline" color={colors.archive} label="Archive" onPress={() => fling('left')} />
           <ActionButton icon="time-outline" color={colors.snooze} label="Snooze" onPress={() => fling('up')} big />
-          <ActionButton icon="checkmark-done" color={colors.done} label="Done" onPress={() => fling('right')} />
+          <ActionButton icon="mail-open-outline" color={colors.done} label="Mark read" onPress={() => fling('right')} />
         </View>
       )}
     </SafeAreaView>

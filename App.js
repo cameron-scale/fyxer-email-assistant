@@ -36,7 +36,8 @@ const SCREENS = {
 };
 
 // Screens that show the bottom tab bar and can be switched between as tabs.
-const TAB_SCREENS = ['Inbox', 'Starred', 'Sent', 'Drafts', 'Settings'];
+// Settings now lives behind the profile avatar, not the tab bar.
+const TAB_SCREENS = ['Inbox', 'Starred', 'Sent', 'Drafts'];
 const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts'];
 
 function AppShell() {
@@ -87,7 +88,7 @@ function AppShell() {
       <BottomSheet visible={sheet === 'profile'} onClose={closeSheet} heightPct={0.72}>
         <ProfileSheet
           onClose={closeSheet}
-          onOpenSettings={() => switchTab('Settings')}
+          onOpenSettings={() => { closeSheet(); navigate('Settings'); }}
           onOpenConnect={() => navigate('Connect')}
         />
       </BottomSheet>

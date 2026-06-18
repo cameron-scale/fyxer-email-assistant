@@ -15,7 +15,6 @@ const LEFT = [
 const RIGHT = [
   { key: 'Sent', label: 'Sent', icon: 'paper-plane-outline', activeIcon: 'paper-plane' },
   { key: 'Drafts', label: 'Drafts', icon: 'document-text-outline', activeIcon: 'document-text' },
-  { key: 'Settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' },
 ];
 
 function Tab({ t, active, onNavigate, badge }) {

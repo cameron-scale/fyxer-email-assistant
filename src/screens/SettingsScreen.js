@@ -18,12 +18,20 @@ const TONES = [
   { key: 'brief', label: 'Brief' },
 ];
 
-export default function SettingsScreen({ navigate }) {
+export default function SettingsScreen({ navigate, goBack }) {
   const { prefs, setPrefs, vips, toggleVip, accounts } = useStore();
   const connected = ['gmail', 'outlook'].filter((a) => accounts[a]);
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.navBar}>
+        <Pressable style={styles.backRow} onPress={goBack} hitSlop={10}>
+          <Ionicons name="chevron-back" size={24} color={colors.blue} />
+          <Text style={styles.backText}>Back</Text>
+        </Pressable>
+        <Text style={styles.navTitle}>Settings</Text>
+        <View style={{ width: 60 }} />
+      </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* Profile header */}
@@ -132,6 +140,13 @@ export default function SettingsScreen({ navigate }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
+  navBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.hairline,
+  },
+  backRow: { flexDirection: 'row', alignItems: 'center', width: 60 },
+  backText: { color: colors.blue, fontSize: 16, fontWeight: '500' },
+  navTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
   scroll: { padding: 22, paddingBottom: 120 },
   profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 },
   profileAv: {

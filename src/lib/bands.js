@@ -6,6 +6,7 @@ export const BANDS = {
   urgent:  { grad: ['#D32F2F', '#8B0000'], tagBg: '#FEF0F0', tagColor: '#D32F2F' },
   clients: { grad: ['#1E6FD9', '#0055B3'], tagBg: '#EBF3FF', tagColor: '#0071E3' },
   work:    { grad: ['#7C3AED', '#5B21B6'], tagBg: '#F3EEFF', tagColor: '#7C3AED' },
+  meeting: { grad: ['#4338CA', '#312E81'], tagBg: '#EEF2FF', tagColor: '#4338CA' },
   finance: { grad: ['#059669', '#065F46'], tagBg: '#E8F8F1', tagColor: '#059669' },
   teal:    { grad: ['#0891B2', '#164E63'], tagBg: '#E8F6FA', tagColor: '#0891B2' },
   amber:   { grad: ['#D97706', '#92400E'], tagBg: '#FFF8E1', tagColor: '#C77D00' },
@@ -15,7 +16,7 @@ export const BANDS = {
 // Which band a category maps to.
 const CATEGORY_BAND = {
   'To Respond': 'clients',
-  Meeting: 'work',
+  Meeting: 'meeting',
   Notification: 'finance',
   Newsletter: 'teal',
   Promotions: 'amber',

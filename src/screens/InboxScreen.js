@@ -169,9 +169,12 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                       onPress={() => setFilter(f.key)}
                       style={[styles.chip, active && styles.chipActive]}
                     >
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                        {f.label}{f.key !== 'all' && count > 0 ? ` ${count}` : ''}
-                      </Text>
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
+                      {f.key !== 'all' && count > 0 && (
+                        <View style={styles.chipBadge}>
+                          <Text style={styles.chipBadgeText}>{count > 99 ? '99+' : count}</Text>
+                        </View>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -273,7 +276,7 @@ const styles = StyleSheet.create({
   searchActiveInput: { flex: 1, color: '#fff', fontSize: 15, paddingVertical: 11 },
   cancel: { color: colors.blue, fontSize: 15, fontWeight: '500' },
   chipsWrap: { marginBottom: 12, marginHorizontal: -6 },
-  chipsRow: { gap: 7, paddingHorizontal: 6, paddingRight: 24 },
+  chipsRow: { gap: 7, paddingHorizontal: 6, paddingRight: 24, paddingTop: 8 },
   chip: {
     paddingVertical: 6, paddingHorizontal: 14, borderRadius: 20,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.05)',
@@ -281,6 +284,12 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.blue, borderColor: colors.blue },
   chipText: { fontSize: 12.5, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
   chipTextActive: { color: '#fff' },
+  chipBadge: {
+    position: 'absolute', top: -7, right: -5, minWidth: 18, height: 18, borderRadius: 9,
+    paddingHorizontal: 4, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.bg,
+  },
+  chipBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   sectionEyebrow: {
     fontSize: 11, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.25)', paddingHorizontal: 6, paddingTop: 10, paddingBottom: 10,

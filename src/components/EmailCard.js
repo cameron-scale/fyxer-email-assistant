@@ -24,7 +24,7 @@ function EmailCard({ email, onPress }) {
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      {/* Colored band */}
+      {/* Colored band — single dense row: avatar · name · time */}
       <LinearGradient
         colors={band.grad}
         start={{ x: 0, y: 0 }}
@@ -34,12 +34,10 @@ function EmailCard({ email, onPress }) {
         <View style={styles.initialWrap}>
           <Text style={styles.initial}>{initials(p.senderName)}</Text>
         </View>
-        <View style={styles.bandInfo}>
-          <Text style={styles.bandName} numberOfLines={1}>{p.senderName}</Text>
-          <Text style={styles.bandTime}>{timeAgo(email.date)}</Text>
-        </View>
-        {p.isVip && <Ionicons name="star" size={15} color={colors.star} style={styles.vip} />}
+        <Text style={styles.bandName} numberOfLines={1}>{p.senderName}</Text>
+        {p.isVip && <Ionicons name="star" size={13} color={colors.star} style={styles.vip} />}
         {unread && <View style={styles.unreadDot} />}
+        <Text style={styles.bandTime} numberOfLines={1}>{timeAgo(email.date)}</Text>
       </LinearGradient>
 
       {/* Body */}
@@ -72,30 +70,29 @@ const styles = StyleSheet.create({
   },
   pressed: { transform: [{ scale: 0.975 }] },
   band: {
-    height: 64,
+    height: 44,
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 8,
   },
   initialWrap: {
-    width: 38, height: 38, borderRadius: 19,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
-  initial: { color: '#fff', fontWeight: '800', fontSize: 15, letterSpacing: -0.5 },
-  bandInfo: { flex: 1, paddingLeft: 10 },
-  bandName: { color: 'rgba(255,255,255,0.96)', fontSize: 13.5, fontWeight: '700' },
-  bandTime: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '500', marginTop: 2 },
-  vip: { marginRight: 8, marginBottom: 2 },
+  initial: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: -0.5 },
+  bandName: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '700' },
+  bandTime: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '500', textAlign: 'right' },
+  vip: { marginLeft: 2 },
   unreadDot: {
-    width: 9, height: 9, borderRadius: 5, backgroundColor: '#fff', opacity: 0.95, marginBottom: 3,
+    width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', opacity: 0.95,
   },
-  body: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14 },
-  subject: { fontSize: 14, fontWeight: '600', color: colors.ink, letterSpacing: -0.2, marginBottom: 5 },
+  body: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
+  subject: { fontSize: 14, fontWeight: '600', color: colors.ink, letterSpacing: -0.2, marginBottom: 4 },
   subjectRead: { fontWeight: '500', color: colors.ink2 },
-  preview: { fontSize: 13, color: colors.ink3, lineHeight: 19 },
-  footer: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 },
+  preview: { fontSize: 13, color: colors.ink3, lineHeight: 18 },
+  footer: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
   tag: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6 },
   tagText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.02 },
 });
