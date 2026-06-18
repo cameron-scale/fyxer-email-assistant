@@ -83,6 +83,16 @@ export function suggestEdits(serverUrl, body, context) {
   return post(serverUrl, '/suggest', { body, context });
 }
 
+// Set the user's M365 profile photo (what recipients see). Returns { ok }.
+export function setMyPhoto(serverUrl, refreshToken, dataUri) {
+  return post(serverUrl, '/me/photo', { refreshToken, dataUri });
+}
+
+// Get the user's current M365 photo. Returns { dataUri | null }.
+export function getMyPhoto(serverUrl, refreshToken) {
+  return post(serverUrl, '/me/photo/get', { refreshToken });
+}
+
 // Current month's AI usage vs cap. Returns { total, cap, ... }.
 export async function fetchUsage(serverUrl) {
   const res = await fetch(`${base(serverUrl)}/usage`);

@@ -64,7 +64,8 @@ const AI_MODEL = process.env.AI_MODEL || 'claude-haiku-4-5';
 
 // Where Microsoft sends the user back, and where we then bounce them into the app.
 const APP_REDIRECT = 'brisk://auth';
-const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.Read', 'Mail.Read', 'Mail.Send'];
+// User.ReadWrite lets us set the user's M365 profile photo (what recipients see).
+const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.ReadWrite', 'Mail.Read', 'Mail.Send'];
 // 'common' = any account (needs the Azure app set to multi-tenant). For a
 // single-tenant app, set MS_TENANT to your Directory (tenant) ID instead.
 const MS_TENANT = process.env.MS_TENANT || 'common';
@@ -551,6 +552,45 @@ app.post('/search', async (req, res) => {
     res.json({ emails });
   } catch (e) {
     record({ stage: 'search_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── Profile photo (the avatar recipients see in their inbox) ─────────────────
+app.post('/me/photo', async (req, res) => {
+  try {
+    const { refreshToken, dataUri } = req.body || {};
+    const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(String(dataUri || ''));
+    if (!m) return res.status(400).json({ error: 'Expected an image data URI.' });
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const r = await fetch(`${GRAPH}/me/photo/$value`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': m[1] },
+      body: Buffer.from(m[2], 'base64'),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.error?.message || `Couldn't set photo (${r.status}).`);
+    }
+    record({ stage: 'photo_set_ok' });
+    res.json({ ok: true });
+  } catch (e) {
+    record({ stage: 'photo_set_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/me/photo/get', async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const r = await fetch(`${GRAPH}/me/photo/$value`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (r.status === 404) return res.json({ dataUri: null });
+    if (!r.ok) throw new Error('photo fetch failed');
+    const type = r.headers.get('content-type') || 'image/jpeg';
+    const b64 = Buffer.from(await r.arrayBuffer()).toString('base64');
+    res.json({ dataUri: `data:${type};base64,${b64}` });
+  } catch (e) {
     res.status(400).json({ error: e.message });
   }
 });

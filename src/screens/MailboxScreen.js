@@ -11,6 +11,7 @@ import { colors, gradients, radius } from '../theme';
 import { useStore } from '../store';
 import { prioritize } from '../lib/priority';
 import EmailCard from '../components/EmailCard';
+import ProfileAvatar from '../components/ProfileAvatar';
 import { dayBucket, longToday } from '../lib/time';
 
 const COPY = {
@@ -57,9 +58,7 @@ export default function MailboxScreen({ navigate, route, openSheet }) {
               </View>
             </View>
             <Pressable style={styles.avatar} onPress={() => openSheet && openSheet('profile')}>
-              <LinearGradient colors={gradients.avatar} style={styles.avatarFill}>
-                <Text style={styles.avatarText}>CG</Text>
-              </LinearGradient>
+              <ProfileAvatar size={40} />
             </Pressable>
           </View>
         }

@@ -13,6 +13,7 @@ import { colors, space, font, radius, gradients } from '../theme';
 import { useStore, SORTS } from '../store';
 import EmailCard from '../components/EmailCard';
 import SwipeableRow from '../components/SwipeableRow';
+import ProfileAvatar from '../components/ProfileAvatar';
 import { dayBucket, longToday } from '../lib/time';
 
 const FILTERS = [
@@ -113,9 +114,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                 </View>
               </View>
               <Pressable style={styles.avatar} onPress={() => openSheet && openSheet('profile')}>
-                <LinearGradient colors={gradients.avatar} style={styles.avatarFill}>
-                  <Text style={styles.avatarText}>CG</Text>
-                </LinearGradient>
+                <ProfileAvatar size={40} />
               </Pressable>
             </View>
 

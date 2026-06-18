@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, space, font, radius, gradients } from '../theme';
 import { useStore } from '../store';
 import { hasSignature } from '../lib/signature';
+import ProfileAvatar from '../components/ProfileAvatar';
 
 const TONES = [
   { key: 'professional', label: 'Professional' },
@@ -36,9 +37,7 @@ export default function SettingsScreen({ navigate, goBack }) {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* Profile header */}
         <View style={styles.profileCard}>
-          <LinearGradient colors={gradients.avatar} style={styles.profileAv}>
-            <Text style={styles.profileAvText}>CG</Text>
-          </LinearGradient>
+          <ProfileAvatar size={60} />
           <View>
             <Text style={styles.profileName}>Cameron Gallup</Text>
             <Text style={styles.profileEmail}>cameron@scalembs.com</Text>

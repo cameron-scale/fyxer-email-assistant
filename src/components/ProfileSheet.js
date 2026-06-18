@@ -3,12 +3,14 @@
 // "Email Signature" and "Account" rows jump to the full Settings tab.
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../theme';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { colors } from '../theme';
 import { useStore } from '../store';
 import { fetchUsage } from '../lib/backend';
+import ProfileAvatar from './ProfileAvatar';
 
 function Toggle({ value, onChange }) {
   return (
@@ -33,11 +35,31 @@ function Row({ icon, bg, color, title, onPress, right }) {
 }
 
 export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect }) {
-  const { vips, prefs } = useStore();
+  const { vips, prefs, updateAvatar, accounts } = useStore();
   const [focused, setFocused] = useState(true);
   const [notifs, setNotifs] = useState(true);
   const [junk, setJunk] = useState(true);
   const [usage, setUsage] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  const pickAvatar = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Photo access needed', 'Allow photo access to set your profile picture.'); return; }
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 1 });
+      if (res.canceled) return;
+      setPhotoBusy(true);
+      const manip = await ImageManipulator.manipulateAsync(res.assets[0].uri, [{ resize: { width: 360 } }], { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true });
+      const dataUri = `data:image/jpeg;base64,${manip.base64}`;
+      const r = await updateAvatar(dataUri);
+      if (!accounts.outlook) Alert.alert('Saved in the app', 'Connect Outlook to also show this photo to people you email.');
+      else if (r && r.synced === false) Alert.alert('Saved in the app', "We couldn't update your Outlook photo (your organization may block it), but it's set here.");
+    } catch (e) {
+      Alert.alert('Could not set photo', e.message || 'Please try again.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   useEffect(() => {
     fetchUsage(prefs.serverUrl).then(setUsage).catch(() => {});
@@ -54,12 +76,16 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect })
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
       <View style={styles.profileCard}>
-        <LinearGradient colors={gradients.avatar} style={styles.av}>
-          <Text style={styles.avText}>CG</Text>
-        </LinearGradient>
+        <Pressable onPress={pickAvatar}>
+          <ProfileAvatar size={60} />
+          <View style={styles.avEdit}>
+            {photoBusy ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="camera" size={13} color="#fff" />}
+          </View>
+        </Pressable>
         <View>
           <Text style={styles.name}>Cameron Gallup</Text>
           <Text style={styles.email}>cameron@scalembs.com</Text>
+          <Text style={styles.avHint}>Tap photo to change · shows when you email people</Text>
         </View>
       </View>
 
@@ -104,6 +130,12 @@ const styles = StyleSheet.create({
     shadowColor: colors.blue, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
   },
   avText: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  avEdit: {
+    position: 'absolute', right: -2, bottom: -2, width: 22, height: 22, borderRadius: 11,
+    backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#fff',
+  },
+  avHint: { fontSize: 11, color: colors.ink4, marginTop: 4, maxWidth: 200 },
   name: { fontSize: 20, fontWeight: '700', color: colors.ink, letterSpacing: -0.4 },
   email: { fontSize: 13, color: colors.ink3, marginTop: 3 },
   storage: { marginBottom: 6 },

@@ -9,7 +9,8 @@ import React, {
 import { prioritize } from './lib/priority';
 import { fetchGmail } from './api/gmail';
 import {
-  fetchInbox, fetchMessageBody, summarizeEmails, searchMail, askMail, DEFAULT_SERVER_URL,
+  fetchInbox, fetchMessageBody, summarizeEmails, searchMail, askMail, setMyPhoto,
+  DEFAULT_SERVER_URL,
 } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 
@@ -181,6 +182,17 @@ export function StoreProvider({ children }) {
       return next;
     });
   }, []);
+
+  // Set the user's avatar: cache it locally (in-app) AND push it to M365 so it
+  // shows in recipients' inboxes (best-effort — some tenants block photo writes).
+  const updateAvatar = useCallback(async (dataUri) => {
+    setPrefs({ avatarUri: dataUri });
+    if (outlookRefresh) {
+      try { await setMyPhoto(prefs.serverUrl, outlookRefresh, dataUri); return { synced: true }; }
+      catch (e) { return { synced: false, error: e.message }; }
+    }
+    return { synced: false };
+  }, [outlookRefresh, prefs.serverUrl, setPrefs]);
 
   // Summarize a batch of emails — but ONLY ones we haven't cached yet, capped, so
   // reloading the inbox is free and the bill stays small.
@@ -397,6 +409,7 @@ export function StoreProvider({ children }) {
     folders,
     folderLoading,
     loadFolder,
+    updateAvatar,
     searchEmails,
     searching,
     runSearch,
