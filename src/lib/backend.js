@@ -31,6 +31,12 @@ async function post(serverUrl, path, body) {
   return data;
 }
 
+// Trade a one-time sign-in session id for the real refresh token, over HTTPS.
+// (The token is too long to survive the deep-link URL intact, so we fetch it.)
+export function claimSession(serverUrl, session) {
+  return post(serverUrl, '/auth/claim', { session });
+}
+
 // Fetch the inbox (with AI summaries). Returns { emails, refreshToken }.
 export function fetchInbox(serverUrl, refreshToken) {
   return post(serverUrl, '/inbox', { refreshToken });

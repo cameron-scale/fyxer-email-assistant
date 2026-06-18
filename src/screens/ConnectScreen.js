@@ -10,7 +10,7 @@ import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { useProviders } from '../auth/useProviders';
 import { isConfigured } from '../auth/authConfig';
-import { isBackendConfigured, microsoftLoginUrl } from '../lib/backend';
+import { isBackendConfigured, microsoftLoginUrl, claimSession } from '../lib/backend';
 
 export default function ConnectScreen({ goBack, navigate }) {
   const { accounts, prefs, loadAccount, connectOutlook, disconnect } = useStore();
@@ -58,8 +58,15 @@ export default function ConnectScreen({ goBack, navigate }) {
       if (result.type !== 'success' || !result.url) return; // user cancelled
       const params = new URLSearchParams(result.url.split('?')[1] || '');
       const err = params.get('error');
-      const refresh = params.get('refresh');
       if (err) throw new Error(err);
+      // Preferred path: a short, deep-link-safe session id we trade for the real
+      // token over HTTPS (the token itself is too long to pass through the URL).
+      const session = params.get('session');
+      let refresh = params.get('refresh');
+      if (session) {
+        const claimed = await claimSession(prefs.serverUrl, session);
+        refresh = claimed.refreshToken;
+      }
       if (!refresh) throw new Error('No token returned');
       await connectOutlook(refresh);
       Alert.alert('Connected 🎉', 'Your Outlook is loading, sorted by priority with AI summaries.');

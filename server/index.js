@@ -54,7 +54,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-4',
+    version: 'debug-5',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -142,13 +142,31 @@ function codeFingerprint(code) {
   return { len: s.length, head: s.slice(0, 6), tail: s.slice(-6) };
 }
 
+// One-time token handoff. A Microsoft refresh token is ~1700 characters; pushing
+// it back through the app's deep-link URL (exp://…?refresh=…) corrupts/truncates
+// it on iOS, which then makes Graph reject it as "malformed" (AADSTS9002313).
+// Instead we stash the token here under a short random id, hand the app only that
+// id through the URL, and let the app trade it for the real token over HTTPS POST
+// (where nothing can mangle it). The id is single-use and expires in 5 minutes.
+const handoffs = new Map(); // id -> { refreshToken, at }
+function newId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+function makeHandoff(refreshToken) {
+  const id = newId();
+  handoffs.set(id, { refreshToken, at: Date.now() });
+  setTimeout(() => handoffs.delete(id), 5 * 60 * 1000).unref?.();
+  return id;
+}
+
 // Flight recorder: last few callback attempts (no secrets) so we can debug remotely.
 const recentCallbacks = [];
 function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-4', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-5', recentCallbacks }));
 
 app.get('/auth/microsoft/callback', async (req, res) => {
   const appRedirect = decodeAppRedirect(req);
@@ -173,9 +191,12 @@ app.get('/auth/microsoft/callback', async (req, res) => {
   const duplicate = codeRedemptions.has(String(code));
   try {
     const tokens = await redeemCode(String(code), redirectUri(req));
-    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind, code: fp, duplicate });
+    // Hand the app a short id (safe through the deep link); it claims the real
+    // token over HTTPS. This is what fixes the "malformed" inbox error.
+    const session = makeHandoff(tokens.refresh_token);
+    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind, code: fp, duplicate, handoff: true });
     return finish(
-      `provider=outlook&refresh=${encodeURIComponent(tokens.refresh_token)}`,
+      `provider=outlook&session=${encodeURIComponent(session)}`,
       true,
       `Refresh token received (length ${String(tokens.refresh_token || '').length}).`
     );
@@ -186,6 +207,19 @@ app.get('/auth/microsoft/callback', async (req, res) => {
       : e.message;
     return finish(`error=${encodeURIComponent(e.message)}`, false, full);
   }
+});
+
+// The app trades its one-time session id for the real refresh token, over HTTPS.
+app.post('/auth/claim', (req, res) => {
+  const { session } = req.body || {};
+  const entry = session ? handoffs.get(String(session)) : null;
+  if (!entry) {
+    record({ stage: 'claim_miss' });
+    return res.status(400).json({ error: 'This sign-in link expired. Please connect Outlook again.' });
+  }
+  handoffs.delete(String(session)); // single use
+  record({ stage: 'claim_success', refreshLen: String(entry.refreshToken || '').length });
+  res.json({ refreshToken: entry.refreshToken });
 });
 
 // Exchange a code or refresh token for Microsoft access tokens.
