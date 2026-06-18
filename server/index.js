@@ -98,7 +98,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-14',
+    version: 'debug-15',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -301,7 +301,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-14', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-15', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -315,7 +315,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-14',
+    version: 'debug-15',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -504,13 +504,11 @@ app.post('/inbox', async (req, res) => {
     const { accessToken, refreshToken: newRt } = await accessTokenFromRefresh(refreshToken);
 
     // Folder totals (cheap) so the app can show the TRUE unread count even when
-    // only some messages are loaded — matches what Outlook shows.
-    let unreadCount = null; let totalCount = null;
-    try {
-      const fr = await graphGet(`${GRAPH}/me/${folderSeg}?$select=unreadItemCount,totalItemCount`, accessToken);
-      const fd = await fr.json();
-      if (fr.ok) { unreadCount = fd.unreadItemCount ?? null; totalCount = fd.totalItemCount ?? null; }
-    } catch (e) { /* counts are best-effort */ }
+    // only some messages are loaded — matches what Outlook shows. Fire it off in
+    // PARALLEL with the message fetch instead of waiting for it first.
+    const countsPromise = graphGet(`${GRAPH}/me/${folderSeg}?$select=unreadItemCount,totalItemCount`, accessToken)
+      .then((fr) => fr.json().then((fd) => (fr.ok ? { unreadCount: fd.unreadItemCount ?? null, totalCount: fd.totalItemCount ?? null } : {})))
+      .catch(() => ({}));
 
     const pageSize = Math.min(want, 50); // Graph caps $top at 50 for messages
     let url =
@@ -550,10 +548,12 @@ app.post('/inbox', async (req, res) => {
       };
     });
 
-    // Attach AI TL;DRs (cached) so the cards show real summaries, not raw text.
-    // Only for incoming mail; only GENERATE new summaries on the first page so the
-    // background full-mailbox sync doesn't burn the AI budget on old backlog.
-    if (!outgoing) await attachSummaries(emails, { summarizeNew: skipN === 0 });
+    // Attach any AI TL;DRs we ALREADY have cached (instant — no AI call here, so
+    // the inbox returns fast). Missing summaries are generated separately by the
+    // client's /summarize call, which then fills the cache for next time.
+    if (!outgoing) for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
+
+    const { unreadCount = null, totalCount = null } = await countsPromise;
 
     record({ stage: 'inbox_success', folder: fkey, count: emails.length, skip: skipN, unread: unreadCount });
     res.json({ emails, refreshToken: newRt, unreadCount, totalCount, skip: skipN, hasMore: emails.length >= pageSize });
@@ -852,13 +852,25 @@ app.post('/summarize', async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 50) : [];
     if (!items.length) return res.json({ summaries: {} });
-    const summaries = await aiSummarize(items.map((i) => ({
+    // Skip anything we've already cached server-side (the inbox attaches those),
+    // so we never re-bill and only summarize genuinely new mail.
+    const fresh = items.filter((i) => i.id && !summaryCache[i.id]);
+    const summaries = await aiSummarize(fresh.map((i) => ({
       id: i.id, from: i.from, subject: i.subject, body: i.preview || i.body || '',
     })));
     const n = Object.keys(summaries).length;
-    bumpUsage('summaries', n);
+    if (n) {
+      Object.assign(summaryCache, summaries);
+      summaryCacheDirty = true;
+      trimSummaryCache();
+      persistSummaryCache();
+      bumpUsage('summaries', n);
+    }
+    // Return cached ones too so the client gets summaries for everything it asked.
+    const out = {};
+    for (const i of items) { if (summaryCache[i.id]) out[i.id] = summaryCache[i.id]; }
     record({ stage: 'summarize_ok', count: n, ms: Date.now() - started });
-    res.json({ summaries });
+    res.json({ summaries: out });
   } catch (e) {
     record({ stage: 'summarize_error', message: e.message });
     res.status(400).json({ error: e.message });

@@ -84,6 +84,8 @@ export function StoreProvider({ children }) {
   // Multiple linked mailboxes. Each: { id, type:'outlook', email, refreshToken }.
   // `activeAccountId` is a specific account id, or 'all' for a unified inbox.
   const [mailAccounts, setMailAccounts] = useState([]);
+  const mailAccountsRef = useRef([]);
+  useEffect(() => { mailAccountsRef.current = mailAccounts; }, [mailAccounts]);
   const [activeAccountId, setActiveAccountId] = useState('all');
   // The active account's folder list + who it belongs to (for the drawer).
   const [mailFolders, setMailFolders] = useState([]);
@@ -130,6 +132,7 @@ export function StoreProvider({ children }) {
           list = [{ id: `outlook-${Date.now()}`, type: 'outlook', email: null, refreshToken: rt }, ...list];
         }
         if (list.length) {
+          mailAccountsRef.current = list;
           setMailAccounts(list);
           setActiveAccountId(list.length > 1 ? 'all' : list[0].id);
           const primary = list[0].refreshToken;
@@ -445,23 +448,24 @@ export function StoreProvider({ children }) {
     // and we must update it in place rather than show the mailbox twice.
     let email = emailArg || null;
     if (!email) { try { const r = await listFolders(prefs.serverUrl, refreshToken); email = r.email || null; } catch (e) { /* ignore */ } }
-    let acc;
-    let list;
-    setMailAccounts((prev) => {
-      const existing = email && prev.find((a) => a.email && a.email.toLowerCase() === email.toLowerCase());
-      if (existing) {
-        acc = { ...existing, refreshToken, email };
-        list = prev.map((a) => (a.id === existing.id ? acc : a));
-      } else if (prev.some((a) => a.refreshToken === refreshToken)) {
-        acc = prev.find((a) => a.refreshToken === refreshToken);
-        list = prev;
-      } else {
-        acc = { id: `outlook-${Date.now()}`, type: 'outlook', email, refreshToken };
-        list = [...prev, acc];
-      }
-      persistAccounts(list);
-      return list;
-    });
+    // Compute synchronously from the latest accounts (a ref — NOT inside a setState
+    // updater, which doesn't run in time to use `acc` below).
+    const prev = mailAccountsRef.current || [];
+    const existing = email && prev.find((a) => a.email && a.email.toLowerCase() === email.toLowerCase());
+    let acc; let list;
+    if (existing) {
+      acc = { ...existing, refreshToken, email };
+      list = prev.map((a) => (a.id === existing.id ? acc : a));
+    } else if (prev.some((a) => a.refreshToken === refreshToken)) {
+      acc = prev.find((a) => a.refreshToken === refreshToken);
+      list = prev;
+    } else {
+      acc = { id: `outlook-${Date.now()}`, type: 'outlook', email, refreshToken };
+      list = [...prev, acc];
+    }
+    mailAccountsRef.current = list;
+    setMailAccounts(list);
+    persistAccounts(list);
     setAccounts((a) => ({ ...a, outlook: true }));
     setActiveAccountId('all');
     setLoading(true);
