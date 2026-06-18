@@ -717,6 +717,117 @@ app.post('/draft', async (req, res) => {
   }
 });
 
+// ── 4e. Snooze time suggestion ───────────────────────────────────────────────
+app.post('/snooze-suggest', async (req, res) => {
+  try {
+    const { subject, body, now } = req.body || {};
+    if (!ANTHROPIC_API_KEY) return res.json({ suggestion: null });
+    const msg = await anthropic().messages.create({
+      model: AI_MODEL, max_tokens: 160,
+      system:
+        'Given an email and the current datetime, suggest the single best FUTURE time to ' +
+        'resurface (snooze) it, based on any date/deadline/meeting it mentions. Reply ONLY ' +
+        'JSON {"label":"short human label","iso":"ISO-8601 future datetime"}. If there is no ' +
+        'time cue, suggest tomorrow at 8am.',
+      messages: [{ role: 'user', content: `Now: ${now || new Date().toISOString()}\nSubject: ${subject || ''}\n\n${String(body || '').slice(0, 1200)}` }],
+    });
+    let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+    text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
+    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    res.json({ suggestion: parsed });
+  } catch (e) {
+    res.json({ suggestion: null });
+  }
+});
+
+// ── 4f. Relationship intelligence (sender mini-profile) ──────────────────────
+app.post('/relationship', async (req, res) => {
+  try {
+    const { refreshToken, email } = req.body || {};
+    if (!email) throw new Error('missing email');
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const q = encodeURIComponent(`"${email}"`);
+    const r = await graphGet(`${GRAPH}/me/messages?$search=${q}&$select=from,receivedDateTime,isRead&$top=50`, accessToken);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || 'lookup failed');
+    const msgs = data.value || [];
+    const low = String(email).toLowerCase();
+    let received = 0; let sent = 0; let awaiting = 0; let last = null;
+    for (const m of msgs) {
+      const fromThem = (m.from?.emailAddress?.address || '').toLowerCase().includes(low);
+      if (fromThem) { received += 1; if (!m.isRead) awaiting += 1; } else sent += 1;
+      const d = m.receivedDateTime ? new Date(m.receivedDateTime) : null;
+      if (d && (!last || d > last)) last = d;
+    }
+    res.json({ total: msgs.length, received, sent, awaiting, lastIso: last ? last.toISOString() : null });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── 4g. Inbox health stats (snapshot from Graph) ─────────────────────────────
+app.post('/health-stats', async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const countOf = async (url) => {
+      const r = await graphGet(url, accessToken); const d = await r.json();
+      return r.ok ? (d['@odata.count'] ?? (d.value ? d.value.length : 0)) : 0;
+    };
+    const recv = await countOf(`${GRAPH}/me/mailFolders/inbox/messages?$filter=receivedDateTime ge ${weekAgo}&$count=true&$top=1`);
+    const sent = await countOf(`${GRAPH}/me/mailFolders/sentitems/messages?$filter=sentDateTime ge ${weekAgo}&$count=true&$top=1`);
+    const unread = await countOf(`${GRAPH}/me/mailFolders/inbox/messages?$filter=isRead eq false&$count=true&$top=1`);
+    res.json({ received7d: recv, sent7d: sent, unread, replyRate: recv ? Math.round((sent / recv) * 100) : 0 });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── 4h. Daily digest narrative ───────────────────────────────────────────────
+app.post('/digest', async (req, res) => {
+  try {
+    const { items } = req.body || {};
+    if (!ANTHROPIC_API_KEY || !Array.isArray(items) || !items.length) return res.json({ digest: '' });
+    const msg = await anthropic().messages.create({
+      model: AI_MODEL, max_tokens: 400,
+      system:
+        'Write a short, friendly morning digest of someone\'s inbox as a NARRATIVE (not a list). ' +
+        '3-5 sentences. Lead with what is urgent / needs action, mention meetings, then note ' +
+        'low-priority bulk briefly. Be specific using the senders/subjects given. Plain text only.',
+      messages: [{ role: 'user', content: JSON.stringify(items.slice(0, 30)) }],
+    });
+    const digest = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+    bumpUsage('asks');
+    res.json({ digest });
+  } catch (e) {
+    res.json({ digest: '' });
+  }
+});
+
+// ── 4i. Voice → formatted email ──────────────────────────────────────────────
+app.post('/voice-format', async (req, res) => {
+  try {
+    const { transcript } = req.body || {};
+    if (!ANTHROPIC_API_KEY || !String(transcript || '').trim()) return res.json({ subject: '', body: '' });
+    const msg = await anthropic().messages.create({
+      model: AI_MODEL, max_tokens: 700,
+      system:
+        'Turn a rough dictated transcript into a clean, well-formatted professional email. ' +
+        'Fix grammar/filler, add paragraphs, keep the speaker\'s intent and voice. Also propose ' +
+        'a concise subject line. Reply ONLY JSON {"subject":"...","body":"..."} — no code fences.',
+      messages: [{ role: 'user', content: String(transcript).slice(0, 3000) }],
+    });
+    let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+    text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
+    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    bumpUsage('drafts');
+    res.json({ subject: parsed.subject || '', body: parsed.body || '' });
+  } catch (e) {
+    res.json({ subject: '', body: '' });
+  }
+});
+
 // ── 4d. One-tap smart reply suggestions ──────────────────────────────────────
 app.post('/quick-replies', async (req, res) => {
   try {
@@ -856,12 +967,35 @@ app.post('/signature/generate', async (req, res) => {
 // ── 5. Send a reply ──────────────────────────────────────────────────────────
 app.post('/send', async (req, res) => {
   try {
-    const { refreshToken, toEmail, subject, body, html, inReplyToId } = req.body || {};
+    const { refreshToken, toEmail, subject, body, html, inReplyToId, sendAt } = req.body || {};
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
     const auth = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
     const content = html
       ? { contentType: 'HTML', content: html }
       : { contentType: 'Text', content: body || '' };
+
+    // Scheduled send: create a draft with the deferred-send time, then send it.
+    // Exchange transport holds the message until `sendAt`.
+    if (sendAt && !inReplyToId) {
+      const draftRes = await fetch(`${GRAPH}/me/messages`, {
+        method: 'POST', headers: auth,
+        body: JSON.stringify({
+          subject: subject || '(no subject)',
+          body: content,
+          toRecipients: [{ emailAddress: { address: toEmail } }],
+          singleValueExtendedProperties: [{ id: 'SystemTime 0x3FEF', value: new Date(sendAt).toISOString() }],
+        }),
+      });
+      const draft = await draftRes.json();
+      if (!draftRes.ok) throw new Error(draft.error?.message || 'schedule failed');
+      const sendRes = await fetch(`${GRAPH}/me/messages/${draft.id}/send`, { method: 'POST', headers: auth });
+      if (!sendRes.ok) {
+        const d = await sendRes.json().catch(() => ({}));
+        throw new Error(d.error?.message || 'schedule send failed');
+      }
+      record({ stage: 'send_scheduled', at: sendAt });
+      return res.json({ ok: true, scheduled: true });
+    }
 
     let r;
     if (inReplyToId) {

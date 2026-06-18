@@ -14,6 +14,8 @@ import { useStore } from '../store';
 import { bandFor } from '../lib/bands';
 import { useTourTarget } from '../lib/tour';
 import { quickReplies, isBackendConfigured } from '../lib/backend';
+import SnoozeSheet from '../components/SnoozeSheet';
+import RelationshipSheet from '../components/RelationshipSheet';
 
 // Wrap raw email HTML in a responsive page for the WebView.
 function emailDocument(html) {
@@ -39,10 +41,12 @@ const BAND_PALETTE = {
 };
 
 export default function DetailScreen({ params, goBack, navigate }) {
-  const { emails, archive, snooze, markRead, toggleVip, loadFullBody, setPalette, prefs } = useStore();
+  const { emails, archive, snooze, snoozeUntil, markRead, toggleVip, loadFullBody, setPalette, prefs, outlookRefresh } = useStore();
   const email = emails.find((e) => e.id === params.id);
   const [webHeight, setWebHeight] = React.useState(360);
   const [replies, setReplies] = React.useState([]);
+  const [showSnooze, setShowSnooze] = React.useState(false);
+  const [showRel, setShowRel] = React.useState(false);
   const actionsRef = useTourTarget('detail.actions');
   const replyRef = useTourTarget('detail.reply');
 
@@ -105,7 +109,7 @@ export default function DetailScreen({ params, goBack, navigate }) {
           <Pressable style={styles.actionIcon} onPress={() => toggleVip(p.senderEmail)}>
             <Ionicons name={p.isVip ? 'star' : 'star-outline'} size={18} color={p.isVip ? '#FF9F0A' : colors.ink2} />
           </Pressable>
-          <Pressable style={styles.actionIcon} onPress={() => act(snooze)}>
+          <Pressable style={styles.actionIcon} onPress={() => setShowSnooze(true)}>
             <Ionicons name="time-outline" size={18} color={colors.ink2} />
           </Pressable>
           <Pressable style={styles.actionIcon} onPress={() => act(archive)}>
@@ -116,9 +120,9 @@ export default function DetailScreen({ params, goBack, navigate }) {
 
       {/* Colored hero */}
       <LinearGradient colors={band.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-        <View style={styles.heroInitial}>
+        <Pressable style={styles.heroInitial} onPress={() => setShowRel(true)}>
           <Text style={styles.heroInitialText}>{initials(p.senderName)}</Text>
-        </View>
+        </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.heroName} numberOfLines={1}>{p.senderName}</Text>
           <Text style={styles.heroAddr} numberOfLines={1}>{p.senderEmail}</Text>
@@ -200,6 +204,23 @@ export default function DetailScreen({ params, goBack, navigate }) {
           <Text style={styles.replyText}>Reply</Text>
         </Pressable>
       </View>
+
+      <SnoozeSheet
+        visible={showSnooze}
+        email={email}
+        serverUrl={prefs?.serverUrl}
+        onClose={() => setShowSnooze(false)}
+        onSnooze={(ts, label) => { setShowSnooze(false); snoozeUntil(email.id, ts, label); goBack(); }}
+      />
+      <RelationshipSheet
+        visible={showRel}
+        name={p.senderName}
+        email={p.senderEmail}
+        serverUrl={prefs?.serverUrl}
+        refreshToken={outlookRefresh}
+        demo={email.demo}
+        onClose={() => setShowRel(false)}
+      />
     </SafeAreaView>
   );
 }

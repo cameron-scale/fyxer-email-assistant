@@ -91,6 +91,31 @@ export function quickReplies(serverUrl, payload) {
   return post(serverUrl, '/quick-replies', payload);
 }
 
+// AI snooze-time suggestion. Returns { suggestion: { label, iso } | null }.
+export function snoozeSuggest(serverUrl, payload) {
+  return post(serverUrl, '/snooze-suggest', payload);
+}
+
+// Sender mini-profile stats. Returns { total, received, sent, awaiting, lastIso }.
+export function relationship(serverUrl, refreshToken, email) {
+  return post(serverUrl, '/relationship', { refreshToken, email });
+}
+
+// Inbox health snapshot. Returns { received7d, sent7d, unread, replyRate }.
+export function healthStats(serverUrl, refreshToken) {
+  return post(serverUrl, '/health-stats', { refreshToken });
+}
+
+// Daily narrative digest. Returns { digest }.
+export function digestNarrative(serverUrl, items) {
+  return post(serverUrl, '/digest', { items });
+}
+
+// Clean a dictated transcript into a formatted email. Returns { subject, body }.
+export function voiceFormat(serverUrl, transcript) {
+  return post(serverUrl, '/voice-format', { transcript });
+}
+
 // Ask Claude for writing suggestions on a draft. Returns { suggestions, improved }.
 export function suggestEdits(serverUrl, body, context) {
   return post(serverUrl, '/suggest', { body, context });

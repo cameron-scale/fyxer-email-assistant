@@ -165,6 +165,12 @@ export function StoreProvider({ children }) {
     setRecentAction({ id, label: 'Snoozed 4h' });
   }, [setOverride]);
 
+  // Snooze until a specific timestamp (used by the smart-snooze picker).
+  const snoozeUntil = useCallback((id, ts, label = 'Snoozed') => {
+    setOverride(id, { snoozedUntil: ts });
+    setRecentAction({ id, label });
+  }, [setOverride]);
+
   // Revert whatever the snackbar is currently offering to undo.
   const undoLast = useCallback(() => {
     setRecentAction((cur) => {
@@ -405,6 +411,7 @@ export function StoreProvider({ children }) {
     markDone,
     markRead,
     snooze,
+    snoozeUntil,
     undoLast,
     dismissRecent,
     toggleVip,

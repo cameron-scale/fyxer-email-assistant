@@ -20,6 +20,7 @@ const SWIPE = width * 0.28;
 export default function TriageScreen({ navigate, goBack }) {
   const { emails, archive, markRead, snooze } = useStore();
   const triageActionsRef = useTourTarget('triage.actions');
+  const triageCardRef = useTourTarget('triage.card');
   // Freeze the deck order when we enter so cards don't reshuffle as we act.
   const deck = useMemo(() => emails, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [index, setIndex] = useState(0);
@@ -110,6 +111,7 @@ export default function TriageScreen({ navigate, goBack }) {
 
             {/* Active card */}
             <Animated.View
+              ref={triageCardRef}
               {...responder.panHandlers}
               style={[
                 styles.card,

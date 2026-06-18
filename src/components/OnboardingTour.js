@@ -28,7 +28,9 @@ const STEPS = [
   { id: 'detail.actions', title: 'Quick actions', body: 'Archive, star, or open the menu for Reply All, Forward, Move to Folder, or Delete — all without leaving the reading view.', before: 'openEmail' },
   { id: 'detail.reply', title: 'Inline reply', body: 'Type and send without navigating away. ScaleMail sends from your connected account instantly.', after: 'closeEmail' },
   { id: 'tabbar', title: 'Tab bar', body: 'Inbox, Starred, Compose, Sent, and Drafts. The aurora background shifts color for each tab automatically.', before: 'inbox' },
-  { id: 'triage.actions', title: 'Zip Through — rapid triage', body: 'Archive, Snooze, or Mark Read with a single tap each. Process your entire backlog in minutes.', before: 'openZip', after: 'closeZip' },
+  { id: 'triage.card', title: 'Zip Through — swipe to triage', body: 'One card at a time. Swipe right to mark read, left to archive, up to snooze — or tap the card to open and reply. The progress counter up top tracks your pace.', before: 'openZip' },
+  { id: 'triage.card', title: 'Why it matters', body: 'Each card shows the AI’s priority pill, the category, a one-line summary, and a short reason it flagged the email — so you decide in a glance.' },
+  { id: 'triage.actions', title: 'Tap-friendly actions', body: 'Prefer tapping to swiping? Archive, Snooze, or Mark Read with a single tap each. Clear your whole backlog in minutes.', after: 'closeZip' },
   { center: true, title: 'Live aurora background', body: 'The animated background shifts color with your context — blue for inbox, red for urgent, gold for starred, indigo for meetings.' },
   { id: 'inbox.avatar', title: 'You’re all set — connect your account', body: 'Tap your avatar then “Account & accounts” to connect Gmail, Outlook, or iCloud. ScaleMail will sync and categorize your real mail immediately.', before: 'inbox', final: true },
 ];
