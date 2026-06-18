@@ -36,7 +36,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
   const {
     emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
     searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
-    mailboxUnread,
+    mailboxUnread, syncingAll,
   } = useStore();
   const connected = accounts.outlook || accounts.gmail;
   const [filter, setFilter] = useState('all');
@@ -119,7 +119,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                   </Pressable>
                 )}
                 <View>
-                <Text style={styles.eyebrow}>{starred ? 'Mailbox' : "Cameron's Inbox"}</Text>
+                <Text style={styles.eyebrow}>{starred ? 'Mailbox' : (syncingAll ? 'Syncing all mail…' : "Cameron's Inbox")}</Text>
                 <View ref={wordmarkRef} collapsable={false} style={styles.logoRow}>
                   <Text style={styles.logoScale}>Scale</Text>
                   <Text style={styles.logoMail}>Mail</Text>

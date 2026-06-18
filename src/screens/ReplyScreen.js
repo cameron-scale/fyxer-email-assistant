@@ -29,8 +29,10 @@ function firstName(name = '') {
 
 export default function ReplyScreen({ params, goBack }) {
   const prefill = params?.prefill;
-  const { emails, prefs, setPrefs, accounts, outlookRefresh } = useStore();
-  const email = emails.find((e) => e.id === params.id);
+  const { emails, searchEmails, folderEmails, prefs, setPrefs, accounts, outlookRefresh } = useStore();
+  const email = emails.find((e) => e.id === params.id)
+    || (searchEmails || []).find((e) => e.id === params.id)
+    || (folderEmails || []).find((e) => e.id === params.id);
   const p = email?.priority;
   const backendReady = isBackendConfigured(prefs.serverUrl);
   const canSend = backendReady && accounts.outlook && email?.account === 'outlook';
