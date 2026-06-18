@@ -14,25 +14,32 @@ const THRESHOLD = width * 0.3;
 export default function SwipeableRow({ children, onSwipeRight, onSwipeLeft }) {
   const x = useRef(new Animated.Value(0)).current;
 
+  const springBack = () => Animated.spring(x, { toValue: 0, useNativeDriver: true, bounciness: 0, speed: 18 }).start();
+
   const responder = useRef(
     PanResponder.create({
-      // Only take over for clearly-horizontal drags (so the FlatList can still scroll).
+      onStartShouldSetPanResponder: () => false,
+      // Only take over for clearly-horizontal drags (so the list can still scroll).
       onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
-      onPanResponderMove: (_, g) => x.setValue(g.dx),
+        Math.abs(g.dx) > 16 && Math.abs(g.dx) > Math.abs(g.dy) * 1.8,
+      // Once we've claimed the horizontal drag, don't let the list steal it back
+      // mid-swipe (that was the jump/glitch).
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderMove: (_, g) => {
+        // Light resistance past the threshold so it feels controlled, not loose.
+        const d = g.dx;
+        x.setValue(Math.abs(d) > THRESHOLD ? (d > 0 ? THRESHOLD + (d - THRESHOLD) * 0.4 : -THRESHOLD + (d + THRESHOLD) * 0.4) : d);
+      },
       onPanResponderRelease: (_, g) => {
         if (g.dx > THRESHOLD) {
-          Animated.timing(x, { toValue: width, duration: 180, useNativeDriver: true }).start(
-            () => onSwipeRight && onSwipeRight()
-          );
+          Animated.timing(x, { toValue: width, duration: 180, useNativeDriver: true }).start(() => onSwipeRight && onSwipeRight());
         } else if (g.dx < -THRESHOLD) {
-          Animated.timing(x, { toValue: -width, duration: 180, useNativeDriver: true }).start(
-            () => onSwipeLeft && onSwipeLeft()
-          );
+          Animated.timing(x, { toValue: -width, duration: 180, useNativeDriver: true }).start(() => onSwipeLeft && onSwipeLeft());
         } else {
-          Animated.spring(x, { toValue: 0, useNativeDriver: true }).start();
+          springBack();
         }
       },
+      onPanResponderTerminate: springBack, // snap back cleanly if interrupted
     })
   ).current;
 
