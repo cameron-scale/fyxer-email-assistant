@@ -44,14 +44,15 @@ app.use((req, res, next) => {
 
 // ── AI usage meter (monthly) — keeps spend visible against a free-tier cap ─────
 const AI_CAP = parseInt(process.env.AI_CAP || '1000', 10);
-let usage = { month: new Date().toISOString().slice(0, 7), summaries: 0, drafts: 0, signatures: 0, suggests: 0 };
+const freshUsage = () => ({ month: new Date().toISOString().slice(0, 7), summaries: 0, drafts: 0, signatures: 0, suggests: 0, asks: 0 });
+let usage = freshUsage();
 function bumpUsage(kind, n = 1) {
   const m = new Date().toISOString().slice(0, 7);
-  if (usage.month !== m) usage = { month: m, summaries: 0, drafts: 0, signatures: 0, suggests: 0 };
+  if (usage.month !== m) usage = freshUsage();
   usage[kind] = (usage[kind] || 0) + n;
 }
 app.get('/usage', (_req, res) => {
-  const total = usage.summaries + usage.drafts + usage.signatures + usage.suggests;
+  const total = usage.summaries + usage.drafts + usage.signatures + usage.suggests + usage.asks;
   res.json({ ...usage, total, cap: AI_CAP });
 });
 
@@ -550,6 +551,60 @@ app.post('/search', async (req, res) => {
     res.json({ emails });
   } catch (e) {
     record({ stage: 'search_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── AI chat over your mail: "pull all emails about X" ────────────────────────
+app.post('/ask', async (req, res) => {
+  try {
+    const { refreshToken, q } = req.body || {};
+    const query = String(q || '').trim();
+    if (!query) return res.json({ answer: '', emails: [] });
+    if (!ANTHROPIC_API_KEY) return res.status(400).json({ error: 'AI not configured (set ANTHROPIC_API_KEY).' });
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const url = `${GRAPH}/me/messages?$search=${encodeURIComponent(`"${query}"`)}&$top=40` +
+      `&$select=subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification`;
+    const r = await graphGet(url, accessToken);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || 'Graph search failed');
+    const all = (data.value || []).map((m) => ({
+      id: m.id,
+      account: 'outlook',
+      from: m.from?.emailAddress ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>` : '',
+      subject: m.subject || '(no subject)',
+      body: stripHtml(m.bodyPreview || ''),
+      preview: stripHtml(m.bodyPreview || ''),
+      date: m.receivedDateTime || new Date().toISOString(),
+      read: !!m.isRead,
+      flagged: m.flag?.flagStatus === 'flagged',
+      inferred: m.inferenceClassification || null,
+    }));
+    if (!all.length) return res.json({ answer: `I couldn't find any emails matching "${query}".`, emails: [] });
+
+    const items = all.map((e) => ({ id: e.id, from: e.from, subject: e.subject, date: e.date, preview: e.body.slice(0, 200) }));
+    const msg = await anthropic().messages.create({
+      model: AI_MODEL,
+      max_tokens: 900,
+      system:
+        'You help the user query their email. You are given their request and a JSON list ' +
+        'of candidate emails (id, from, subject, date, preview) returned by a search. Answer ' +
+        'the request concisely based ONLY on these, and pick the ids that are genuinely ' +
+        'relevant. Reply ONLY JSON (no code fences): {"answer":"2-4 sentence answer","ids":' +
+        '["id",...]}. If the request is just to "pull"/"show"/"find" emails, give a one-line ' +
+        'answer and include all relevant ids.',
+      messages: [{ role: 'user', content: `Request: ${query}\n\nCandidate emails:\n${JSON.stringify(items)}` }],
+    });
+    let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+    text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
+    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    const ids = new Set(parsed.ids || []);
+    const picked = ids.size ? all.filter((e) => ids.has(e.id)) : all;
+    bumpUsage('asks');
+    record({ stage: 'ask_ok', matched: all.length, picked: picked.length });
+    res.json({ answer: parsed.answer || '', emails: picked });
+  } catch (e) {
+    record({ stage: 'ask_error', message: e.message });
     res.status(400).json({ error: e.message });
   }
 });

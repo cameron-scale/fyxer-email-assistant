@@ -9,7 +9,7 @@ import React, {
 import { prioritize } from './lib/priority';
 import { fetchGmail } from './api/gmail';
 import {
-  fetchInbox, fetchMessageBody, summarizeEmails, searchMail, DEFAULT_SERVER_URL,
+  fetchInbox, fetchMessageBody, summarizeEmails, searchMail, askMail, DEFAULT_SERVER_URL,
 } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 
@@ -67,6 +67,7 @@ export function StoreProvider({ children }) {
   // Whole-mailbox search results (Graph), shown in place of the inbox while active.
   const [searchResults, setSearchResults] = useState(null); // null = not searching
   const [searching, setSearching] = useState(false);
+  const [chatAnswer, setChatAnswer] = useState(null); // AI answer banner text
 
   // Load saved VIPs + prefs + tokens once when the app starts.
   useEffect(() => {
@@ -256,7 +257,27 @@ export function StoreProvider({ children }) {
       setSearching(false);
     }
   }, [outlookRefresh, prefs.serverUrl, summarizeBatch]);
-  const clearSearch = useCallback(() => { setSearchResults(null); setSearching(false); }, []);
+  const clearSearch = useCallback(() => { setSearchResults(null); setSearching(false); setChatAnswer(null); }, []);
+
+  // AI chat: ask a question, get an answer + the relevant emails shown in the list.
+  const askMailQuestion = useCallback(async (q) => {
+    const query = (q || '').trim();
+    if (!query) { setSearchResults(null); setChatAnswer(null); return; }
+    if (!outlookRefresh) return;
+    setSearching(true);
+    setChatAnswer(null);
+    try {
+      const { answer, emails: found } = await askMail(prefs.serverUrl, outlookRefresh, query);
+      setSearchResults(found || []);
+      setChatAnswer(answer || '');
+      summarizeBatch(found || []);
+    } catch (e) {
+      setError(e.message || 'Could not ask');
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, [outlookRefresh, prefs.serverUrl, summarizeBatch]);
 
   // Auto-load the inbox once on launch when a saved Outlook session is restored,
   // so mail appears without needing a manual pull-to-refresh.
@@ -380,6 +401,8 @@ export function StoreProvider({ children }) {
     searching,
     runSearch,
     clearSearch,
+    chatAnswer,
+    askMailQuestion,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

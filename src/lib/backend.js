@@ -68,6 +68,11 @@ export function searchMail(serverUrl, refreshToken, q) {
   return post(serverUrl, '/search', { refreshToken, q });
 }
 
+// AI chat over mail ("pull all emails about X"). Returns { answer, emails }.
+export function askMail(serverUrl, refreshToken, q) {
+  return post(serverUrl, '/ask', { refreshToken, q });
+}
+
 // Save a draft to the Outlook Drafts folder. Returns { id }.
 export function saveDraft(serverUrl, payload) {
   return post(serverUrl, '/draft-save', payload);

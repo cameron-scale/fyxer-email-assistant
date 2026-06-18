@@ -32,25 +32,27 @@ const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 export default function InboxScreen({ navigate, starred, openSheet }) {
   const {
     emails, counts, loading, refresh, markDone, archive, accounts, error, sortBy, setSortBy,
-    searchEmails, searching: searchBusy, runSearch, clearSearch,
+    searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
   } = useStore();
   const connected = accounts.outlook || accounts.gmail;
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const [aiMode, setAiMode] = useState(false); // search bar becomes an AI chat
 
   const q = query.trim().toLowerCase();
   // Whole-mailbox search runs server-side (debounced); Starred tab stays local.
+  // In AI mode we don't auto-run — the user submits a question.
   const usingSearch = !starred && query.trim().length > 0;
   useEffect(() => {
-    if (starred) return undefined;
+    if (starred || aiMode) return undefined;
     const t = setTimeout(() => {
       if (query.trim()) runSearch(query.trim());
       else clearSearch();
     }, 450);
     return () => clearTimeout(t);
-  }, [query, starred]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, starred, aiMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const base = starred
     ? emails.filter((e) => e.priority.isVip)
@@ -117,17 +119,22 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
 
             {/* Search */}
             {searching ? (
-              <View style={styles.searchActive}>
-                <Ionicons name="search" size={16} color={colors.onDarkFaint} />
+              <View style={[styles.searchActive, aiMode && styles.searchActiveAi]}>
+                <Ionicons name={aiMode ? 'sparkles' : 'search'} size={16} color={aiMode ? colors.blue : colors.onDarkFaint} />
                 <TextInput
                   style={styles.searchActiveInput}
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Search mail…"
+                  placeholder={aiMode ? 'Ask about your mail…' : 'Search mail…'}
                   placeholderTextColor={colors.onDarkFaint}
                   autoFocus
+                  returnKeyType={aiMode ? 'send' : 'search'}
+                  onSubmitEditing={() => { if (aiMode && query.trim()) askMailQuestion(query.trim()); }}
                 />
-                <Pressable hitSlop={8} onPress={() => { setSearching(false); setQuery(''); }}>
+                <Pressable hitSlop={8} onPress={() => setAiMode((v) => !v)} style={styles.aiToggle}>
+                  <Ionicons name={aiMode ? 'sparkles' : 'sparkles-outline'} size={18} color={aiMode ? colors.blue : colors.onDarkFaint} />
+                </Pressable>
+                <Pressable hitSlop={8} onPress={() => { setSearching(false); setQuery(''); setAiMode(false); clearSearch(); }}>
                   <Text style={styles.cancel}>Cancel</Text>
                 </Pressable>
               </View>
@@ -137,9 +144,20 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                   <Ionicons name="search" size={15} color={colors.onDarkFaint} />
                   <Text style={styles.searchText}>Search mail…</Text>
                 </Pressable>
+                <Pressable style={[styles.sortBtn, styles.aiPillBtn]} onPress={() => { setSearching(true); setAiMode(true); }}>
+                  <Ionicons name="sparkles" size={17} color={colors.blue} />
+                </Pressable>
                 <Pressable style={styles.sortBtn} onPress={() => setSortOpen((v) => !v)}>
                   <Ionicons name="swap-vertical" size={18} color="#fff" />
                 </Pressable>
+              </View>
+            )}
+
+            {/* AI answer banner */}
+            {aiMode && !!chatAnswer && (
+              <View style={styles.aiAnswer}>
+                <Ionicons name="sparkles" size={14} color={colors.blue} />
+                <Text style={styles.aiAnswerText}>{chatAnswer}</Text>
               </View>
             )}
 
@@ -303,6 +321,15 @@ const styles = StyleSheet.create({
     borderRadius: 12, paddingHorizontal: 12, marginBottom: 14,
   },
   searchActiveInput: { flex: 1, color: '#fff', fontSize: 15, paddingVertical: 11 },
+  searchActiveAi: { backgroundColor: 'rgba(0,113,227,0.18)', borderColor: 'rgba(0,113,227,0.5)' },
+  aiToggle: { paddingHorizontal: 4 },
+  aiPillBtn: { backgroundColor: 'rgba(0,113,227,0.16)', borderColor: 'rgba(0,113,227,0.4)' },
+  aiAnswer: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 14,
+    backgroundColor: 'rgba(0,113,227,0.14)', borderWidth: 1, borderColor: 'rgba(0,113,227,0.3)',
+    borderRadius: radius.md, padding: 12,
+  },
+  aiAnswerText: { color: '#fff', fontSize: 13.5, flex: 1, lineHeight: 19 },
   cancel: { color: colors.blue, fontSize: 15, fontWeight: '500' },
   chipsWrap: { marginBottom: 12, marginHorizontal: -6 },
   chipsRow: { gap: 7, paddingHorizontal: 6, paddingRight: 24, paddingTop: 8 },
