@@ -82,7 +82,7 @@ export default function MailboxScreen({ navigate, route, openSheet }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 230 },
   list: { paddingHorizontal: 16, paddingBottom: 120 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 6, paddingTop: 4, marginBottom: 14 },

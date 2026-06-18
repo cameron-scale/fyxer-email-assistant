@@ -1,11 +1,12 @@
 // App.js — entry point. Sets up the shared store, a tiny screen navigator, the
 // ScaleMail bottom tab bar, and the slide-up Compose / Profile sheets.
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { colors } from './src/theme';
 import { StoreProvider, useStore } from './src/store';
+import AuroraBackground from './src/components/AuroraBackground';
 import InboxScreen from './src/screens/InboxScreen';
 import TriageScreen from './src/screens/TriageScreen';
 import DetailScreen from './src/screens/DetailScreen';
@@ -40,8 +41,11 @@ const SCREENS = {
 const TAB_SCREENS = ['Inbox', 'Starred', 'Sent', 'Drafts'];
 const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts'];
 
+// Which aurora palette a top-level screen uses (Detail sets its own per-email).
+const SCREEN_PALETTE = { Starred: 'starred', Sent: 'sent', Drafts: 'drafts' };
+
 function AppShell() {
-  const { emails } = useStore();
+  const { emails, setPalette } = useStore();
   const [stack, setStack] = useState([{ name: 'Inbox', params: {} }]);
   const [sheet, setSheet] = useState(null); // 'compose' | 'profile' | null
 
@@ -61,9 +65,15 @@ function AppShell() {
   const showTabBar = TAB_SCREENS.includes(top.name);
   const inboxBadge = emails.filter((e) => e.read === false).length;
 
+  // Shift the aurora palette to match the current folder (Detail handles per-email).
+  useEffect(() => {
+    if (top.name !== 'Detail') setPalette(SCREEN_PALETTE[top.name] || 'default');
+  }, [top.name, setPalette]);
+
   return (
     <View style={styles.root}>
       <StatusBar style={DARK_SCREENS.includes(top.name) ? 'light' : 'dark'} />
+      <AuroraBackground />
       <Screen
         navigate={navigate}
         goBack={goBack}

@@ -19,12 +19,23 @@ function initials(name = '') {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+// Aurora palette for an open email, from its band/category.
+const BAND_PALETTE = { urgent: 'urgent', clients: 'clients', work: 'work', meeting: 'meeting', finance: 'finance' };
+
 export default function DetailScreen({ params, goBack, navigate }) {
-  const { emails, archive, snooze, markRead, toggleVip, loadFullBody } = useStore();
+  const { emails, archive, snooze, markRead, toggleVip, loadFullBody, setPalette } = useStore();
   const email = emails.find((e) => e.id === params.id);
 
   React.useEffect(() => {
     if (email && email.read === false) markRead(email.id);
+  }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Shift the aurora to match this email; restore default on leave.
+  React.useEffect(() => {
+    if (!email) return undefined;
+    const band = bandFor(email);
+    setPalette(email.priority?.isVip ? 'starred' : (BAND_PALETTE[band.key] || 'default'));
+    return () => setPalette('default');
   }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The inbox list only carries a short preview; fetch the full body on open.

@@ -182,7 +182,7 @@ function ProviderCard({ icon, color, title, subtitle, connected, busy, onPress, 
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   backRow: { flexDirection: 'row', alignItems: 'center', padding: space.md },
   backText: { color: colors.text, fontSize: font.title, fontWeight: '600' },
   body: { padding: space.lg },

@@ -260,7 +260,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: 'transparent' }, // aurora shows through
   glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 230 },
   list: { paddingHorizontal: 16, paddingBottom: 120 },
   header: { paddingHorizontal: 6, paddingTop: 4 },
