@@ -16,7 +16,7 @@ import { useStore } from '../store';
 import { uploadSignatureImage, aiGenerateSignature, reportClientEvent } from '../lib/backend';
 import {
   EMPTY_SIG, ACCENTS, TEMPLATES, SOCIALS, AI_STYLES, hasSignature, templateKey, photoSource,
-  initials, splitName, contactItems, socialItems, signatureDetails, composeHtml,
+  initials, splitName, contactItems, socialItems, signatureDetails, signatureHtml, SCALEMAIL_FOOTER_HTML,
 } from '../lib/signature';
 
 const MAX_DIM = 512;
@@ -209,10 +209,15 @@ function Preview({ sig }) {
 }
 
 // Wrap the real email HTML in a minimal page so the WebView preview is WYSIWYG.
+// The "Sent using ScaleMail" line is rendered as its own container UNDER the
+// signature — never inside it.
 function webPreviewHtml(sig) {
   return `<!doctype html><html><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width,initial-scale=1"></head>` +
-    `<body style="margin:0;padding:16px;background:#fff">${composeHtml('', sig)}</body></html>`;
+    `<body style="margin:0;padding:16px;background:#fff">` +
+    `<div>${signatureHtml(sig)}</div>` +
+    `<div style="margin-top:18px;padding-top:12px;border-top:1px dashed #e2e2ea">${SCALEMAIL_FOOTER_HTML}</div>` +
+    `</body></html>`;
 }
 
 export default function SignatureScreen({ goBack }) {

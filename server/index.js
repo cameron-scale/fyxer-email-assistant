@@ -645,12 +645,17 @@ const SIG_SYSTEM =
   '- Output ONLY raw HTML (no markdown, no code fences, no commentary).\n' +
   '- Email-safe HTML ONLY: a single root <table> with inline styles, web-safe fonts ' +
   '(Arial/Helvetica/Georgia), no <style> blocks, no <script>, no external CSS, no JS.\n' +
-  '- Use the person\'s photo URL in an <img> if provided; otherwise use a tasteful monogram. ' +
-  'Make photos round/framed as the reference does. Keep max width ~520px.\n' +
+  '- If a photo URL is provided, use it in an <img> framed as the reference does. ' +
+  'If NO photo is provided, do NOT leave a blank/broken image area: instead render a ' +
+  'tasteful monogram badge (the person\'s initials in a colored circle using the accent ' +
+  'color) OR a clean, balanced text-only layout. The result must look polished and ' +
+  'intentional with no empty gaps. Keep max width ~520px.\n' +
+  '- Include EVERY field the person provided (name, title, company, tagline, phone, email, ' +
+  'website, location, and any socials) — never drop information. Only omit a field if it is ' +
+  'absent. Never invent data or use lorem ipsum.\n' +
   '- For icons use simple emoji (📞 ✉️ 🌐 📍) or small colored shapes — never icon fonts.\n' +
-  '- Only include fields the person actually provided. Never invent data or use lorem ipsum.\n' +
   '- Make links real: tel:, mailto:, and https:// for website/socials.\n' +
-  '- Do NOT add any "sent from" footer.';
+  '- Do NOT add any "sent from" / footer line — that is added separately.';
 
 app.post('/signature/generate', async (req, res) => {
   const started = Date.now();
