@@ -36,6 +36,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
   const {
     emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
     searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
+    mailboxUnread,
   } = useStore();
   const connected = accounts.outlook || accounts.gmail;
   const [filter, setFilter] = useState('all');
@@ -89,7 +90,10 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
     .filter((k) => grouped[k]?.length)
     .map((k) => ({ title: k === 'Today' ? `Today — ${longToday()}` : k, data: grouped[k] }));
 
-  const unreadCount = emails.filter((e) => e.read === false).length;
+  // The wordmark badge shows the mailbox's true unread count (matches Outlook);
+  // the per-filter "Unread" chip uses the same number once known.
+  const loadedUnread = emails.filter((e) => e.read === false).length;
+  const unreadCount = mailboxUnread != null ? mailboxUnread : loadedUnread;
 
   return (
     <SafeAreaView style={styles.safe}>

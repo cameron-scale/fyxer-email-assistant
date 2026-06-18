@@ -55,9 +55,10 @@ export function claimSession(serverUrl, session) {
 }
 
 // Fetch a mailbox folder (inbox | sent | drafts | archive). Returns
-// { emails, refreshToken }.
-export function fetchInbox(serverUrl, refreshToken, limit = 50, folder = 'inbox') {
-  return post(serverUrl, '/inbox', { refreshToken, limit, folder });
+// { emails, refreshToken, unreadCount, totalCount, skip, hasMore }.
+// `skip` pages further back through the mailbox (50 at a time).
+export function fetchInbox(serverUrl, refreshToken, limit = 50, folder = 'inbox', skip = 0) {
+  return post(serverUrl, '/inbox', { refreshToken, limit, folder, skip });
 }
 
 // Fetch one message's full body on demand. Returns { body }.

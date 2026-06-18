@@ -55,7 +55,7 @@ const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts'];
 const SCREEN_PALETTE = { Starred: 'starred', Sent: 'sent', Drafts: 'drafts' };
 
 function AppShell() {
-  const { emails, setPalette, tourActive } = useStore();
+  const { emails, setPalette, tourActive, mailboxUnread } = useStore();
   const [stack, setStack] = useState([{ name: 'Inbox', params: {} }]);
   const [sheet, setSheet] = useState(null); // 'compose' | 'profile' | null
 
@@ -86,7 +86,9 @@ function AppShell() {
   const top = stack[stack.length - 1];
   const Screen = SCREENS[top.name] || InboxScreen;
   const showTabBar = TAB_SCREENS.includes(top.name);
-  const inboxBadge = emails.filter((e) => e.read === false).length;
+  // Prefer the mailbox's true unread count (matches Outlook) over just-loaded mail.
+  const loadedUnread = emails.filter((e) => e.read === false).length;
+  const inboxBadge = mailboxUnread != null ? mailboxUnread : loadedUnread;
 
   // Shift the aurora palette to match the current folder (Detail handles per-email).
   useEffect(() => {

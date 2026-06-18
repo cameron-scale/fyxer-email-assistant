@@ -478,15 +478,25 @@ async function attachSummaries(emails) {
 // fetching is FREE; summaries are a separate cached step (/summarize).
 app.post('/inbox', async (req, res) => {
   try {
-    const { refreshToken, limit, folder } = req.body || {};
+    const { refreshToken, limit, folder, skip } = req.body || {};
     const want = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 300);
+    const skipN = Math.max(parseInt(skip, 10) || 0, 0);
     const fkey = WELL_KNOWN_FOLDER[String(folder || 'inbox').toLowerCase()] || 'inbox';
     const outgoing = fkey === 'sentitems' || fkey === 'drafts';
     const { accessToken, refreshToken: newRt } = await accessTokenFromRefresh(refreshToken);
 
+    // Folder totals (cheap) so the app can show the TRUE unread count even when
+    // only some messages are loaded — matches what Outlook shows.
+    let unreadCount = null; let totalCount = null;
+    try {
+      const fr = await graphGet(`${GRAPH}/me/mailFolders/${fkey}?$select=unreadItemCount,totalItemCount`, accessToken);
+      const fd = await fr.json();
+      if (fr.ok) { unreadCount = fd.unreadItemCount ?? null; totalCount = fd.totalItemCount ?? null; }
+    } catch (e) { /* counts are best-effort */ }
+
     const pageSize = Math.min(want, 50); // Graph caps $top at 50 for messages
     let url =
-      `${GRAPH}/me/mailFolders/${fkey}/messages?$top=${pageSize}` +
+      `${GRAPH}/me/mailFolders/${fkey}/messages?$top=${pageSize}&$skip=${skipN}` +
       `&$select=subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification` +
       `&$orderby=receivedDateTime desc`;
     const raw = [];
@@ -526,8 +536,8 @@ app.post('/inbox', async (req, res) => {
     // Only for incoming mail — Sent/Drafts don't need a "why it matters" line.
     if (!outgoing) await attachSummaries(emails);
 
-    record({ stage: 'inbox_success', folder: fkey, count: emails.length });
-    res.json({ emails, refreshToken: newRt });
+    record({ stage: 'inbox_success', folder: fkey, count: emails.length, skip: skipN, unread: unreadCount });
+    res.json({ emails, refreshToken: newRt, unreadCount, totalCount, skip: skipN, hasMore: emails.length >= pageSize });
   } catch (e) {
     record({ stage: 'inbox_error', message: e.message, detail: e.detail || null });
     res.status(400).json({ error: e.message });

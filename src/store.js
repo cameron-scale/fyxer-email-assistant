@@ -75,6 +75,13 @@ export function StoreProvider({ children }) {
   const [folders, setFolders] = useState({ sent: [], drafts: [] });
   const [folderLoading, setFolderLoading] = useState(false);
 
+  // True mailbox totals from Graph (so the badge matches Outlook even before all
+  // mail is loaded), plus background "sync the rest" progress.
+  const [mailboxUnread, setMailboxUnread] = useState(null); // server truth, or null
+  const [mailboxTotal, setMailboxTotal] = useState(null);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const syncAbort = useRef(false);
+
   // Whole-mailbox search results (Graph), shown in place of the inbox while active.
   const [searchResults, setSearchResults] = useState(null); // null = not searching
   const [searching, setSearching] = useState(false);
@@ -250,18 +257,51 @@ export function StoreProvider({ children }) {
   const loadOutlook = useCallback(async (refreshToken) => {
     const rt = refreshToken || outlookRefresh;
     if (!rt) throw new Error('Outlook not connected');
-    const { emails: fetched, refreshToken: newRt } = await fetchInbox(prefs.serverUrl, rt, 50, 'inbox');
+    const { emails: fetched, refreshToken: newRt, unreadCount, totalCount } = await fetchInbox(prefs.serverUrl, rt, 50, 'inbox', 0);
     if (newRt && newRt !== rt) {
       await saveToken('outlook_refresh', newRt);
       setOutlookRefresh(newRt);
     }
+    if (unreadCount != null) setMailboxUnread(unreadCount);
+    if (totalCount != null) setMailboxTotal(totalCount);
     // Replace old outlook mail with the fresh batch.
     setRaw((prev) => {
       const others = prev.filter((e) => e.account !== 'outlook');
       return [...others, ...fetched];
     });
     summarizeBatch(fetched); // fire-and-forget; only summarizes new, uncached mail
-  }, [outlookRefresh, prefs.serverUrl, summarizeBatch]);
+    // Then keep pulling the rest of the mailbox in the background so the inbox
+    // reflects ALL mail, not just the first page.
+    syncAllOutlook(newRt && newRt !== rt ? newRt : rt);
+  }, [outlookRefresh, prefs.serverUrl, summarizeBatch]); // eslint-disable-line
+
+  // Background pagination: page back through the whole mailbox 50 at a time,
+  // appending as we go, until there's no more (or we hit a safety cap). Cheap to
+  // run because fetching is free and summaries are cached per id server-side.
+  const syncAllOutlook = useCallback(async (refreshToken) => {
+    const rt = refreshToken || outlookRefresh;
+    if (!rt || syncingAll) return;
+    setSyncingAll(true);
+    syncAbort.current = false;
+    const CAP = 2000; // safety ceiling on how much we hold in memory
+    try {
+      let skip = 50; // page 0 already loaded
+      while (skip < CAP && !syncAbort.current) {
+        const { emails: page, hasMore } = await fetchInbox(prefs.serverUrl, rt, 50, 'inbox', skip);
+        if (page && page.length) {
+          setRaw((prev) => {
+            const seen = new Set(prev.map((e) => e.id));
+            const add = page.filter((e) => !seen.has(e.id));
+            return add.length ? [...prev, ...add] : prev;
+          });
+          summarizeBatch(page);
+        }
+        if (!hasMore || !page || page.length < 50) break;
+        skip += 50;
+      }
+    } catch (e) { /* partial sync is fine — we keep what loaded */ }
+    finally { setSyncingAll(false); }
+  }, [outlookRefresh, prefs.serverUrl, summarizeBatch, syncingAll]);
 
   // Load the Sent or Drafts folder on demand (for those tabs).
   const loadFolder = useCallback(async (name) => {
@@ -432,6 +472,9 @@ export function StoreProvider({ children }) {
     sortBy,
     setSortBy,
     summaries,
+    mailboxUnread,
+    mailboxTotal,
+    syncingAll,
     loadFullBody,
     folders,
     folderLoading,
