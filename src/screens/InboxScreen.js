@@ -2,9 +2,9 @@
 // search pill, scrollable filter chips, and day-grouped white cards driven by
 // Brisk's priority engine. Doubles as the Starred tab via the `starred` prop.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, SectionList, Pressable, RefreshControl, TextInput, ScrollView,
+  View, Text, StyleSheet, SectionList, Pressable, RefreshControl, TextInput, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +30,10 @@ const FILTERS = [
 const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
 export default function InboxScreen({ navigate, starred, openSheet }) {
-  const { emails, counts, loading, refresh, markDone, archive, accounts, error, sortBy, setSortBy } = useStore();
+  const {
+    emails, counts, loading, refresh, markDone, archive, accounts, error, sortBy, setSortBy,
+    searchEmails, searching: searchBusy, runSearch, clearSearch,
+  } = useStore();
   const connected = accounts.outlook || accounts.gmail;
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -38,21 +41,30 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
   const [sortOpen, setSortOpen] = useState(false);
 
   const q = query.trim().toLowerCase();
-  const base = starred ? emails.filter((e) => e.priority.isVip) : emails;
+  // Whole-mailbox search runs server-side (debounced); Starred tab stays local.
+  const usingSearch = !starred && query.trim().length > 0;
+  useEffect(() => {
+    if (starred) return undefined;
+    const t = setTimeout(() => {
+      if (query.trim()) runSearch(query.trim());
+      else clearSearch();
+    }, 450);
+    return () => clearTimeout(t);
+  }, [query, starred]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const base = starred
+    ? emails.filter((e) => e.priority.isVip)
+    : usingSearch ? (searchEmails || []) : emails;
 
   const shown = base.filter((e) => {
-    if (!starred) {
+    if (!starred && !usingSearch) {
       if (filter === 'unread' && e.read !== false) return false;
       if (filter === 'urgent' && e.priority.bucket !== 'urgent') return false;
       if (filter === 'starred' && !e.priority.isVip) return false;
       if (['To Respond', 'Meeting', 'Notification', 'Newsletter', 'Promotions'].includes(filter) &&
         e.priority.category !== filter) return false;
     }
-    if (q) {
-      const hay = `${e.subject} ${e.priority.senderName} ${e.priority.senderEmail} ${e.priority.tldr}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
+    return true; // server already matched the query text when searching
   });
 
   // Group into Today / Yesterday / Earlier sections.
@@ -203,27 +215,44 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
           </View>
         )}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Ionicons
-                name={starred ? 'star-outline' : connected ? 'checkmark-done' : 'mail-outline'}
-                size={28} color={colors.onDarkFaint}
-              />
+          usingSearch ? (
+            <View style={styles.empty}>
+              {searchBusy ? (
+                <>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.emptySub}>Searching all your mail…</Text>
+                </>
+              ) : (
+                <>
+                  <View style={styles.emptyIcon}><Ionicons name="search" size={28} color={colors.onDarkFaint} /></View>
+                  <Text style={styles.emptyTitle}>No matches</Text>
+                  <Text style={styles.emptySub}>Nothing found for “{query.trim()}”.</Text>
+                </>
+              )}
             </View>
-            <Text style={styles.emptyTitle}>
-              {starred ? 'No starred mail' : connected ? 'Inbox zero' : 'No inbox yet'}
-            </Text>
-            <Text style={styles.emptySub}>
-              {starred ? 'Star a sender to keep them here.'
-                : connected ? 'Nothing left to triage. Nice work.'
-                : 'Tap the profile icon to connect your email.'}
-            </Text>
-            {!starred && !connected && (
-              <Pressable style={styles.connectBtn} onPress={() => navigate('Connect')}>
-                <Text style={styles.connectBtnText}>Connect email</Text>
-              </Pressable>
-            )}
-          </View>
+          ) : (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Ionicons
+                  name={starred ? 'star-outline' : connected ? 'checkmark-done' : 'mail-outline'}
+                  size={28} color={colors.onDarkFaint}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {starred ? 'No starred mail' : connected ? 'Inbox zero' : 'No inbox yet'}
+              </Text>
+              <Text style={styles.emptySub}>
+                {starred ? 'Star a sender to keep them here.'
+                  : connected ? 'Nothing left to triage. Nice work.'
+                  : 'Tap the profile icon to connect your email.'}
+              </Text>
+              {!starred && !connected && (
+                <Pressable style={styles.connectBtn} onPress={() => navigate('Connect')}>
+                  <Text style={styles.connectBtnText}>Connect email</Text>
+                </Pressable>
+              )}
+            </View>
+          )
         }
       />
     </SafeAreaView>

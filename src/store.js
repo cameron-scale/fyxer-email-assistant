@@ -9,7 +9,7 @@ import React, {
 import { prioritize } from './lib/priority';
 import { fetchGmail } from './api/gmail';
 import {
-  fetchInbox, fetchMessageBody, summarizeEmails, DEFAULT_SERVER_URL,
+  fetchInbox, fetchMessageBody, summarizeEmails, searchMail, DEFAULT_SERVER_URL,
 } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 
@@ -60,6 +60,14 @@ export function StoreProvider({ children }) {
   const summariesRef = useRef({});
   useEffect(() => { summariesRef.current = summaries; }, [summaries]);
 
+  // Sent / Drafts folders (fetched on demand from Graph), kept separate from inbox.
+  const [folders, setFolders] = useState({ sent: [], drafts: [] });
+  const [folderLoading, setFolderLoading] = useState(false);
+
+  // Whole-mailbox search results (Graph), shown in place of the inbox while active.
+  const [searchResults, setSearchResults] = useState(null); // null = not searching
+  const [searching, setSearching] = useState(false);
+
   // Load saved VIPs + prefs + tokens once when the app starts.
   useEffect(() => {
     (async () => {
@@ -101,6 +109,15 @@ export function StoreProvider({ children }) {
     // 'importance' keeps the prioritize() order.
     return sorted;
   }, [raw, overrides, vips, summaries, sortBy]);
+
+  // Prioritized view of whole-mailbox search results (null when not searching).
+  const searchEmails = useMemo(() => {
+    if (!searchResults) return null;
+    const merged = searchResults.map((e) => ({
+      ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id],
+    }));
+    return prioritize(merged, vips);
+  }, [searchResults, overrides, summaries, vips]);
 
   const counts = useMemo(() => {
     const c = { urgent: 0, important: 0, fyi: 0, noise: 0, total: emails.length };
@@ -190,11 +207,11 @@ export function StoreProvider({ children }) {
     } catch (e) { /* keep the preview if the fetch fails */ }
   }, [raw, outlookRefresh, prefs.serverUrl]);
 
-  // Pull the latest Outlook mail from the backend (Inbox folder, many messages).
+  // Pull the latest Outlook inbox from the backend (fast: one page of 50).
   const loadOutlook = useCallback(async (refreshToken) => {
     const rt = refreshToken || outlookRefresh;
     if (!rt) throw new Error('Outlook not connected');
-    const { emails: fetched, refreshToken: newRt } = await fetchInbox(prefs.serverUrl, rt, 200);
+    const { emails: fetched, refreshToken: newRt } = await fetchInbox(prefs.serverUrl, rt, 50, 'inbox');
     if (newRt && newRt !== rt) {
       await saveToken('outlook_refresh', newRt);
       setOutlookRefresh(newRt);
@@ -206,6 +223,49 @@ export function StoreProvider({ children }) {
     });
     summarizeBatch(fetched); // fire-and-forget; only summarizes new, uncached mail
   }, [outlookRefresh, prefs.serverUrl, summarizeBatch]);
+
+  // Load the Sent or Drafts folder on demand (for those tabs).
+  const loadFolder = useCallback(async (name) => {
+    const rt = outlookRefresh;
+    if (!rt) return;
+    setFolderLoading(true);
+    try {
+      const { emails: fetched } = await fetchInbox(prefs.serverUrl, rt, 50, name);
+      setFolders((f) => ({ ...f, [name]: fetched }));
+    } catch (e) { /* leave previous */ } finally { setFolderLoading(false); }
+  }, [outlookRefresh, prefs.serverUrl]);
+
+  // Whole-mailbox search via Graph (finds old mail the device never loaded).
+  const runSearch = useCallback(async (q) => {
+    const query = (q || '').trim();
+    if (!query) { setSearchResults(null); return; }
+    if (!outlookRefresh) return;
+    setSearching(true);
+    try {
+      const { emails: found } = await searchMail(prefs.serverUrl, outlookRefresh, query);
+      setSearchResults(found || []);
+      summarizeBatch(found || []);
+    } catch (e) {
+      setError(e.message || 'Search failed');
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, [outlookRefresh, prefs.serverUrl, summarizeBatch]);
+  const clearSearch = useCallback(() => { setSearchResults(null); setSearching(false); }, []);
+
+  // Auto-load the inbox once on launch when a saved Outlook session is restored,
+  // so mail appears without needing a manual pull-to-refresh.
+  const didInitialLoad = useRef(false);
+  useEffect(() => {
+    if (outlookRefresh && !didInitialLoad.current) {
+      didInitialLoad.current = true;
+      setLoading(true);
+      loadOutlook(outlookRefresh)
+        .catch((e) => setError(e.message || 'Could not load mail'))
+        .finally(() => setLoading(false));
+    }
+  }, [outlookRefresh, loadOutlook]);
 
   // Called after Microsoft login hands back a refresh token.
   const connectOutlook = useCallback(async (refreshToken) => {
@@ -309,6 +369,13 @@ export function StoreProvider({ children }) {
     setSortBy,
     summaries,
     loadFullBody,
+    folders,
+    folderLoading,
+    loadFolder,
+    searchEmails,
+    searching,
+    runSearch,
+    clearSearch,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

@@ -11,9 +11,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { suggestReplies } from '../lib/drafts';
-import { aiDraft, sendReply, isBackendConfigured } from '../lib/backend';
+import { aiDraft, sendReply, saveDraft, isBackendConfigured } from '../lib/backend';
 import { composeText, composeHtml } from '../lib/signature';
 import { timeAgo } from '../lib/time';
+import ComposeAssistant from '../components/ComposeAssistant';
 
 const TONES = [
   { key: 'professional', label: 'Professional' },
@@ -44,6 +45,8 @@ export default function ReplyScreen({ params, goBack }) {
   );
   const [aiBusy, setAiBusy] = useState(false);
   const [sending, setSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [bodyHeight, setBodyHeight] = useState(240); // grows with content so the page (not the field) scrolls
 
   const writeWithAi = async () => {
     setAiBusy(true);
@@ -70,6 +73,28 @@ export default function ReplyScreen({ params, goBack }) {
   }
 
   const subject = /^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`;
+
+  const saveToDrafts = async () => {
+    if (!canSend) {
+      Alert.alert('Connect Outlook first', 'Saving to Drafts needs your Outlook account connected.');
+      return;
+    }
+    setSavingDraft(true);
+    try {
+      await saveDraft(prefs.serverUrl, {
+        refreshToken: outlookRefresh,
+        toEmail: p.senderEmail,
+        subject,
+        html: composeHtml(body, prefs.sig),
+      });
+      Alert.alert('Saved to Drafts ✓', 'You can finish it later from the Drafts tab.');
+      goBack();
+    } catch (e) {
+      Alert.alert('Could not save', e.message || 'Please try again.');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   const send = async () => {
     if (!canSend) {
@@ -118,9 +143,10 @@ export default function ReplyScreen({ params, goBack }) {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
           {/* Recipient + subject */}
           <View style={styles.field}>
             <Text style={styles.label}>To</Text>
@@ -167,16 +193,38 @@ export default function ReplyScreen({ params, goBack }) {
             ))}
           </View>
 
-          {/* Formal body */}
+          {/* Formal body — auto-grows so the PAGE scrolls, not the field */}
           <TextInput
-            style={styles.bodyInput}
+            style={[styles.bodyInput, { height: Math.max(240, bodyHeight) }]}
             value={body}
             onChangeText={setBody}
             multiline
+            scrollEnabled={false}
+            onContentSizeChange={(e) => setBodyHeight(e.nativeEvent.contentSize.height)}
             placeholder="Write your reply…"
             placeholderTextColor={colors.ink4}
             autoFocus
           />
+
+          {/* AI writing suggestions */}
+          {backendReady && (
+            <ComposeAssistant
+              serverUrl={prefs.serverUrl}
+              getBody={() => body}
+              onApplyBody={setBody}
+              context={`Reply to "${email.subject}" from ${p.senderName}`}
+            />
+          )}
+
+          {/* Save to drafts */}
+          <Pressable style={styles.draftBtn} onPress={saveToDrafts} disabled={savingDraft}>
+            {savingDraft ? <ActivityIndicator size="small" color={colors.blue} /> : (
+              <>
+                <Ionicons name="document-text-outline" size={16} color={colors.blue} />
+                <Text style={styles.draftBtnText}>Save to drafts</Text>
+              </>
+            )}
+          </Pressable>
 
           {/* Quoted original */}
           <View style={styles.quoteWrap}>
@@ -236,6 +284,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Georgia', fontSize: 16, lineHeight: 26, color: colors.ink,
     marginTop: 18, minHeight: 220, textAlignVertical: 'top',
   },
+  draftBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16,
+    backgroundColor: colors.blueLight, borderRadius: 12, paddingVertical: 12,
+  },
+  draftBtnText: { color: colors.blue, fontWeight: '700', fontSize: 14 },
   quoteWrap: {
     marginTop: 20, paddingTop: 16, paddingLeft: 12,
     borderTopWidth: 1, borderTopColor: colors.hairline,

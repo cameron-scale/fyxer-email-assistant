@@ -46,9 +46,10 @@ export function claimSession(serverUrl, session) {
   return post(serverUrl, '/auth/claim', { session });
 }
 
-// Fetch the inbox (Inbox folder only, paginated). Returns { emails, refreshToken }.
-export function fetchInbox(serverUrl, refreshToken, limit = 150) {
-  return post(serverUrl, '/inbox', { refreshToken, limit });
+// Fetch a mailbox folder (inbox | sent | drafts | archive). Returns
+// { emails, refreshToken }.
+export function fetchInbox(serverUrl, refreshToken, limit = 50, folder = 'inbox') {
+  return post(serverUrl, '/inbox', { refreshToken, limit, folder });
 }
 
 // Fetch one message's full body on demand. Returns { body }.
@@ -60,6 +61,28 @@ export function fetchMessageBody(serverUrl, refreshToken, id) {
 // { summaries: { id: tldr } }.
 export function summarizeEmails(serverUrl, items) {
   return post(serverUrl, '/summarize', { items });
+}
+
+// Search the whole mailbox via Graph. Returns { emails }.
+export function searchMail(serverUrl, refreshToken, q) {
+  return post(serverUrl, '/search', { refreshToken, q });
+}
+
+// Save a draft to the Outlook Drafts folder. Returns { id }.
+export function saveDraft(serverUrl, payload) {
+  return post(serverUrl, '/draft-save', payload);
+}
+
+// Ask Claude for writing suggestions on a draft. Returns { suggestions, improved }.
+export function suggestEdits(serverUrl, body, context) {
+  return post(serverUrl, '/suggest', { body, context });
+}
+
+// Current month's AI usage vs cap. Returns { total, cap, ... }.
+export async function fetchUsage(serverUrl) {
+  const res = await fetch(`${base(serverUrl)}/usage`);
+  if (!res.ok) throw new Error('usage unavailable');
+  return res.json();
 }
 
 // Ask Claude to write a reply. Returns { text }.

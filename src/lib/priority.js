@@ -95,9 +95,14 @@ function categorize(haystack, signals) {
 export function scoreEmail(email, options = {}) {
   const vips = options.vips || [];
   const sender = parseSender(email.from || email.sender || '');
-  const haystack = `${email.subject || ''} ${email.body || email.snippet || ''}`.toLowerCase();
+  // Categorize from the STABLE preview (never the full body, which loads later and
+  // would otherwise flip an email's category when you open it). Falls back to body.
+  const text = email.preview || email.snippet || email.body || '';
+  const haystack = `${email.subject || ''} ${text}`.toLowerCase();
   const senderStr = `${sender.name} ${sender.email}`.toLowerCase();
   const isVip = vips.includes(sender.email);
+  // Outlook's own Focused/Other verdict: 'other' is a strong newsletter/noise hint.
+  const inferredOther = email.inferred === 'other' && !isVip;
 
   let score = 0;
   const reasons = [];
@@ -116,7 +121,7 @@ export function scoreEmail(email, options = {}) {
   }
 
   // A direct question usually wants a reply.
-  const isQuestion = `${email.subject} ${email.body || ''}`.includes('?');
+  const isQuestion = `${email.subject} ${text}`.includes('?');
   if (isQuestion) {
     score += 12;
     reasons.push('Asks a question');
@@ -128,8 +133,8 @@ export function scoreEmail(email, options = {}) {
     reasons.unshift('⭐ VIP sender');
   }
 
-  // Addressed to you personally (your first name appears) — lightweight check.
-  if (email.body && /\b(hi|hey|hello|dear)\b/i.test(email.body.slice(0, 60))) {
+  // Addressed to you personally (a greeting near the top) — lightweight check.
+  if (text && /\b(hi|hey|hello|dear)\b/i.test(text.slice(0, 60))) {
     score += 6;
   }
 
@@ -151,7 +156,11 @@ export function scoreEmail(email, options = {}) {
   if (noisySender) {
     score -= 22;
   }
-  if (noiseHits || noisySender) {
+  // Outlook filed it as "Other" — treat it like automated/bulk mail.
+  if (inferredOther) {
+    score -= 24;
+  }
+  if (noiseHits || noisySender || inferredOther) {
     reasons.push('Looks automated / promotional');
   }
 
@@ -163,8 +172,9 @@ export function scoreEmail(email, options = {}) {
   }
 
   // --- Decide the bucket from the final score ---
+  // "Other" mail (newsletters/bulk) is never urgent, regardless of buzzwords.
   let bucket;
-  if (urgentHits >= 1 && !noisySender) {
+  if (urgentHits >= 1 && !noisySender && !inferredOther) {
     bucket = 'urgent';
   } else if (score >= 30) {
     bucket = 'important';
@@ -175,7 +185,7 @@ export function scoreEmail(email, options = {}) {
   }
 
   const category = categorize(haystack, {
-    noisySender,
+    noisySender: noisySender || inferredOther,
     isQuestion,
     importantHits,
     looksHuman,

@@ -42,6 +42,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── AI usage meter (monthly) — keeps spend visible against a free-tier cap ─────
+const AI_CAP = parseInt(process.env.AI_CAP || '1000', 10);
+let usage = { month: new Date().toISOString().slice(0, 7), summaries: 0, drafts: 0, signatures: 0, suggests: 0 };
+function bumpUsage(kind, n = 1) {
+  const m = new Date().toISOString().slice(0, 7);
+  if (usage.month !== m) usage = { month: m, summaries: 0, drafts: 0, signatures: 0, suggests: 0 };
+  usage[kind] = (usage[kind] || 0) + n;
+}
+app.get('/usage', (_req, res) => {
+  const total = usage.summaries + usage.drafts + usage.signatures + usage.suggests;
+  res.json({ ...usage, total, cap: AI_CAP });
+});
+
 // ── Config ───────────────────────────────────────────────────────────────────
 const MS_CLIENT_ID = process.env.MS_CLIENT_ID || '';
 const MS_CLIENT_SECRET = process.env.MS_CLIENT_SECRET || '';
@@ -70,7 +83,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-8',
+    version: 'debug-9',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -265,7 +278,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-8', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-9', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -279,7 +292,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-8',
+    version: 'debug-9',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -388,47 +401,69 @@ async function accessTokenFromRefresh(refreshToken) {
   return { accessToken: data.access_token, refreshToken: data.refresh_token || refreshToken };
 }
 
-// ── 2. Inbox fetch (Graph) ───────────────────────────────────────────────────
-// Pulls ONLY the Inbox folder (not Archive/Sent/etc.), newest first, and pages
-// through Graph until it has `limit` messages — so years of mail are reachable.
-// No AI here: fetching is FREE. Summaries are a separate, cached step (/summarize)
-// so reloading the inbox never re-bills AI credits.
+// A Graph GET with a hard timeout so a slow call can't hang the request for 30s.
+async function graphGet(url, accessToken, timeoutMs = 15000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: ctrl.signal });
+  } finally { clearTimeout(timer); }
+}
+
+const WELL_KNOWN_FOLDER = { inbox: 'inbox', sent: 'sentitems', drafts: 'drafts', archive: 'archive' };
+
+// ── 2. Mailbox fetch (Graph) ─────────────────────────────────────────────────
+// Pulls one folder (Inbox by default; also Sent/Drafts/Archive), newest first.
+// Fast + resilient: pages up to `limit`, but if a later page fails or times out
+// it returns what it already has instead of failing the whole load. No AI here —
+// fetching is FREE; summaries are a separate cached step (/summarize).
 app.post('/inbox', async (req, res) => {
   try {
-    const { refreshToken, limit } = req.body || {};
-    const want = Math.min(Math.max(parseInt(limit, 10) || 150, 1), 1000);
+    const { refreshToken, limit, folder } = req.body || {};
+    const want = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 300);
+    const fkey = WELL_KNOWN_FOLDER[String(folder || 'inbox').toLowerCase()] || 'inbox';
+    const outgoing = fkey === 'sentitems' || fkey === 'drafts';
     const { accessToken, refreshToken: newRt } = await accessTokenFromRefresh(refreshToken);
 
     const pageSize = Math.min(want, 50); // Graph caps $top at 50 for messages
     let url =
-      `${GRAPH}/me/mailFolders/inbox/messages?$top=${pageSize}` +
-      `&$select=subject,from,bodyPreview,receivedDateTime,isRead,flag` +
+      `${GRAPH}/me/mailFolders/${fkey}/messages?$top=${pageSize}` +
+      `&$select=subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification` +
       `&$orderby=receivedDateTime desc`;
     const raw = [];
     while (url && raw.length < want) {
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error?.message || 'Graph fetch failed');
+      let data;
+      try {
+        const r = await graphGet(url, accessToken);
+        data = await r.json();
+        if (!r.ok) throw new Error(data.error?.message || 'Graph fetch failed');
+      } catch (pageErr) {
+        if (raw.length === 0) throw pageErr; // nothing yet → surface the error
+        break; // got some → return partial rather than fail the whole load
+      }
       raw.push(...(data.value || []));
       url = data['@odata.nextLink'] || null;
     }
 
-    const emails = raw.slice(0, want).map((m) => ({
-      id: m.id,
-      account: 'outlook',
-      from: m.from?.emailAddress
-        ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>`
-        : '',
-      subject: m.subject || '(no subject)',
-      // bodyPreview keeps the payload light across hundreds of messages; the full
-      // body is fetched on demand when an email is opened (/message).
-      body: stripHtml(m.bodyPreview || ''),
-      date: m.receivedDateTime || new Date().toISOString(),
-      read: !!m.isRead,
-      flagged: m.flag?.flagStatus === 'flagged',
-    }));
+    const emails = raw.slice(0, want).map((m) => {
+      // For Sent/Drafts show who it's TO; otherwise show who it's FROM.
+      const party = outgoing ? m.toRecipients?.[0]?.emailAddress : m.from?.emailAddress;
+      return {
+        id: m.id,
+        account: 'outlook',
+        folder: fkey,
+        from: party ? `${party.name || party.address} <${party.address}>` : (outgoing ? 'Me' : ''),
+        subject: m.subject || '(no subject)',
+        body: stripHtml(m.bodyPreview || ''),
+        preview: stripHtml(m.bodyPreview || ''), // stable text for categorization
+        date: m.receivedDateTime || new Date().toISOString(),
+        read: !!m.isRead,
+        flagged: m.flag?.flagStatus === 'flagged',
+        inferred: m.inferenceClassification || null, // 'focused' | 'other'
+      };
+    });
 
-    record({ stage: 'inbox_success', count: emails.length });
+    record({ stage: 'inbox_success', folder: fkey, count: emails.length });
     res.json({ emails, refreshToken: newRt });
   } catch (e) {
     record({ stage: 'inbox_error', message: e.message, detail: e.detail || null });
@@ -453,6 +488,62 @@ app.post('/message', async (req, res) => {
   }
 });
 
+// ── Whole-mailbox search (Graph $search across all folders) ──────────────────
+app.post('/search', async (req, res) => {
+  try {
+    const { refreshToken, q } = req.body || {};
+    const query = String(q || '').trim();
+    if (!query) return res.json({ emails: [] });
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    // $search uses KQL and can't be combined with $orderby (results come ranked).
+    const url = `${GRAPH}/me/messages?$search=${encodeURIComponent(`"${query}"`)}&$top=50` +
+      `&$select=subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification`;
+    const r = await graphGet(url, accessToken);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || 'Graph search failed');
+    const emails = (data.value || []).map((m) => ({
+      id: m.id,
+      account: 'outlook',
+      from: m.from?.emailAddress ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>` : '',
+      subject: m.subject || '(no subject)',
+      body: stripHtml(m.bodyPreview || ''),
+      preview: stripHtml(m.bodyPreview || ''),
+      date: m.receivedDateTime || new Date().toISOString(),
+      read: !!m.isRead,
+      flagged: m.flag?.flagStatus === 'flagged',
+      inferred: m.inferenceClassification || null,
+    }));
+    record({ stage: 'search_ok', count: emails.length });
+    res.json({ emails });
+  } catch (e) {
+    record({ stage: 'search_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── Save a draft to the Outlook Drafts folder ────────────────────────────────
+app.post('/draft-save', async (req, res) => {
+  try {
+    const { refreshToken, toEmail, subject, html, body } = req.body || {};
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const content = html ? { contentType: 'HTML', content: html } : { contentType: 'Text', content: body || '' };
+    const message = { subject: subject || '(no subject)', body: content };
+    if (toEmail) message.toRecipients = [{ emailAddress: { address: toEmail } }];
+    const r = await fetch(`${GRAPH}/me/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(message),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error?.message || 'draft save failed');
+    record({ stage: 'draft_save_ok' });
+    res.json({ id: data.id });
+  } catch (e) {
+    record({ stage: 'draft_save_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // ── 3. Cheap, cacheable TL;DR summaries ──────────────────────────────────────
 // The app sends ONLY emails it hasn't cached yet, so each message is summarized
 // at most once, ever. Brief + direct: what it's about and why it matters.
@@ -464,7 +555,9 @@ app.post('/summarize', async (req, res) => {
     const summaries = await aiSummarize(items.map((i) => ({
       id: i.id, from: i.from, subject: i.subject, body: i.preview || i.body || '',
     })));
-    record({ stage: 'summarize_ok', count: Object.keys(summaries).length, ms: Date.now() - started });
+    const n = Object.keys(summaries).length;
+    bumpUsage('summaries', n);
+    record({ stage: 'summarize_ok', count: n, ms: Date.now() - started });
     res.json({ summaries });
   } catch (e) {
     record({ stage: 'summarize_error', message: e.message });
@@ -477,10 +570,45 @@ app.post('/draft', async (req, res) => {
   try {
     const { subject, body, senderName, tone = 'professional', signature = 'Cameron' } = req.body || {};
     const text = await aiDraft({ subject, body, senderName, tone, signature });
+    bumpUsage('drafts');
     record({ stage: 'draft_ok' });
     res.json({ text });
   } catch (e) {
     record({ stage: 'draft_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── 4c. AI writing suggestions for a compose draft ───────────────────────────
+app.post('/suggest', async (req, res) => {
+  try {
+    const { body, context } = req.body || {};
+    if (!ANTHROPIC_API_KEY) return res.status(400).json({ error: 'AI not configured (set ANTHROPIC_API_KEY).' });
+    if (!String(body || '').trim()) return res.json({ suggestions: [], improved: '' });
+    const msg = await anthropic().messages.create({
+      model: AI_MODEL,
+      max_tokens: 1600,
+      system:
+        'You are an expert writing coach for professional email. Given an email DRAFT, ' +
+        'reply with ONLY JSON (no code fences): ' +
+        '{"suggestions":[{"type":"grammar|spelling|clarity|tone|persuasion",' +
+        '"issue":"short problem","advice":"how to fix it","original":"the exact substring ' +
+        'from the draft to replace (verbatim, or empty if not a simple swap)","replacement":' +
+        '"the text to replace it with (empty if not a simple swap)"}],"improved":"the full ' +
+        'improved email body"}. Cover grammar, spelling, conciseness, tone (flag if it reads ' +
+        'too aggressive), and stronger persuasion/sales wording. When a fix is a clear phrase ' +
+        'swap, fill original+replacement with verbatim text from/for the draft. Preserve the ' +
+        'writer\'s voice and meaning. Max 6 suggestions.',
+      messages: [{ role: 'user', content: `Context: ${context || 'general professional email'}\n\nDRAFT:\n${String(body).slice(0, 4000)}` }],
+    });
+    let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+    text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
+    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    bumpUsage('suggests');
+    record({ stage: 'suggest_ok', n: (parsed.suggestions || []).length });
+    res.json({ suggestions: parsed.suggestions || [], improved: parsed.improved || '', model: AI_MODEL });
+  } catch (e) {
+    record({ stage: 'suggest_error', message: e.message });
     res.status(400).json({ error: e.message });
   }
 });
@@ -546,6 +674,7 @@ app.post('/signature/generate', async (req, res) => {
     });
     let html = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
     html = html.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim(); // strip any stray fences
+    bumpUsage('signatures');
     record({ stage: 'sig_generate_ok', style, ms: Date.now() - started });
     res.json({ html });
   } catch (e) {

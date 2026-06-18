@@ -2,12 +2,13 @@
 // the ScaleMail mockup: profile card, storage bar, and preference rows. The
 // "Email Signature" and "Account" rows jump to the full Settings tab.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, gradients } from '../theme';
 import { useStore } from '../store';
+import { fetchUsage } from '../lib/backend';
 
 function Toggle({ value, onChange }) {
   return (
@@ -32,10 +33,20 @@ function Row({ icon, bg, color, title, onPress, right }) {
 }
 
 export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect }) {
-  const { vips } = useStore();
+  const { vips, prefs } = useStore();
   const [focused, setFocused] = useState(true);
   const [notifs, setNotifs] = useState(true);
   const [junk, setJunk] = useState(true);
+  const [usage, setUsage] = useState(null);
+
+  useEffect(() => {
+    fetchUsage(prefs.serverUrl).then(setUsage).catch(() => {});
+  }, [prefs.serverUrl]);
+
+  const used = usage?.total ?? 0;
+  const cap = usage?.cap ?? 1000;
+  const pct = Math.min(100, Math.round((used / cap) * 100));
+  const monthName = usage ? new Date(`${usage.month}-01`).toLocaleString('en-US', { month: 'long' }) : '';
 
   const go = (fn) => { onClose(); setTimeout(fn, 260); };
   const chevron = <Ionicons name="chevron-forward" size={16} color={colors.ink4} />;
@@ -53,9 +64,17 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect })
       </View>
 
       <View style={styles.storage}>
-        <Text style={styles.storageLabel}>Mailbox storage · 6.9 GB of 15 GB used</Text>
-        <View style={styles.bar}><View style={styles.fill} /></View>
-        <Text style={styles.storageNums}>6.9 GB used · 8.1 GB available</Text>
+        <Text style={styles.storageLabel}>
+          AI usage{monthName ? ` · ${monthName}` : ''} · {used} of {cap} calls
+        </Text>
+        <View style={styles.bar}>
+          <View style={[styles.fill, { width: `${pct}%`, backgroundColor: pct > 90 ? '#FF3B30' : colors.blue }]} />
+        </View>
+        <Text style={styles.storageNums}>
+          {usage
+            ? `${usage.summaries} summaries · ${usage.drafts} drafts · ${usage.signatures} signatures · ${usage.suggests} edits`
+            : 'Loading usage…'}
+        </Text>
       </View>
 
       <Text style={styles.section}>Account</Text>
