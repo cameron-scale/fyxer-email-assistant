@@ -4,7 +4,7 @@
 
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, SafeAreaView, Linking,
+  View, Text, StyleSheet, ScrollView, Pressable, SafeAreaView, Linking, Alert, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,7 +13,7 @@ import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { bandFor } from '../lib/bands';
 import { useTourTarget } from '../lib/tour';
-import { quickReplies, isBackendConfigured } from '../lib/backend';
+import { quickReplies, isBackendConfigured, rsvpEvent } from '../lib/backend';
 import SnoozeSheet from '../components/SnoozeSheet';
 import RelationshipSheet from '../components/RelationshipSheet';
 
@@ -41,8 +41,13 @@ const BAND_PALETTE = {
 };
 
 export default function DetailScreen({ params, goBack, navigate }) {
-  const { emails, archive, snooze, snoozeUntil, markRead, toggleVip, loadFullBody, setPalette, prefs, outlookRefresh } = useStore();
-  const email = emails.find((e) => e.id === params.id);
+  const { emails, searchEmails, folderEmails, archive, snooze, snoozeUntil, markRead, toggleVip, loadFullBody, setPalette, prefs, outlookRefresh } = useStore();
+  // The opened email may live in the inbox, a search result, or a browsed folder.
+  const email = emails.find((e) => e.id === params.id)
+    || (searchEmails || []).find((e) => e.id === params.id)
+    || (folderEmails || []).find((e) => e.id === params.id);
+  const [rsvpBusy, setRsvpBusy] = React.useState(false);
+  const [rsvpDone, setRsvpDone] = React.useState(null);
   const [webHeight, setWebHeight] = React.useState(360);
   const [replies, setReplies] = React.useState([]);
   const [showSnooze, setShowSnooze] = React.useState(false);
@@ -73,6 +78,18 @@ export default function DetailScreen({ params, goBack, navigate }) {
     setPalette(email.priority?.isVip ? 'starred' : (BAND_PALETTE[band.key] || 'default'));
     return () => setPalette('default');
   }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // RSVP to a meeting-invite email straight into the Outlook calendar.
+  const doRsvp = async (response) => {
+    if (!email?.invite?.eventId) return;
+    setRsvpBusy(true);
+    try {
+      await rsvpEvent(prefs.serverUrl, outlookRefresh, email.invite.eventId, response);
+      setRsvpDone(response);
+    } catch (e) {
+      Alert.alert('Could not RSVP', e.message || 'Please try again.');
+    } finally { setRsvpBusy(false); }
+  };
 
   // The inbox list only carries a short preview; fetch the full body on open.
   React.useEffect(() => {
@@ -175,6 +192,33 @@ export default function DetailScreen({ params, goBack, navigate }) {
           </Pressable>
         )}
 
+        {/* Inline RSVP for meeting-invite emails — writes to the Outlook calendar */}
+        {!!email.invite?.eventId && !email.invite.isOrganizer && (() => {
+          const answered = rsvpDone
+            || (['accepted', 'declined', 'tentativelyAccepted'].includes(email.invite.response) ? email.invite.response : null);
+          const LABEL = { accept: 'Going', accepted: 'Going', decline: 'Declined', declined: 'Declined', tentative: 'Maybe', tentativelyAccepted: 'Maybe' };
+          return (
+            <View style={styles.rsvpCard}>
+              <View style={styles.rsvpHead}>
+                <Ionicons name="calendar" size={16} color={colors.blue} />
+                <Text style={styles.rsvpTitle}>Meeting invitation</Text>
+                {answered && <Text style={styles.rsvpStatus}>{LABEL[answered] || 'Responded'}</Text>}
+              </View>
+              {rsvpBusy ? (
+                <ActivityIndicator color={colors.blue} style={{ marginTop: 10 }} />
+              ) : !answered ? (
+                <View style={styles.rsvpBtns}>
+                  <Pressable style={[styles.rsvpBtn, styles.rsvpAccept]} onPress={() => doRsvp('accept')}><Text style={styles.rsvpAcceptText}>Accept</Text></Pressable>
+                  <Pressable style={styles.rsvpBtn} onPress={() => doRsvp('tentative')}><Text style={styles.rsvpBtnText}>Maybe</Text></Pressable>
+                  <Pressable style={styles.rsvpBtn} onPress={() => doRsvp('decline')}><Text style={styles.rsvpBtnText}>Decline</Text></Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={() => setRsvpDone(null)}><Text style={styles.rsvpChange}>Change response</Text></Pressable>
+              )}
+            </View>
+          );
+        })()}
+
         {email.bodyHtml ? (
           <WebView
             originWhitelist={['*']}
@@ -269,6 +313,16 @@ const styles = StyleSheet.create({
     shadowColor: '#2D8CFF', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
   },
   joinText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  rsvpCard: { backgroundColor: colors.surface2, borderRadius: 14, padding: 14, marginBottom: 18, borderWidth: 1, borderColor: colors.hairline },
+  rsvpHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  rsvpTitle: { fontSize: 14, fontWeight: '700', color: colors.ink, flex: 1 },
+  rsvpStatus: { fontSize: 13, fontWeight: '700', color: '#1E9E63' },
+  rsvpBtns: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  rsvpBtn: { flex: 1, alignItems: 'center', borderRadius: 10, paddingVertical: 9, backgroundColor: colors.surface3 },
+  rsvpBtnText: { fontSize: 13.5, fontWeight: '700', color: colors.ink2 },
+  rsvpAccept: { backgroundColor: '#1E9E63' },
+  rsvpAcceptText: { fontSize: 13.5, fontWeight: '700', color: '#fff' },
+  rsvpChange: { marginTop: 10, fontSize: 13, fontWeight: '600', color: colors.blue },
   para: { fontFamily: 'Georgia', fontSize: 16, lineHeight: 27, color: colors.ink2, marginBottom: 18 },
   salutation: { color: colors.ink },
   replyBar: {

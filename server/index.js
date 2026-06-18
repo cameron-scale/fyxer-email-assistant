@@ -98,7 +98,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-13',
+    version: 'debug-14',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -301,7 +301,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-13', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-14', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -315,7 +315,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-13',
+    version: 'debug-14',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -654,17 +654,41 @@ app.post('/message', async (req, res) => {
     const { refreshToken, id } = req.body || {};
     if (!id) throw new Error('missing id');
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
-    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime`, {
+    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime,meetingMessageType`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const m = await r.json();
     if (!r.ok) throw new Error(m.error?.message || 'fetch failed');
     const rawHtml = m.body?.contentType === 'html' ? (m.body?.content || '') : '';
     const text = stripHtml(m.body?.content || m.bodyPreview || '');
+
+    // If this email is a meeting invite, look up the linked calendar event so the
+    // app can show Accept / Maybe / Decline inline. Best-effort — never fatal.
+    let invite = null;
+    if (m.meetingMessageType && m.meetingMessageType !== 'none') {
+      try {
+        const er = await fetch(
+          `${GRAPH}/me/messages/${id}/?$expand=microsoft.graph.eventMessage/event($select=id,responseStatus,start,end,location,isOrganizer)`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        const ed = await er.json();
+        const ev = ed?.event;
+        if (er.ok && ev?.id) {
+          invite = {
+            eventId: ev.id,
+            response: ev.responseStatus?.response || 'notResponded',
+            isOrganizer: !!ev.isOrganizer,
+            type: m.meetingMessageType,
+          };
+        }
+      } catch (e) { /* not all invites expose an event — just skip RSVP */ }
+    }
+
     res.json({
       body: text,
       bodyHtml: rawHtml ? sanitizeHtml(rawHtml) : '',
       meeting: detectMeeting(`${m.body?.content || ''} ${text}`),
+      invite,
     });
   } catch (e) {
     res.status(400).json({ error: e.message });

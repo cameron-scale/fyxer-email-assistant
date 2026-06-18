@@ -310,9 +310,9 @@ export function StoreProvider({ children }) {
     const acc = mailAccounts.find((a) => a.id === target.accountId);
     const rt = acc?.refreshToken || outlookRefresh;
     try {
-      const { body, bodyHtml, meeting } = await fetchMessageBody(prefs.serverUrl, rt, id);
+      const { body, bodyHtml, meeting, invite } = await fetchMessageBody(prefs.serverUrl, rt, id);
       setRaw((prev) => prev.map((e) => (
-        e.id === id ? { ...e, body: body || e.body, bodyHtml: bodyHtml || '', meeting: meeting || null, fullBody: true } : e
+        e.id === id ? { ...e, body: body || e.body, bodyHtml: bodyHtml || '', meeting: meeting || null, invite: invite || null, fullBody: true } : e
       )));
     } catch (e) { /* keep the preview if the fetch fails */ }
   }, [raw, outlookRefresh, prefs.serverUrl, mailAccounts]);
