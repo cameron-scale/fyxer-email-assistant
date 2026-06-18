@@ -388,41 +388,86 @@ async function accessTokenFromRefresh(refreshToken) {
   return { accessToken: data.access_token, refreshToken: data.refresh_token || refreshToken };
 }
 
-// ── 2 + 3. Inbox (Graph fetch + AI summaries) ────────────────────────────────
+// ── 2. Inbox fetch (Graph) ───────────────────────────────────────────────────
+// Pulls ONLY the Inbox folder (not Archive/Sent/etc.), newest first, and pages
+// through Graph until it has `limit` messages — so years of mail are reachable.
+// No AI here: fetching is FREE. Summaries are a separate, cached step (/summarize)
+// so reloading the inbox never re-bills AI credits.
 app.post('/inbox', async (req, res) => {
   try {
-    const { refreshToken } = req.body || {};
+    const { refreshToken, limit } = req.body || {};
+    const want = Math.min(Math.max(parseInt(limit, 10) || 150, 1), 1000);
     const { accessToken, refreshToken: newRt } = await accessTokenFromRefresh(refreshToken);
 
-    const url =
-      `${GRAPH}/me/messages?$top=25` +
-      `&$select=subject,from,bodyPreview,body,receivedDateTime,isRead,flag` +
+    const pageSize = Math.min(want, 50); // Graph caps $top at 50 for messages
+    let url =
+      `${GRAPH}/me/mailFolders/inbox/messages?$top=${pageSize}` +
+      `&$select=subject,from,bodyPreview,receivedDateTime,isRead,flag` +
       `&$orderby=receivedDateTime desc`;
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error?.message || 'Graph fetch failed');
+    const raw = [];
+    while (url && raw.length < want) {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error?.message || 'Graph fetch failed');
+      raw.push(...(data.value || []));
+      url = data['@odata.nextLink'] || null;
+    }
 
-    const emails = (data.value || []).map((m) => ({
+    const emails = raw.slice(0, want).map((m) => ({
       id: m.id,
       account: 'outlook',
       from: m.from?.emailAddress
         ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>`
         : '',
       subject: m.subject || '(no subject)',
-      body: stripHtml(m.body?.content || m.bodyPreview || ''),
+      // bodyPreview keeps the payload light across hundreds of messages; the full
+      // body is fetched on demand when an email is opened (/message).
+      body: stripHtml(m.bodyPreview || ''),
       date: m.receivedDateTime || new Date().toISOString(),
       read: !!m.isRead,
       flagged: m.flag?.flagStatus === 'flagged',
     }));
 
-    // Add one-line AI summaries (best-effort; never blocks the inbox).
-    const summaries = await aiSummarize(emails);
-    emails.forEach((e) => { if (summaries[e.id]) e.aiSummary = summaries[e.id]; });
-
     record({ stage: 'inbox_success', count: emails.length });
     res.json({ emails, refreshToken: newRt });
   } catch (e) {
     record({ stage: 'inbox_error', message: e.message, detail: e.detail || null });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Fetch the full body of one message (on demand, when an email is opened).
+app.post('/message', async (req, res) => {
+  try {
+    const { refreshToken, id } = req.body || {};
+    if (!id) throw new Error('missing id');
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const m = await r.json();
+    if (!r.ok) throw new Error(m.error?.message || 'fetch failed');
+    res.json({ body: stripHtml(m.body?.content || m.bodyPreview || '') });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── 3. Cheap, cacheable TL;DR summaries ──────────────────────────────────────
+// The app sends ONLY emails it hasn't cached yet, so each message is summarized
+// at most once, ever. Brief + direct: what it's about and why it matters.
+app.post('/summarize', async (req, res) => {
+  const started = Date.now();
+  try {
+    const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 50) : [];
+    if (!items.length) return res.json({ summaries: {} });
+    const summaries = await aiSummarize(items.map((i) => ({
+      id: i.id, from: i.from, subject: i.subject, body: i.preview || i.body || '',
+    })));
+    record({ stage: 'summarize_ok', count: Object.keys(summaries).length, ms: Date.now() - started });
+    res.json({ summaries });
+  } catch (e) {
+    record({ stage: 'summarize_error', message: e.message });
     res.status(400).json({ error: e.message });
   }
 });
@@ -572,8 +617,9 @@ async function aiSummarize(emails) {
       model: AI_MODEL,
       max_tokens: 1500,
       system:
-        'You summarize work emails for a busy executive. For each email, write ONE tight, ' +
-        'plain sentence (max 18 words) capturing what it is and what it wants. ' +
+        'You write TL;DR previews of work emails for a busy executive. For each email, ' +
+        'write a brief, direct summary (max 2 short lines, ~30 words) covering what it is ' +
+        'about AND why it matters / what it wants. No greetings, no fluff. ' +
         'Reply with ONLY a JSON array of {"id","summary"} — no prose, no code fences.',
       messages: [{ role: 'user', content: JSON.stringify(items) }],
     });

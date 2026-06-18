@@ -20,11 +20,16 @@ function initials(name = '') {
 }
 
 export default function DetailScreen({ params, goBack, navigate }) {
-  const { emails, archive, snooze, markRead, toggleVip } = useStore();
+  const { emails, archive, snooze, markRead, toggleVip, loadFullBody } = useStore();
   const email = emails.find((e) => e.id === params.id);
 
   React.useEffect(() => {
     if (email && email.read === false) markRead(email.id);
+  }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The inbox list only carries a short preview; fetch the full body on open.
+  React.useEffect(() => {
+    if (email && loadFullBody) loadFullBody(email.id);
   }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!email) {

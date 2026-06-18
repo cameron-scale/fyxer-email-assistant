@@ -46,9 +46,20 @@ export function claimSession(serverUrl, session) {
   return post(serverUrl, '/auth/claim', { session });
 }
 
-// Fetch the inbox (with AI summaries). Returns { emails, refreshToken }.
-export function fetchInbox(serverUrl, refreshToken) {
-  return post(serverUrl, '/inbox', { refreshToken });
+// Fetch the inbox (Inbox folder only, paginated). Returns { emails, refreshToken }.
+export function fetchInbox(serverUrl, refreshToken, limit = 150) {
+  return post(serverUrl, '/inbox', { refreshToken, limit });
+}
+
+// Fetch one message's full body on demand. Returns { body }.
+export function fetchMessageBody(serverUrl, refreshToken, id) {
+  return post(serverUrl, '/message', { refreshToken, id });
+}
+
+// Summarize a batch of emails (only send ones not already cached). Returns
+// { summaries: { id: tldr } }.
+export function summarizeEmails(serverUrl, items) {
+  return post(serverUrl, '/summarize', { items });
 }
 
 // Ask Claude to write a reply. Returns { text }.

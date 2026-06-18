@@ -4,12 +4,25 @@
 // as one shared box of data the whole app can reach into.
 
 import React, {
-  createContext, useContext, useCallback, useMemo, useState, useEffect,
+  createContext, useContext, useCallback, useMemo, useState, useEffect, useRef,
 } from 'react';
 import { prioritize } from './lib/priority';
 import { fetchGmail } from './api/gmail';
-import { fetchInbox, DEFAULT_SERVER_URL } from './lib/backend';
+import {
+  fetchInbox, fetchMessageBody, summarizeEmails, DEFAULT_SERVER_URL,
+} from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
+
+// How sorting works. "importance" defers to the on-device priority engine.
+export const SORTS = {
+  'date-desc': 'Newest first',
+  'date-asc': 'Oldest first',
+  'name-asc': 'Sender A–Z',
+  'name-desc': 'Sender Z–A',
+  importance: 'Importance',
+};
+// How many fresh emails to auto-summarize per load (bounds AI cost).
+const SUMMARIZE_CAP = 60;
 
 const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null };
 
@@ -39,6 +52,14 @@ export function StoreProvider({ children }) {
   const [palette, setPaletteState] = useState('default');
   const setPalette = useCallback((name) => setPaletteState(name || 'default'), []);
 
+  // Inbox sort order.
+  const [sortBy, setSortBy] = useState('date-desc');
+
+  // Cached AI TL;DR summaries (id -> text). Cached so reloading never re-bills AI.
+  const [summaries, setSummaries] = useState({});
+  const summariesRef = useRef({});
+  useEffect(() => { summariesRef.current = summaries; }, [summaries]);
+
   // Load saved VIPs + prefs + tokens once when the app starts.
   useEffect(() => {
     (async () => {
@@ -56,17 +77,30 @@ export function StoreProvider({ children }) {
     })();
   }, []);
 
-  // Build the prioritized, filtered list the UI shows.
+  // Build the prioritized, filtered, sorted list the UI shows.
   const emails = useMemo(() => {
     const now = Date.now();
-    const merged = raw.map((e) => ({ ...e, ...(overrides[e.id] || {}) }));
+    const merged = raw.map((e) => ({
+      ...e,
+      ...(overrides[e.id] || {}),
+      aiSummary: e.aiSummary || summaries[e.id], // feed the cached TL;DR into priority.tldr
+    }));
     const visible = merged.filter((e) => {
       if (e.status === 'archived' || e.status === 'done') return false;
       if (e.snoozedUntil && e.snoozedUntil > now) return false;
       return true;
     });
-    return prioritize(visible, vips);
-  }, [raw, overrides, vips]);
+    const ranked = prioritize(visible, vips); // importance order + attaches .priority
+    const byName = (a, b) => (a.priority.senderName || '').localeCompare(b.priority.senderName || '');
+    const byDate = (a, b) => new Date(b.date) - new Date(a.date);
+    const sorted = [...ranked];
+    if (sortBy === 'date-desc') sorted.sort(byDate);
+    else if (sortBy === 'date-asc') sorted.sort((a, b) => -byDate(a, b));
+    else if (sortBy === 'name-asc') sorted.sort(byName);
+    else if (sortBy === 'name-desc') sorted.sort((a, b) => -byName(a, b));
+    // 'importance' keeps the prioritize() order.
+    return sorted;
+  }, [raw, overrides, vips, summaries, sortBy]);
 
   const counts = useMemo(() => {
     const c = { urgent: 0, important: 0, fyi: 0, noise: 0, total: emails.length };
@@ -130,11 +164,37 @@ export function StoreProvider({ children }) {
     });
   }, []);
 
-  // Pull the latest Outlook mail (with AI summaries) from the backend.
+  // Summarize a batch of emails — but ONLY ones we haven't cached yet, capped, so
+  // reloading the inbox is free and the bill stays small.
+  const summarizeBatch = useCallback(async (list) => {
+    const todo = list.filter((e) => !summariesRef.current[e.id]).slice(0, SUMMARIZE_CAP);
+    for (let i = 0; i < todo.length; i += 15) {
+      const chunk = todo.slice(i, i + 15);
+      try {
+        const { summaries: got } = await summarizeEmails(
+          prefs.serverUrl,
+          chunk.map((e) => ({ id: e.id, from: e.from, subject: e.subject, preview: e.body })),
+        );
+        if (got && Object.keys(got).length) setSummaries((s) => ({ ...s, ...got }));
+      } catch (e) { /* summaries are best-effort */ }
+    }
+  }, [prefs.serverUrl]);
+
+  // Load the full body of one email on demand (the list only carries a preview).
+  const loadFullBody = useCallback(async (id) => {
+    const target = raw.find((e) => e.id === id);
+    if (!target || target.account !== 'outlook' || target.fullBody) return;
+    try {
+      const { body } = await fetchMessageBody(prefs.serverUrl, outlookRefresh, id);
+      if (body) setRaw((prev) => prev.map((e) => (e.id === id ? { ...e, body, fullBody: true } : e)));
+    } catch (e) { /* keep the preview if the fetch fails */ }
+  }, [raw, outlookRefresh, prefs.serverUrl]);
+
+  // Pull the latest Outlook mail from the backend (Inbox folder, many messages).
   const loadOutlook = useCallback(async (refreshToken) => {
     const rt = refreshToken || outlookRefresh;
     if (!rt) throw new Error('Outlook not connected');
-    const { emails: fetched, refreshToken: newRt } = await fetchInbox(prefs.serverUrl, rt);
+    const { emails: fetched, refreshToken: newRt } = await fetchInbox(prefs.serverUrl, rt, 200);
     if (newRt && newRt !== rt) {
       await saveToken('outlook_refresh', newRt);
       setOutlookRefresh(newRt);
@@ -144,7 +204,8 @@ export function StoreProvider({ children }) {
       const others = prev.filter((e) => e.account !== 'outlook');
       return [...others, ...fetched];
     });
-  }, [outlookRefresh, prefs.serverUrl]);
+    summarizeBatch(fetched); // fire-and-forget; only summarizes new, uncached mail
+  }, [outlookRefresh, prefs.serverUrl, summarizeBatch]);
 
   // Called after Microsoft login hands back a refresh token.
   const connectOutlook = useCallback(async (refreshToken) => {
@@ -244,6 +305,10 @@ export function StoreProvider({ children }) {
     disconnect,
     palette,
     setPalette,
+    sortBy,
+    setSortBy,
+    summaries,
+    loadFullBody,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

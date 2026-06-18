@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, space, font, radius, gradients } from '../theme';
-import { useStore } from '../store';
+import { useStore, SORTS } from '../store';
 import EmailCard from '../components/EmailCard';
 import SwipeableRow from '../components/SwipeableRow';
 import { dayBucket, longToday } from '../lib/time';
@@ -30,11 +30,12 @@ const FILTERS = [
 const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
 export default function InboxScreen({ navigate, starred, openSheet }) {
-  const { emails, counts, loading, refresh, markDone, archive, accounts, error } = useStore();
+  const { emails, counts, loading, refresh, markDone, archive, accounts, error, sortBy, setSortBy } = useStore();
   const connected = accounts.outlook || accounts.gmail;
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
 
   const q = query.trim().toLowerCase();
   const base = starred ? emails.filter((e) => e.priority.isVip) : emails;
@@ -119,10 +120,34 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                 </Pressable>
               </View>
             ) : (
-              <Pressable style={styles.searchPill} onPress={() => setSearching(true)}>
-                <Ionicons name="search" size={15} color={colors.onDarkFaint} />
-                <Text style={styles.searchText}>Search mail…</Text>
-              </Pressable>
+              <View style={styles.searchRow}>
+                <Pressable style={styles.searchPill} onPress={() => setSearching(true)}>
+                  <Ionicons name="search" size={15} color={colors.onDarkFaint} />
+                  <Text style={styles.searchText}>Search mail…</Text>
+                </Pressable>
+                <Pressable style={styles.sortBtn} onPress={() => setSortOpen((v) => !v)}>
+                  <Ionicons name="swap-vertical" size={18} color="#fff" />
+                </Pressable>
+              </View>
+            )}
+
+            {/* Sort menu */}
+            {sortOpen && !searching && (
+              <View style={styles.sortMenu}>
+                {Object.entries(SORTS).map(([key, label]) => {
+                  const active = sortBy === key;
+                  return (
+                    <Pressable key={key} style={styles.sortItem}
+                      onPress={() => { setSortBy(key); setSortOpen(false); }}>
+                      <Ionicons
+                        name={active ? 'radio-button-on' : 'radio-button-off'}
+                        size={16} color={active ? colors.blue : colors.onDarkFaint}
+                      />
+                      <Text style={[styles.sortItemText, active && { color: '#fff', fontWeight: '700' }]}>{label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             )}
 
             {/* Filter chips */}
@@ -224,11 +249,22 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   searchPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 9,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9,
     backgroundColor: colors.onDarkFill, borderWidth: 1, borderColor: colors.onDarkBorder,
-    borderRadius: 14, paddingVertical: 12, paddingHorizontal: 15, marginBottom: 14,
+    borderRadius: 14, paddingVertical: 12, paddingHorizontal: 15,
   },
   searchText: { fontSize: 14, color: 'rgba(255,255,255,0.3)' },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 14 },
+  sortBtn: {
+    width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.onDarkFill, borderWidth: 1, borderColor: colors.onDarkBorder,
+  },
+  sortMenu: {
+    backgroundColor: '#1A2140', borderRadius: 14, borderWidth: 1, borderColor: colors.onDarkBorder,
+    paddingVertical: 4, marginBottom: 14,
+  },
+  sortItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 14 },
+  sortItemText: { color: 'rgba(255,255,255,0.65)', fontSize: 14 },
   searchActive: {
     flexDirection: 'row', alignItems: 'center', gap: 9,
     backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
