@@ -39,6 +39,12 @@ const NOISE_SENDER_HINTS = [
   'promo', 'no_reply',
 ];
 
+// Map the raw score (~-20..120) to a nuanced 1.0–10.0 urgency rank.
+export function score10(score) {
+  const v = (score + 20) / 140; // -20 -> 0, 120 -> 1
+  return Math.round(Math.max(1, Math.min(10, 1 + v * 9)) * 10) / 10;
+}
+
 function countMatches(text, words) {
   let n = 0;
   for (const w of words) {
@@ -237,6 +243,7 @@ export function scoreEmail(email, options = {}) {
 
   return {
     score,
+    rank: score10(score),                // a nuanced 1–10 urgency score
     bucket,
     category,
     categoryColor,                       // custom category color (null for the built-in 6)

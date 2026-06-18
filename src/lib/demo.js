@@ -3,7 +3,7 @@
 // explicit `band` (so the colors match the tutorial copy exactly), plus an
 // `aiSummary` TL;DR the tour highlights as the AI summary feature.
 
-function mk({ id, name, email, subject, body, category, band, tldr, hoursAgo, bucket = 'fyi' }) {
+function mk({ id, name, email, subject, body, category, band, tldr, hoursAgo, bucket = 'fyi', rank = 5 }) {
   return {
     id,
     account: 'demo',
@@ -17,7 +17,7 @@ function mk({ id, name, email, subject, body, category, band, tldr, hoursAgo, bu
     flagged: false,
     band, // explicit band so demo colors match the tutorial copy
     priority: {
-      score: 50, bucket, category, categoryColor: band.tagColor,
+      score: 50, rank, bucket, category, categoryColor: band.tagColor,
       categories: [{ name: category, color: band.tagColor }],
       isVip: false, reason: 'Demo email', reasons: ['Demo email'],
       senderName: name, senderEmail: email, tldr,
@@ -34,27 +34,27 @@ const EMERALD = { grad: ['#059669', '#065F46'], tagBg: '#E8F8F1', tagColor: '#05
 
 export const DEMO_EMAILS = [
   mk({ id: 'demo-1', name: 'Sarah Chen', email: 'sarah.chen@northwind.com', subject: 'Q2 Revenue Report — Needs Your Sign-off',
-    category: 'Urgent', band: RED, bucket: 'urgent', hoursAgo: 1,
+    category: 'Urgent', band: RED, bucket: 'urgent', hoursAgo: 1, rank: 9.2,
     tldr: 'Board approval needed on Q2 numbers before Friday.',
     body: 'Hi,\n\nThe Q2 revenue report is finalized and needs your sign-off before the board meeting on Friday. Please review the attached numbers and confirm.\n\nThanks,\nSarah' }),
   mk({ id: 'demo-2', name: 'James Whitfield', email: 'james@whitfield.partners', subject: 'Partnership Call — Thursday 2pm',
-    category: 'Meeting', band: INDIGO, bucket: 'important', hoursAgo: 3,
+    category: 'Meeting', band: INDIGO, bucket: 'important', hoursAgo: 3, rank: 7.4,
     tldr: 'Call confirmed for Thursday, Zoom link coming one hour before.',
     body: 'Hi,\n\nConfirming our partnership call for Thursday at 2pm. I will send the Zoom link about an hour before we start.\n\nBest,\nJames' }),
   mk({ id: 'demo-3', name: 'Notion', email: 'team@notion.so', subject: 'Your workspace is ready to explore',
-    category: 'Newsletter', band: TEAL, bucket: 'noise', hoursAgo: 6,
+    category: 'Newsletter', band: TEAL, bucket: 'noise', hoursAgo: 6, rank: 2.1,
     tldr: 'Getting started guide for your new Notion workspace.',
     body: 'Welcome to Notion! Your workspace is ready. Here is a quick getting-started guide to help you explore.' }),
   mk({ id: 'demo-4', name: 'Marcus Lee', email: 'marcus@brightlabs.io', subject: 'Re: Proposal Draft — Final Version',
-    category: 'Client', band: CLIENT, bucket: 'important', hoursAgo: 5,
+    category: 'Client', band: CLIENT, bucket: 'important', hoursAgo: 5, rank: 7.8,
     tldr: 'Approved overall — asks to soften pricing language on page 4.',
     body: 'Hi,\n\nThe proposal looks great overall and we are approved to move ahead. One note: could you soften the pricing language on page 4?\n\nThanks,\nMarcus' }),
   mk({ id: 'demo-5', name: 'Alex Rivera', email: 'alex.rivera@gmail.com', subject: 'Lunch tomorrow?',
-    category: 'To Respond', band: BLUE, bucket: 'fyi', hoursAgo: 8,
+    category: 'To Respond', band: BLUE, bucket: 'fyi', hoursAgo: 8, rank: 5.3,
     tldr: "Wants to know if you're free for lunch noon tomorrow.",
     body: 'Hey! Are you free for lunch around noon tomorrow? Would love to catch up.' }),
   mk({ id: 'demo-6', name: 'Finance Team', email: 'finance@northwind.com', subject: 'Invoice #4821 approved — payment processing',
-    category: 'Finance', band: EMERALD, bucket: 'fyi', hoursAgo: 12,
+    category: 'Finance', band: EMERALD, bucket: 'fyi', hoursAgo: 12, rank: 4.1,
     tldr: '$3,400 payment approved and processing, arrives in 2 to 3 days.',
     body: 'Invoice #4821 for $3,400 has been approved and payment is processing. Funds should arrive in 2 to 3 business days.' }),
 ];

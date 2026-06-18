@@ -35,6 +35,9 @@ function EmailCard({ email, onPress, tagRef }) {
           <Text style={styles.initial}>{initials(p.senderName)}</Text>
         </View>
         <Text style={styles.bandName} numberOfLines={1}>{p.senderName}</Text>
+        {p.rank != null && (
+          <View style={styles.rankPill}><Text style={styles.rankText}>{Number(p.rank).toFixed(1)}</Text></View>
+        )}
         {p.isVip && <Ionicons name="star" size={13} color={colors.star} style={styles.vip} />}
         {unread && <View style={styles.unreadDot} />}
         <Text style={styles.bandTime} numberOfLines={1}>{timeAgo(email.date)}</Text>
@@ -86,6 +89,8 @@ const styles = StyleSheet.create({
   },
   initial: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: -0.5 },
   bandName: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '700' },
+  rankPill: { backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, minWidth: 30, alignItems: 'center' },
+  rankText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   bandTime: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '500', textAlign: 'right' },
   vip: { marginLeft: 2 },
   unreadDot: {
