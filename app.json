@@ -28,6 +28,16 @@
       "expo-secure-store",
       "expo-asset",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9aa7a1ca-aa4e-4597-8eb9-1b1dc575e6f8"
+      }
+    },
+    "owner": "scale-cam",
+    "runtimeVersion": "exposdk:54.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/9aa7a1ca-aa4e-4597-8eb9-1b1dc575e6f8"
+    }
   }
 }
