@@ -30,7 +30,7 @@ const FILTERS = [
 const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
 export default function InboxScreen({ navigate, starred, openSheet }) {
-  const { emails, counts, loading, refresh, markDone, archive, accounts } = useStore();
+  const { emails, counts, loading, refresh, markDone, archive, accounts, error } = useStore();
   const connected = accounts.outlook || accounts.gmail;
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -152,6 +152,13 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                 })}
               </ScrollView>
             )}
+
+            {!!error && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={16} color="#fff" />
+                <Text style={styles.errorText} numberOfLines={3}>{error}</Text>
+              </View>
+            )}
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -252,4 +259,10 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 14, color: 'rgba(255,255,255,0.32)', textAlign: 'center' },
   connectBtn: { marginTop: 16, backgroundColor: colors.blue, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: 24 },
   connectBtnText: { color: '#fff', fontWeight: '800', fontSize: font.body },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: 'rgba(255,92,122,0.18)', borderWidth: 1, borderColor: 'rgba(255,92,122,0.4)',
+    borderRadius: radius.md, padding: 12, marginBottom: 10,
+  },
+  errorText: { color: '#fff', fontSize: 13, flex: 1, lineHeight: 18 },
 });

@@ -12,6 +12,7 @@ import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { suggestReplies } from '../lib/drafts';
 import { aiDraft, sendReply, isBackendConfigured } from '../lib/backend';
+import { composeText, composeHtml } from '../lib/signature';
 import { timeAgo } from '../lib/time';
 
 const TONES = [
@@ -84,7 +85,8 @@ export default function ReplyScreen({ params, goBack }) {
         refreshToken: outlookRefresh,
         toEmail: p.senderEmail,
         subject,
-        body,
+        body: composeText(body, prefs.sig),
+        html: composeHtml(body, prefs.sig),
         inReplyToId: email.id,
       });
       Alert.alert('Sent ✓', `Your reply to ${firstName(p.senderName)} is on its way.`);

@@ -2,23 +2,47 @@
 // Sending is disabled in this read-only preview, so Send just confirms the draft.
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TextInput, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import { useStore } from '../store';
+import { sendReply, isBackendConfigured } from '../lib/backend';
+import { composeText, composeHtml } from '../lib/signature';
 
 export default function ComposeSheet({ onClose }) {
-  const { prefs } = useStore();
+  const { prefs, accounts, outlookRefresh } = useStore();
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const canSend = isBackendConfigured(prefs.serverUrl) && accounts.outlook;
 
-  const send = () => {
+  const send = async () => {
     if (!to.trim()) {
       Alert.alert('Add a recipient', 'Enter who this message is going to first.');
       return;
     }
-    Alert.alert('Draft ready ✓', 'Sending is off in this read-only preview — your message is composed and ready.');
-    onClose();
+    if (!canSend) {
+      Alert.alert('Connect Outlook to send', 'Connect your Outlook account first, then your messages will actually send.');
+      return;
+    }
+    setSending(true);
+    try {
+      // Pull a plain email out of "Name <email>" if needed.
+      const toEmail = (to.match(/[^\s<>]+@[^\s<>]+/) || [to])[0];
+      await sendReply(prefs.serverUrl, {
+        refreshToken: outlookRefresh,
+        toEmail,
+        subject,
+        body: composeText(body, prefs.sig),
+        html: composeHtml(body, prefs.sig),
+      });
+      Alert.alert('Sent ✓', 'Your message is on its way.');
+      onClose();
+    } catch (e) {
+      Alert.alert('Send failed', e.message || 'Please try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -26,7 +50,9 @@ export default function ComposeSheet({ onClose }) {
       <View style={styles.header}>
         <Pressable onPress={onClose} hitSlop={10}><Text style={styles.cancel}>Cancel</Text></Pressable>
         <Text style={styles.title}>New Message</Text>
-        <Pressable onPress={send} style={styles.sendBtn}><Text style={styles.sendText}>Send</Text></Pressable>
+        <Pressable onPress={send} style={styles.sendBtn} disabled={sending}>
+          {sending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.sendText}>Send</Text>}
+        </Pressable>
       </View>
 
       <View style={styles.field}>

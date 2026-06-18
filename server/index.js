@@ -118,6 +118,23 @@ function debugPage(ok, detail) {
   </body>`;
 }
 
+// iOS in-app browsers sometimes hit the callback twice with the same code. The
+// first redemption succeeds; a naive second would fail ("code already used" /
+// malformed). We cache the redemption promise per code so duplicate/concurrent
+// callbacks return the SAME successful result instead of erroring.
+const codeRedemptions = new Map(); // code -> Promise<tokens>
+function redeemCode(code, redirectUriValue) {
+  if (codeRedemptions.has(code)) return codeRedemptions.get(code);
+  const promise = msToken({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: redirectUriValue,
+  });
+  codeRedemptions.set(code, promise);
+  setTimeout(() => codeRedemptions.delete(code), 5 * 60 * 1000).unref?.();
+  return promise;
+}
+
 app.get('/auth/microsoft/callback', async (req, res) => {
   const appRedirect = decodeAppRedirect(req);
   const debug = appRedirect === 'debug';
@@ -131,11 +148,7 @@ app.get('/auth/microsoft/callback', async (req, res) => {
   if (error) return finish(`error=${encodeURIComponent(error_description || error)}`, false, String(error_description || error));
   if (!code) return finish('error=missing_code', false, 'No authorization code was returned by Microsoft.');
   try {
-    const tokens = await msToken({
-      grant_type: 'authorization_code',
-      code: String(code),
-      redirect_uri: redirectUri(req),
-    });
+    const tokens = await redeemCode(String(code), redirectUri(req));
     // Hand the refresh token back to the app. The app stores it securely and sends
     // it to us on each request to mint a fresh access token.
     return finish(
@@ -230,15 +243,20 @@ app.post('/draft', async (req, res) => {
 // ── 5. Send a reply ──────────────────────────────────────────────────────────
 app.post('/send', async (req, res) => {
   try {
-    const { refreshToken, toEmail, subject, body, inReplyToId } = req.body || {};
+    const { refreshToken, toEmail, subject, body, html, inReplyToId } = req.body || {};
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
     const auth = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+    const content = html
+      ? { contentType: 'HTML', content: html }
+      : { contentType: 'Text', content: body || '' };
 
     let r;
     if (inReplyToId) {
       // Reply on the original thread (keeps the conversation together).
+      // /reply requires a draft + send for HTML bodies, so use the message body.
       r = await fetch(`${GRAPH}/me/messages/${inReplyToId}/reply`, {
-        method: 'POST', headers: auth, body: JSON.stringify({ comment: body }),
+        method: 'POST', headers: auth,
+        body: JSON.stringify({ message: { body: content } }),
       });
     } else {
       r = await fetch(`${GRAPH}/me/sendMail`, {
@@ -246,7 +264,7 @@ app.post('/send', async (req, res) => {
         body: JSON.stringify({
           message: {
             subject: subject || '(no subject)',
-            body: { contentType: 'Text', content: body || '' },
+            body: content,
             toRecipients: [{ emailAddress: { address: toEmail } }],
           },
           saveToSentItems: true,

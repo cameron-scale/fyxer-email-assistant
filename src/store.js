@@ -11,7 +11,7 @@ import { fetchGmail } from './api/gmail';
 import { fetchInbox, DEFAULT_SERVER_URL } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null };
 
 const StoreContext = createContext(null);
 

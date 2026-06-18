@@ -4,11 +4,13 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, TextInput,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, space, font, radius, gradients } from '../theme';
 import { useStore } from '../store';
+import { hasSignature } from '../lib/signature';
 
 const TONES = [
   { key: 'professional', label: 'Professional' },
@@ -22,7 +24,8 @@ export default function SettingsScreen({ navigate }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* Profile header */}
         <View style={styles.profileCard}>
           <LinearGradient colors={gradients.avatar} style={styles.profileAv}>
@@ -34,17 +37,19 @@ export default function SettingsScreen({ navigate }) {
           </View>
         </View>
 
-        {/* Signature */}
-        <Text style={styles.sectionLabel}>Your signature</Text>
-        <View style={styles.group}>
-          <TextInput
-            style={styles.input}
-            value={prefs.signature}
-            onChangeText={(t) => setPrefs({ signature: t })}
-            placeholder="Your name"
-            placeholderTextColor={colors.ink4}
-          />
-        </View>
+        {/* Signature builder */}
+        <Text style={styles.sectionLabel}>Email signature</Text>
+        <Pressable style={styles.group} onPress={() => navigate('Signature')}>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: '#F3EEFF' }]}>
+              <Ionicons name="pencil" size={16} color="#7C3AED" />
+            </View>
+            <Text style={styles.rowTitle}>
+              {hasSignature(prefs.sig) ? 'Edit signature' : 'Create your signature'}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.ink4} />
+          </View>
+        </Pressable>
 
         {/* Backend server */}
         <Text style={styles.sectionLabel}>Backend server URL</Text>
@@ -120,6 +125,7 @@ export default function SettingsScreen({ navigate }) {
           </Text>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
