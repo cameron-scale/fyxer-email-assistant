@@ -220,7 +220,7 @@ function webPreviewHtml(sig) {
     `</body></html>`;
 }
 
-export default function SignatureScreen({ goBack }) {
+export default function SignatureScreen({ goBack, navigate }) {
   const { prefs, setPrefs } = useStore();
   const [sig, setSig] = useState({ ...EMPTY_SIG, name: prefs.signature || '', ...(prefs.sig || {}) });
   const [uploading, setUploading] = useState(false);
@@ -243,7 +243,7 @@ export default function SignatureScreen({ goBack }) {
     try {
       const { html } = await aiGenerateSignature(serverUrl, styleKey, signatureDetails(sig));
       if (!html) throw new Error('No signature returned');
-      setSig((s) => ({ ...s, html, style: styleKey }));
+      setSig((s) => ({ ...s, html, style: styleKey, blocks: undefined }));
     } catch (e) {
       reportClientEvent(serverUrl, 'error', 'sig_generate_failed', { style: styleKey, msg: e.message });
       Alert.alert('Could not design it', e.message || 'Please try again in a moment.');
@@ -377,13 +377,20 @@ export default function SignatureScreen({ goBack }) {
             </Pressable>
           )}
 
+          {/* Canva-style manual editor */}
+          <Pressable style={styles.editBtn} onPress={() => { setPrefs({ sig, signature: sig.name || prefs.signature }); navigate && navigate('SignatureEditor'); }}>
+            <Ionicons name="construct-outline" size={16} color="#fff" />
+            <Text style={styles.editBtnText}>Edit manually (blocks, fonts, buttons, colors)</Text>
+          </Pressable>
+          {!!(sig.blocks && sig.blocks.length) && <Text style={styles.hint}>You have a custom block layout — it overrides the styles above. Pick a style/layout to drop it.</Text>}
+
           {/* Simple built-in layouts (no AI needed) */}
           <Text style={styles.section}>Basic layouts</Text>
           <View style={styles.templateGrid}>
             {TEMPLATES.map((tpl) => {
               const active = !sig.html && templateKey(sig) === tpl.key;
               return (
-                <Pressable key={tpl.key} onPress={() => set({ layout: tpl.key, html: '', style: '' })}
+                <Pressable key={tpl.key} onPress={() => set({ layout: tpl.key, html: '', style: '', blocks: undefined })}
                   style={[styles.tplCard, active && styles.tplCardActive]}>
                   <Text style={[styles.tplName, active && styles.tplNameActive]}>{tpl.label}</Text>
                   <Text style={[styles.tplBlurb, active && styles.tplBlurbActive]}>{tpl.blurb}</Text>
@@ -559,6 +566,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blueLight, borderRadius: 12, paddingVertical: 11,
   },
   regenText: { color: colors.blue, fontWeight: '700', fontSize: 14, textTransform: 'capitalize' },
+  editBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 18,
+    backgroundColor: colors.ink, borderRadius: 12, paddingVertical: 13,
+  },
+  editBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
   swatches: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },

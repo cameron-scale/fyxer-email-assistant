@@ -240,10 +240,85 @@ export function signatureDetails(sig) {
   return out;
 }
 
+// ── Block editor (Canva-style manual editing) ────────────────────────────────
+export const FONTS = ['Arial', 'Helvetica', 'Georgia', 'Times', 'Verdana'];
+const FONT_STACK = {
+  Arial: 'Arial,Helvetica,sans-serif',
+  Helvetica: 'Helvetica,Arial,sans-serif',
+  Georgia: 'Georgia,serif',
+  Times: "'Times New Roman',Times,serif",
+  Verdana: 'Verdana,Geneva,sans-serif',
+};
+export const BLOCK_TYPES = ['text', 'contact', 'social', 'photo', 'button', 'divider', 'spacer'];
+const newBlockId = () => Math.random().toString(36).slice(2, 9);
+
+// Seed an editable block list from the user's structured details.
+export function defaultBlocks(sig) {
+  const b = [];
+  if (photoSource(sig)) b.push({ id: newBlockId(), type: 'photo', style: { align: 'left', size: 64, radius: 50, marginBottom: 8 } });
+  if (sig.name) b.push({ id: newBlockId(), type: 'text', text: sig.name, style: { font: 'Arial', size: 18, bold: true, color: '#111111', align: 'left' } });
+  const role = [sig.title, sig.company].filter(Boolean).join(', ');
+  if (role) b.push({ id: newBlockId(), type: 'text', text: role, style: { font: 'Arial', size: 13, color: '#555555', marginTop: 2 } });
+  if (sig.tagline) b.push({ id: newBlockId(), type: 'text', text: sig.tagline, style: { font: 'Arial', size: 12, italic: true, color: '#888888', marginTop: 4 } });
+  b.push({ id: newBlockId(), type: 'divider', style: { color: sig.accent || '#0071E3', marginTop: 8, marginBottom: 8 } });
+  if (sig.phone || sig.email || sig.website || sig.location) b.push({ id: newBlockId(), type: 'contact', style: { marginTop: 0 } });
+  if (socialItems(sig).length) b.push({ id: newBlockId(), type: 'social', style: { marginTop: 8 } });
+  return b;
+}
+export function emptyBlock(type, sig) {
+  const accent = sig?.accent || '#0071E3';
+  if (type === 'button') return { id: newBlockId(), type, label: 'Book a call', url: '', bg: accent, color: '#ffffff', radius: 8, style: { align: 'left', size: 14, marginTop: 8, marginBottom: 8 } };
+  if (type === 'divider') return { id: newBlockId(), type, style: { color: '#e0e0e6', marginTop: 8, marginBottom: 8 } };
+  if (type === 'spacer') return { id: newBlockId(), type, style: { size: 14 } };
+  if (type === 'text') return { id: newBlockId(), type, text: 'New text', link: '', style: { font: 'Arial', size: 14, color: '#333333', align: 'left' } };
+  return { id: newBlockId(), type, style: { align: 'left', marginTop: 4, marginBottom: 4 } };
+}
+
+function blockTextStyle(s = {}) {
+  const css = [`font-family:${FONT_STACK[s.font] || FONT_STACK.Arial}`];
+  if (s.size) css.push(`font-size:${s.size}px`);
+  if (s.color) css.push(`color:${s.color}`);
+  css.push(`text-align:${s.align || 'left'}`);
+  if (s.bold) css.push('font-weight:700');
+  if (s.italic) css.push('font-style:italic');
+  css.push(`line-height:1.4;margin:${s.marginTop || 0}px 0 ${s.marginBottom || 0}px 0`);
+  return css.join(';');
+}
+
+export function blocksToHtml(sig) {
+  const blocks = sig.blocks || [];
+  if (!blocks.length) return '';
+  const accent = sig.accent || '#0071E3';
+  const parts = blocks.map((b) => {
+    const st = b.style || {};
+    const align = st.align || 'left';
+    if (b.type === 'divider') return `<div style="border-top:1px solid ${st.color || '#e0e0e6'};margin:${st.marginTop || 8}px 0 ${st.marginBottom || 8}px 0"></div>`;
+    if (b.type === 'spacer') return `<div style="height:${st.size || 12}px;line-height:${st.size || 12}px;font-size:0">&nbsp;</div>`;
+    if (b.type === 'photo') {
+      const src = photoSource(sig);
+      if (!src) return '';
+      const size = st.size || 72;
+      return `<div style="text-align:${align};margin:${st.marginTop || 0}px 0 ${st.marginBottom || 8}px 0"><img src="${esc(src)}" width="${size}" height="${size}" style="width:${size}px;height:${size}px;border-radius:${st.radius != null ? st.radius : 50}%;object-fit:cover;display:inline-block" alt=""></div>`;
+    }
+    if (b.type === 'button') {
+      const url = cleanUrl(b.url || '#');
+      return `<div style="text-align:${align};margin:${st.marginTop || 8}px 0 ${st.marginBottom || 8}px 0"><a href="${esc(url)}" style="display:inline-block;${FONT_STACK[st.font] ? `font-family:${FONT_STACK[st.font]};` : 'font-family:Arial,sans-serif;'}background:${b.bg || accent};color:${b.color || '#fff'};text-decoration:none;font-weight:700;font-size:${st.size || 14}px;padding:10px 18px;border-radius:${b.radius != null ? b.radius : 8}px">${esc(b.label || 'Button')}</a></div>`;
+    }
+    if (b.type === 'contact') return `<div style="margin:${st.marginTop || 0}px 0 ${st.marginBottom || 0}px 0">${contactsTable(sig, accent)}</div>`;
+    if (b.type === 'social') return `<div style="margin:${st.marginTop || 0}px 0 ${st.marginBottom || 0}px 0">${socialBadges(sig)}</div>`;
+    // text (optionally a single hyperlink)
+    const txt = esc(b.text || '').replace(/\n/g, '<br>');
+    const inner = b.link ? `<a href="${esc(cleanUrl(b.link))}" style="color:${st.color || accent};text-decoration:underline">${txt}</a>` : txt;
+    return `<div style="${blockTextStyle(st)}">${inner}</div>`;
+  });
+  return `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;${FONT_STACK.Arial && `font-family:${FONT_STACK.Arial}`}"><tr><td>${parts.join('')}</td></tr></table>`;
+}
+
 // ── Rendering ─────────────────────────────────────────────────────────────────
 export function signatureHtml(sig) {
-  if (!hasSignature(sig)) return '';
-  // An AI-designed signature wins: use its HTML verbatim.
+  if (!hasSignature(sig) && !(sig && sig.blocks && sig.blocks.length)) return '';
+  // A manually-edited block signature wins, then an AI-designed one, then templates.
+  if (sig.blocks && sig.blocks.length) return blocksToHtml(sig);
   if (sig.html) return sig.html;
   const accent = sig.accent || '#0071E3';
   const src = photoSource(sig);
