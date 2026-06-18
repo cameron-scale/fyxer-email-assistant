@@ -1,5 +1,6 @@
 // SwipeableRow.js — wraps an inbox row so you can swipe it away.
-// Swipe RIGHT = Done, swipe LEFT = Archive. Matches the triage deck's directions.
+// Swipe RIGHT = Snooze, swipe LEFT = Archive. A colored action bleeds in behind
+// the card as you drag, so you see the action before you release.
 // Uses React Native's built-in Animated + PanResponder (no extra libraries), and
 // only claims horizontal drags so vertical list scrolling still works normally.
 
@@ -43,7 +44,7 @@ export default function SwipeableRow({ children, onSwipeRight, onSwipeLeft }) {
     })
   ).current;
 
-  const doneOpacity = x.interpolate({
+  const snoozeOpacity = x.interpolate({
     inputRange: [0, THRESHOLD], outputRange: [0, 1], extrapolate: 'clamp',
   });
   const archiveOpacity = x.interpolate({
@@ -52,10 +53,10 @@ export default function SwipeableRow({ children, onSwipeRight, onSwipeLeft }) {
 
   return (
     <View style={styles.wrap}>
-      {/* Colored backgrounds revealed as you drag */}
-      <Animated.View style={[styles.bg, styles.bgDone, { opacity: doneOpacity }]}>
-        <Ionicons name="checkmark-done" size={22} color="#fff" />
-        <Text style={styles.label}>Done</Text>
+      {/* Colored actions revealed as you drag */}
+      <Animated.View style={[styles.bg, styles.bgSnooze, { opacity: snoozeOpacity }]}>
+        <Ionicons name="time" size={22} color="#fff" />
+        <Text style={styles.label}>Snooze</Text>
       </Animated.View>
       <Animated.View style={[styles.bg, styles.bgArchive, { opacity: archiveOpacity }]}>
         <Text style={styles.label}>Archive</Text>
@@ -76,7 +77,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg, paddingHorizontal: space.lg,
     flexDirection: 'row', alignItems: 'center', gap: 8,
   },
-  bgDone: { backgroundColor: colors.done, justifyContent: 'flex-start' },
+  bgSnooze: { backgroundColor: colors.snooze, justifyContent: 'flex-start' },
   bgArchive: { backgroundColor: colors.archive, justifyContent: 'flex-end' },
   label: { color: '#fff', fontWeight: '800', fontSize: font.body },
 });

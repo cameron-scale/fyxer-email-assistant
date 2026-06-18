@@ -13,6 +13,7 @@ import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { bandFor } from '../lib/bands';
 import { useTourTarget } from '../lib/tour';
+import { quickReplies, isBackendConfigured } from '../lib/backend';
 
 // Wrap raw email HTML in a responsive page for the WebView.
 function emailDocument(html) {
@@ -38,11 +39,24 @@ const BAND_PALETTE = {
 };
 
 export default function DetailScreen({ params, goBack, navigate }) {
-  const { emails, archive, snooze, markRead, toggleVip, loadFullBody, setPalette } = useStore();
+  const { emails, archive, snooze, markRead, toggleVip, loadFullBody, setPalette, prefs } = useStore();
   const email = emails.find((e) => e.id === params.id);
   const [webHeight, setWebHeight] = React.useState(360);
+  const [replies, setReplies] = React.useState([]);
   const actionsRef = useTourTarget('detail.actions');
   const replyRef = useTourTarget('detail.reply');
+
+  // One-tap smart replies (demo emails get static ones so the tour shows them).
+  React.useEffect(() => {
+    if (!email) return;
+    if (email.demo) { setReplies(['Sounds good, I’ll review it today.', 'Can we push to next week?']); return; }
+    if (!isBackendConfigured(prefs?.serverUrl) || email.account !== 'outlook') { setReplies([]); return; }
+    let alive = true;
+    quickReplies(prefs.serverUrl, { subject: email.subject, body: email.body, senderName: email.priority?.senderName })
+      .then((r) => { if (alive) setReplies(r.replies || []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
     if (email && email.read === false) markRead(email.id);
@@ -125,6 +139,18 @@ export default function DetailScreen({ params, goBack, navigate }) {
           )}
         </View>
       </View>
+
+      {/* One-tap smart replies */}
+      {replies.length > 0 && (
+        <View style={styles.repliesRow}>
+          <Ionicons name="sparkles" size={13} color={colors.blue} />
+          {replies.map((r, i) => (
+            <Pressable key={i} style={styles.replyPill} onPress={() => navigate('Reply', { id: email.id, prefill: r })}>
+              <Text style={styles.replyPillText} numberOfLines={1}>{r}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {/* Body */}
       <ScrollView style={styles.bodyScroll} contentContainerStyle={styles.letter} showsVerticalScrollIndicator={false}>
@@ -210,6 +236,12 @@ const styles = StyleSheet.create({
   tldrHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   tldrLabel: { color: colors.blue, fontWeight: '700', fontSize: 12 },
   tldrText: { color: colors.ink2, fontSize: 14, lineHeight: 20 },
+  repliesRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingHorizontal: 20, paddingBottom: 12 },
+  replyPill: {
+    backgroundColor: colors.blueLight, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14,
+    maxWidth: '85%',
+  },
+  replyPillText: { color: colors.blue, fontWeight: '700', fontSize: 13 },
   joinBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: '#2D8CFF', borderRadius: 12, paddingVertical: 13, marginBottom: 18,

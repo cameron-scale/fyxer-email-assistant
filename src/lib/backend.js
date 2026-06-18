@@ -86,6 +86,11 @@ export function saveDraft(serverUrl, payload) {
   return post(serverUrl, '/draft-save', payload);
 }
 
+// Get 2–3 one-tap smart replies for an email. Returns { replies: [string] }.
+export function quickReplies(serverUrl, payload) {
+  return post(serverUrl, '/quick-replies', payload);
+}
+
 // Ask Claude for writing suggestions on a draft. Returns { suggestions, improved }.
 export function suggestEdits(serverUrl, body, context) {
   return post(serverUrl, '/suggest', { body, context });

@@ -34,7 +34,7 @@ const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
 export default function InboxScreen({ navigate, starred, openSheet }) {
   const {
-    emails, counts, loading, refresh, markDone, archive, accounts, error, sortBy, setSortBy,
+    emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
     searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
   } = useStore();
   const connected = accounts.outlook || accounts.gmail;
@@ -241,7 +241,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
           return (
             <View ref={isFirst ? firstCardRef : undefined} collapsable={false} style={styles.cardWrap}>
               <SwipeableRow
-                onSwipeRight={() => markDone(item.id)}
+                onSwipeRight={() => snooze(item.id)}
                 onSwipeLeft={() => archive(item.id)}
               >
                 <EmailCard email={item} tagRef={isFirst ? firstTagRef : undefined} onPress={() => navigate('Detail', { id: item.id })} />

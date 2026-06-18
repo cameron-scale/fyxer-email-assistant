@@ -28,6 +28,7 @@ function firstName(name = '') {
 }
 
 export default function ReplyScreen({ params, goBack }) {
+  const prefill = params?.prefill;
   const { emails, prefs, setPrefs, accounts, outlookRefresh } = useStore();
   const email = emails.find((e) => e.id === params.id);
   const p = email?.priority;
@@ -39,9 +40,9 @@ export default function ReplyScreen({ params, goBack }) {
     [email?.id, prefs.tone, prefs.signature] // eslint-disable-line
   );
 
-  // Start with a polite greeting scaffold so it reads like an email from the first keystroke.
+  // Start from a tapped smart-reply if provided, else a polite greeting scaffold.
   const [body, setBody] = useState(
-    email ? `Hi ${firstName(p.senderName)},\n\n` : ''
+    email ? (prefill ? `Hi ${firstName(p.senderName)},\n\n${prefill}\n\n` : `Hi ${firstName(p.senderName)},\n\n`) : ''
   );
   const [aiBusy, setAiBusy] = useState(false);
   const [sending, setSending] = useState(false);

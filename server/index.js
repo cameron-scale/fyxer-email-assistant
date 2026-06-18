@@ -715,6 +715,33 @@ app.post('/draft', async (req, res) => {
   }
 });
 
+// ── 4d. One-tap smart reply suggestions ──────────────────────────────────────
+app.post('/quick-replies', async (req, res) => {
+  try {
+    const { subject, body, senderName } = req.body || {};
+    if (!ANTHROPIC_API_KEY) return res.json({ replies: [] });
+    const msg = await anthropic().messages.create({
+      model: AI_MODEL,
+      max_tokens: 300,
+      system:
+        'Given an email, suggest 2-3 very short one-tap replies the recipient could ' +
+        'send (each under 12 words, natural and varied — e.g. an accept, a defer/decline, ' +
+        'and a clarifying question where it fits). Reply with ONLY a JSON array of strings, ' +
+        'no code fences.',
+      messages: [{ role: 'user', content: `From: ${senderName || ''}\nSubject: ${subject || ''}\n\n${String(body || '').slice(0, 1500)}` }],
+    });
+    let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+    text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
+    const arr = JSON.parse(text.slice(text.indexOf('['), text.lastIndexOf(']') + 1));
+    bumpUsage('drafts');
+    record({ stage: 'quickreplies_ok', n: arr.length });
+    res.json({ replies: arr.slice(0, 3).map((s) => String(s)) });
+  } catch (e) {
+    record({ stage: 'quickreplies_error', message: e.message });
+    res.json({ replies: [] }); // non-blocking
+  }
+});
+
 // ── 4c. AI writing suggestions for a compose draft ───────────────────────────
 app.post('/suggest', async (req, res) => {
   try {
