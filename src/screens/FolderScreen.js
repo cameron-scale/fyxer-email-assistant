@@ -2,7 +2,7 @@
 // (Junk, Archive, custom folders…). Same cards as the inbox, grouped by day.
 
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, SafeAreaView, SectionList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, SafeAreaView, SectionList, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { useStore } from '../store';
@@ -12,7 +12,7 @@ import { dayBucket, longToday } from '../lib/time';
 const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
 export default function FolderScreen({ goBack, navigate }) {
-  const { folderEmails, currentFolder, folderLoading } = useStore();
+  const { folderEmails, currentFolder, folderLoading, openFolder } = useStore();
   const list = folderEmails || [];
 
   const sections = useMemo(() => {
@@ -42,6 +42,7 @@ export default function FolderScreen({ goBack, navigate }) {
           contentContainerStyle={styles.list}
           stickySectionHeadersEnabled={false}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={folderLoading} onRefresh={() => currentFolder && openFolder(currentFolder)} tintColor="#fff" />}
           renderSectionHeader={({ section }) => <Text style={styles.sectionEyebrow}>{section.title}</Text>}
           renderItem={({ item }) => (
             <View style={styles.cardWrap}>

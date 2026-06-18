@@ -396,12 +396,14 @@ export function StoreProvider({ children }) {
   const openFolder = useCallback(async (folder) => {
     setCurrentFolder(folder);
     if (!folder) return;
-    const rt = (mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0])?.refreshToken || outlookRefresh;
+    const acc = mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0];
+    const rt = acc?.refreshToken || outlookRefresh;
     if (!rt) return;
     setFolderLoading(true);
     try {
       const { emails: fetched } = await fetchInbox(prefs.serverUrl, rt, 50, null, 0, folder.id);
-      const tagged = fetched.map((e) => ({ ...e, folder: folder.id }));
+      // Tag with the owning account so opening a message uses the right token.
+      const tagged = fetched.map((e) => ({ ...e, folder: folder.id, accountId: acc?.id, accountEmail: acc?.email }));
       setRaw((prev) => {
         const others = prev.filter((e) => e.folder !== folder.id);
         return [...others, ...tagged];
