@@ -10,12 +10,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { WebView } from 'react-native-webview';
 import { colors, radius } from '../theme';
 import { useStore } from '../store';
-import { uploadSignatureImage } from '../lib/backend';
+import { uploadSignatureImage, aiGenerateSignature, reportClientEvent } from '../lib/backend';
 import {
-  EMPTY_SIG, ACCENTS, TEMPLATES, SOCIALS, hasSignature, templateKey, photoSource,
-  initials, splitName, contactItems, socialItems,
+  EMPTY_SIG, ACCENTS, TEMPLATES, SOCIALS, AI_STYLES, hasSignature, templateKey, photoSource,
+  initials, splitName, contactItems, socialItems, signatureDetails, composeHtml,
 } from '../lib/signature';
 
 const MAX_DIM = 512;
@@ -207,13 +208,44 @@ function Preview({ sig }) {
   );
 }
 
+// Wrap the real email HTML in a minimal page so the WebView preview is WYSIWYG.
+function webPreviewHtml(sig) {
+  return `<!doctype html><html><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1"></head>` +
+    `<body style="margin:0;padding:16px;background:#fff">${composeHtml('', sig)}</body></html>`;
+}
+
 export default function SignatureScreen({ goBack }) {
   const { prefs, setPrefs } = useStore();
   const [sig, setSig] = useState({ ...EMPTY_SIG, name: prefs.signature || '', ...(prefs.sig || {}) });
   const [uploading, setUploading] = useState(false);
+  const [generating, setGenerating] = useState(null); // style key being generated
   const serverUrl = prefs.serverUrl;
 
-  const set = (patch) => setSig((s) => ({ ...s, ...patch }));
+  // Editing a field invalidates any AI-designed HTML (it was built from old data).
+  const set = (patch) => setSig((s) => {
+    const fieldChange = Object.keys(patch).some((k) => k !== 'html' && k !== 'style' && k !== 'layout' && k !== 'accent');
+    return { ...s, ...patch, ...(fieldChange && s.html ? { html: '', style: '' } : {}) };
+  });
+
+  // Ask Claude to design a signature in this style from the current details.
+  const generate = async (styleKey) => {
+    if (!hasSignature(sig)) {
+      Alert.alert('Add your details first', 'Fill in at least your name so the AI has something to design with.');
+      return;
+    }
+    setGenerating(styleKey);
+    try {
+      const { html } = await aiGenerateSignature(serverUrl, styleKey, signatureDetails(sig));
+      if (!html) throw new Error('No signature returned');
+      setSig((s) => ({ ...s, html, style: styleKey }));
+    } catch (e) {
+      reportClientEvent(serverUrl, 'error', 'sig_generate_failed', { style: styleKey, msg: e.message });
+      Alert.alert('Could not design it', e.message || 'Please try again in a moment.');
+    } finally {
+      setGenerating(null);
+    }
+  };
 
   const pickPhoto = async () => {
     try {
@@ -270,24 +302,63 @@ export default function SignatureScreen({ goBack }) {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.section}>Preview</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.previewScroller}>
-            <View style={styles.previewCard}>
-              <Preview sig={sig} />
-              <View style={styles.previewFooterWrap}>
-                <Text style={styles.previewFooter}>
-                  Sent using <Text style={styles.fScale}>Scale</Text><Text style={styles.fMail}>Mail</Text>, The Best Email Software in Existence
-                </Text>
-              </View>
+          {sig.html ? (
+            <View style={styles.webPreviewCard}>
+              <WebView
+                originWhitelist={['*']}
+                source={{ html: webPreviewHtml(sig) }}
+                style={styles.webview}
+                scrollEnabled
+                scalesPageToFit={false}
+              />
             </View>
-          </ScrollView>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.previewScroller}>
+              <View style={styles.previewCard}>
+                <Preview sig={sig} />
+                <View style={styles.previewFooterWrap}>
+                  <Text style={styles.previewFooter}>
+                    Sent using <Text style={styles.fScale}>Scale</Text><Text style={styles.fMail}>Mail</Text>, The Best Email Software in Existence
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+          )}
           <Text style={styles.footerNote}>Every email signs off with the Scale Mail mark above — automatically.</Text>
 
-          <Text style={styles.section}>Template</Text>
+          {/* AI-designed styles — Claude designs a fresh signature each time */}
+          <Text style={styles.section}>AI signature styles ✨</Text>
+          <Text style={styles.hint}>Tap a style and AI designs a unique signature from your details — it's never a fixed template.</Text>
+          <View style={styles.templateGrid}>
+            {AI_STYLES.map((s) => {
+              const active = sig.style === s.key;
+              const busy = generating === s.key;
+              return (
+                <Pressable key={s.key} onPress={() => generate(s.key)} disabled={!!generating}
+                  style={[styles.tplCard, active && styles.tplCardActive]}>
+                  <View style={styles.tplHead}>
+                    <Text style={[styles.tplName, active && styles.tplNameActive]}>{s.label}</Text>
+                    {busy ? <ActivityIndicator size="small" color={colors.blue} /> : active ? <Ionicons name="sparkles" size={14} color={colors.blue} /> : null}
+                  </View>
+                  <Text style={[styles.tplBlurb, active && styles.tplBlurbActive]}>{busy ? 'Designing…' : s.blurb}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {!!sig.style && (
+            <Pressable style={styles.regenBtn} onPress={() => generate(sig.style)} disabled={!!generating}>
+              <Ionicons name="refresh" size={15} color={colors.blue} />
+              <Text style={styles.regenText}>Regenerate {sig.style}</Text>
+            </Pressable>
+          )}
+
+          {/* Simple built-in layouts (no AI needed) */}
+          <Text style={styles.section}>Basic layouts</Text>
           <View style={styles.templateGrid}>
             {TEMPLATES.map((tpl) => {
-              const active = templateKey(sig) === tpl.key;
+              const active = !sig.html && templateKey(sig) === tpl.key;
               return (
-                <Pressable key={tpl.key} onPress={() => set({ layout: tpl.key })}
+                <Pressable key={tpl.key} onPress={() => set({ layout: tpl.key, html: '', style: '' })}
                   style={[styles.tplCard, active && styles.tplCardActive]}>
                   <Text style={[styles.tplName, active && styles.tplNameActive]}>{tpl.label}</Text>
                   <Text style={[styles.tplBlurb, active && styles.tplBlurbActive]}>{tpl.blurb}</Text>
@@ -427,10 +498,22 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: 'transparent', paddingVertical: 12, paddingHorizontal: 14,
   },
   tplCardActive: { borderColor: colors.blue, backgroundColor: colors.blueLight },
+  tplHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tplName: { fontSize: 14, fontWeight: '700', color: colors.ink },
   tplNameActive: { color: colors.blue },
   tplBlurb: { fontSize: 12, color: colors.ink3, marginTop: 2 },
   tplBlurbActive: { color: colors.blue },
+  webPreviewCard: {
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: colors.hairline,
+    overflow: 'hidden', height: 320,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+  },
+  webview: { flex: 1, backgroundColor: '#fff' },
+  regenBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10,
+    backgroundColor: colors.blueLight, borderRadius: 12, paddingVertical: 11,
+  },
+  regenText: { color: colors.blue, fontWeight: '700', fontSize: 14, textTransform: 'capitalize' },
 
   swatches: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },

@@ -60,3 +60,19 @@ export function aiDraft(serverUrl, payload) {
 export function sendReply(serverUrl, payload) {
   return post(serverUrl, '/send', payload);
 }
+
+// Ask Claude to design a signature in the given style from the user's details.
+// Returns { html }.
+export function aiGenerateSignature(serverUrl, style, details) {
+  return post(serverUrl, '/signature/generate', { style, details });
+}
+
+// Fire-and-forget client telemetry so app-side events show up in /debug/status.
+export function reportClientEvent(serverUrl, level, event, detail) {
+  try {
+    fetch(`${base(serverUrl)}/debug/client-log`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level, event, detail, at: new Date().toISOString() }),
+    }).catch(() => {});
+  } catch (e) {}
+}
