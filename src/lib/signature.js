@@ -304,8 +304,8 @@ export function blocksToHtml(sig) {
       const url = cleanUrl(b.url || '#');
       return `<div style="text-align:${align};margin:${st.marginTop || 8}px 0 ${st.marginBottom || 8}px 0"><a href="${esc(url)}" style="display:inline-block;${FONT_STACK[st.font] ? `font-family:${FONT_STACK[st.font]};` : 'font-family:Arial,sans-serif;'}background:${b.bg || accent};color:${b.color || '#fff'};text-decoration:none;font-weight:700;font-size:${st.size || 14}px;padding:10px 18px;border-radius:${b.radius != null ? b.radius : 8}px">${esc(b.label || 'Button')}</a></div>`;
     }
-    if (b.type === 'contact') return `<div style="margin:${st.marginTop || 0}px 0 ${st.marginBottom || 0}px 0">${contactsTable(sig, accent)}</div>`;
-    if (b.type === 'social') return `<div style="margin:${st.marginTop || 0}px 0 ${st.marginBottom || 0}px 0">${socialBadges(sig)}</div>`;
+    if (b.type === 'contact') return `<div style="text-align:${align};margin:${st.marginTop || 0}px 0 ${st.marginBottom || 0}px 0"><span style="display:inline-block;text-align:left">${contactsTable(sig, accent)}</span></div>`;
+    if (b.type === 'social') return `<div style="text-align:${align};margin:${st.marginTop || 0}px 0 ${st.marginBottom || 0}px 0">${socialBadges(sig)}</div>`;
     // text (optionally a single hyperlink)
     const txt = esc(b.text || '').replace(/\n/g, '<br>');
     const inner = b.link ? `<a href="${esc(cleanUrl(b.link))}" style="color:${st.color || accent};text-decoration:underline">${txt}</a>` : txt;

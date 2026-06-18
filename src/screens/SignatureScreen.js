@@ -380,8 +380,9 @@ export default function SignatureScreen({ goBack, navigate }) {
           {/* Canva-style manual editor */}
           <Pressable style={styles.editBtn} onPress={() => { setPrefs({ sig, signature: sig.name || prefs.signature }); navigate && navigate('SignatureEditor'); }}>
             <Ionicons name="construct-outline" size={16} color="#fff" />
-            <Text style={styles.editBtnText}>Edit manually (blocks, fonts, buttons, colors)</Text>
+            <Text style={styles.editBtnText} numberOfLines={1}>Edit manually</Text>
           </Pressable>
+          <Text style={styles.hint}>Build it block-by-block — fonts, buttons, colors, links. The block editor builds from your details below (an AI design can't be block-edited; switch to a basic layout first to tweak it manually).</Text>
           {!!(sig.blocks && sig.blocks.length) && <Text style={styles.hint}>You have a custom block layout — it overrides the styles above. Pick a style/layout to drop it.</Text>}
 
           {/* Simple built-in layouts (no AI needed) */}

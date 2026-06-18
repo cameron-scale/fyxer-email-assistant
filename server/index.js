@@ -87,7 +87,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-10',
+    version: 'debug-11',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -290,7 +290,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-10', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-11', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -304,7 +304,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-10',
+    version: 'debug-11',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -915,23 +915,57 @@ const SIG_STYLES = {
 };
 const SIG_SYSTEM =
   'You are an expert email-signature designer. You are given a REFERENCE IMAGE of a ' +
-  'signature design and a person\'s real details. Design a NEW HTML email signature that ' +
-  'closely captures the reference\'s layout, color palette, typography and decorative feel, ' +
-  'but uses ONLY the person\'s real details. Hard requirements:\n' +
+  'signature design and a person\'s real details as JSON. Design a NEW HTML email signature ' +
+  'that captures the reference\'s layout, color palette, typography and decorative feel, ' +
+  'but uses ONLY the exact details in the JSON. Hard requirements:\n' +
   '- Output ONLY raw HTML (no markdown, no code fences, no commentary).\n' +
   '- Email-safe HTML ONLY: a single root <table> with inline styles, web-safe fonts ' +
   '(Arial/Helvetica/Georgia), no <style> blocks, no <script>, no external CSS, no JS.\n' +
-  '- If a photo URL is provided, use it in an <img> framed as the reference does. ' +
-  'If NO photo is provided, do NOT leave a blank/broken image area: instead render a ' +
-  'tasteful monogram badge (the person\'s initials in a colored circle using the accent ' +
-  'color) OR a clean, balanced text-only layout. The result must look polished and ' +
-  'intentional with no empty gaps. Keep max width ~520px.\n' +
-  '- Include EVERY field the person provided (name, title, company, tagline, phone, email, ' +
-  'website, location, and any socials) — never drop information. Only omit a field if it is ' +
-  'absent. Never invent data or use lorem ipsum.\n' +
+  '\n' +
+  'STRICT DATA RULES (most important):\n' +
+  '- Use ONLY the literal values present in the JSON. Render EVERY field that is present, ' +
+  'and render NOTHING that is absent.\n' +
+  '- NEVER invent, infer, guess, derive, or fabricate ANY value. In particular: do NOT ' +
+  'derive a website from the email domain; do NOT invent a company name, slogan, tagline, ' +
+  'department, descriptor (e.g. "Business Solutions"), address, phone, or social handle. ' +
+  'If a field is not in the JSON it does NOT exist — leave it out entirely.\n' +
+  '- Do NOT use placeholder, sample, or lorem-ipsum text of any kind.\n' +
+  '- Reproduce each value EXACTLY as given (same spelling/casing of the actual text; you ' +
+  'may style case via CSS text-transform, but never change the words).\n' +
+  '\n' +
+  'PHOTO RULES:\n' +
+  '- If a photoUrl is provided, place it in a plain <img> framed as the reference does ' +
+  '(rounded/circular via border-radius is fine). Show the photo at its NATURAL full color.\n' +
+  '- NEVER alter the photo: no CSS filter, -webkit-filter, mix-blend-mode, opacity below 1, ' +
+  'duotone, color overlay, tint, gradient over the image, or background-blend. The person\'s ' +
+  'face must look exactly like the original photo.\n' +
+  '- If NO photoUrl is provided, do NOT leave a blank/broken image area: render a tasteful ' +
+  'monogram badge (initials in a circle using the accent color) or a clean text-only layout.\n' +
+  '\n' +
+  'QUALITY WITH LIMITED INFO:\n' +
+  '- When few details are provided, prefer a clean, minimal, well-spaced layout. Do NOT pad ' +
+  'empty space with invented content or oversized decoration — restraint over clutter. The ' +
+  'result must look polished and intentional with no empty gaps. Keep max width ~520px.\n' +
+  '\n' +
   '- For icons use simple emoji (📞 ✉️ 🌐 📍) or small colored shapes — never icon fonts.\n' +
-  '- Make links real: tel:, mailto:, and https:// for website/socials.\n' +
-  '- Do NOT add any "sent from" / footer line — that is added separately.';
+  '- Make links real from the provided values only: tel:, mailto:, and https://.\n' +
+  '- NEVER include the words "ScaleMail", "Scale Mail", "Sent using", or "Best Email Software ' +
+  'in Existence", and never add any "sent from" / footer / marketing sign-off line — a footer ' +
+  'is added separately below your output.';
+
+// Belt-and-suspenders cleanup of AI signature HTML: never let a photo filter or
+// the ScaleMail footer slip through even if the model ignores the prompt.
+function sanitizeSignatureHtml(html) {
+  let out = String(html || '');
+  // Strip any image-altering CSS (filters/tints/blends) wherever it appears.
+  out = out.replace(/(?:-webkit-)?filter\s*:[^;"']*;?/gi, '');
+  out = out.replace(/mix-blend-mode\s*:[^;"']*;?/gi, '');
+  out = out.replace(/background-blend-mode\s*:[^;"']*;?/gi, '');
+  // Remove any stray footer / branding line the model may have invented.
+  out = out.replace(/Sent\s+using[\s\S]{0,160}?Best\s+Email\s+Software\s+in\s+Existence/gi, '');
+  out = out.replace(/\bScale\s*Mail\b/gi, '');
+  return out.trim();
+}
 
 app.post('/signature/generate', async (req, res) => {
   const started = Date.now();
@@ -949,12 +983,18 @@ app.post('/signature/generate', async (req, res) => {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: cfg.media, data: imgData } },
-          { type: 'text', text: `Reference style notes: ${cfg.brief}\n\nPerson's details (JSON):\n${JSON.stringify(details || {}, null, 2)}\n\nDesign the signature HTML now.` },
+          { type: 'text', text: `Reference style notes: ${cfg.brief}\n\n` +
+            `Person's details (JSON) — these are the ONLY values that exist. Render every key ` +
+            `present and NOTHING that is absent. Do not add a website, slogan, tagline, or any ` +
+            `text that is not a value below:\n${JSON.stringify(details || {}, null, 2)}\n\n` +
+            `Allowed fields present: ${Object.keys(details || {}).join(', ') || '(none)'}.\n\n` +
+            `Design the signature HTML now using only these values.` },
         ],
       }],
     });
     let html = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
     html = html.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim(); // strip any stray fences
+    html = sanitizeSignatureHtml(html);
     bumpUsage('signatures');
     record({ stage: 'sig_generate_ok', style, ms: Date.now() - started });
     res.json({ html });
