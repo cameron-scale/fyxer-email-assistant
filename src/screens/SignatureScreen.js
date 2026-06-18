@@ -13,7 +13,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { WebView } from 'react-native-webview';
 import { colors, radius } from '../theme';
 import { useStore } from '../store';
-import { uploadSignatureImage, aiGenerateSignature, reportClientEvent } from '../lib/backend';
+import { uploadSignatureImage, deleteSignatureImage, aiGenerateSignature, reportClientEvent } from '../lib/backend';
 import {
   EMPTY_SIG, ACCENTS, TEMPLATES, SOCIALS, AI_STYLES, hasSignature, templateKey, photoSource,
   initials, splitName, contactItems, socialItems, signatureDetails, signatureHtml, SCALEMAIL_FOOTER_HTML,
@@ -275,13 +275,8 @@ export default function SignatureScreen({ goBack }) {
         Alert.alert('Photo is a bit large', 'Try a tighter crop or a simpler logo so it stays light enough to email.');
         return;
       }
+      // Hold the photo locally — it isn't hosted until you press Save.
       set({ photoUri: dataUri, photoUrl: '' });
-      try {
-        const { url } = await uploadSignatureImage(serverUrl, dataUri);
-        if (url) set({ photoUrl: url, photoUri: '' });
-      } catch (e) {
-        Alert.alert('Photo saved on your phone', "We couldn't reach the server to host it, so it'll be embedded in the email instead (may not show in Gmail). You can re-upload later to host it.");
-      }
     } catch (e) {
       Alert.alert('Could not add photo', e.message || 'Please try again.');
     } finally {
@@ -289,8 +284,33 @@ export default function SignatureScreen({ goBack }) {
     }
   };
 
-  const save = () => {
-    setPrefs({ sig, signature: sig.name || prefs.signature });
+  // Pick a previously-saved photo from the gallery (already hosted).
+  const useGalleryPhoto = (url) => set({ photoUrl: url, photoUri: '' });
+  const removeGalleryPhoto = async (url) => {
+    setPrefs({ photoGallery: (prefs.photoGallery || []).filter((u) => u !== url) });
+    if (sig.photoUrl === url) set({ photoUrl: '' });
+    try { await deleteSignatureImage(serverUrl, url); } catch (e) { /* best-effort */ }
+  };
+
+  const save = async () => {
+    let next = sig;
+    // Host the photo now (on Save), and remember it in the gallery.
+    if (sig.photoUri && !sig.photoUrl) {
+      setUploading(true);
+      try {
+        const { url } = await uploadSignatureImage(serverUrl, sig.photoUri);
+        if (url) {
+          next = { ...sig, photoUrl: url, photoUri: '' };
+          const gallery = Array.from(new Set([url, ...(prefs.photoGallery || [])])).slice(0, 24);
+          setPrefs({ photoGallery: gallery });
+        }
+      } catch (e) {
+        Alert.alert('Saved with embedded photo', "We couldn't host the photo, so it's embedded (may not show in Gmail).");
+      } finally {
+        setUploading(false);
+      }
+    }
+    setPrefs({ sig: next, signature: next.name || prefs.signature });
     goBack();
   };
 
@@ -403,9 +423,29 @@ export default function SignatureScreen({ goBack }) {
               )}
             </View>
           </View>
+          <Text style={styles.hint}>The photo is hosted when you press Save — then it's added to your gallery below.</Text>
           <Field label="…or paste an image URL" value={sig.photoUrl}
             onChangeText={(t) => set({ photoUrl: t, photoUri: '' })}
             placeholder="https://…/logo.png" keyboardType="url" autoCapitalize="none" />
+
+          {/* Saved-photos gallery */}
+          {(prefs.photoGallery || []).length > 0 && (
+            <>
+              <Text style={styles.galleryLabel}>Saved photos</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryRow}>
+                {(prefs.photoGallery || []).map((url) => (
+                  <View key={url} style={styles.galleryItem}>
+                    <Pressable onPress={() => useGalleryPhoto(url)} style={[styles.galleryThumbWrap, sig.photoUrl === url && styles.galleryThumbActive]}>
+                      <Image source={{ uri: url }} style={styles.galleryThumb} />
+                    </Pressable>
+                    <Pressable style={styles.galleryDelete} hitSlop={6} onPress={() => removeGalleryPhoto(url)}>
+                      <Ionicons name="close" size={12} color="#fff" />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          )}
 
           <Text style={styles.section}>Details</Text>
           <Field label="Full name" value={sig.name} onChangeText={(t) => set({ name: t })} placeholder="Cameron Gallup" autoCapitalize="words" />
@@ -530,6 +570,16 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.hairline, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   photoThumb: { width: '100%', height: '100%' },
+  galleryLabel: { fontSize: 12, fontWeight: '700', color: colors.ink3, marginTop: 12, marginBottom: 8 },
+  galleryRow: { flexDirection: 'row' },
+  galleryItem: { marginRight: 12, paddingTop: 6, paddingRight: 6 },
+  galleryThumbWrap: { width: 60, height: 60, borderRadius: 12, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent' },
+  galleryThumbActive: { borderColor: colors.blue },
+  galleryThumb: { width: '100%', height: '100%' },
+  galleryDelete: {
+    position: 'absolute', top: 0, right: 0, width: 20, height: 20, borderRadius: 10,
+    backgroundColor: colors.urgent, alignItems: 'center', justifyContent: 'center',
+  },
   uploadBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: colors.blue, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16,

@@ -40,6 +40,14 @@ export function uploadSignatureImage(serverUrl, dataUri) {
   return post(serverUrl, '/upload', { dataUri });
 }
 
+// Delete a hosted gallery image. `url` is the full /img/<file> URL.
+export async function deleteSignatureImage(serverUrl, url) {
+  const file = String(url || '').split('/img/')[1];
+  if (!file) return { ok: false };
+  const res = await fetch(`${base(serverUrl)}/img/${file}`, { method: 'DELETE' });
+  return res.json().catch(() => ({ ok: res.ok }));
+}
+
 // Trade a one-time sign-in session id for the real refresh token, over HTTPS.
 // (The token is too long to survive the deep-link URL intact, so we fetch it.)
 export function claimSession(serverUrl, session) {

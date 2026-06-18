@@ -154,6 +154,14 @@ app.get('/img/:file', (req, res) => {
   fs.createReadStream(full).pipe(res);
 });
 
+// Delete a hosted image (from the user's saved-photos gallery).
+app.delete('/img/:file', (req, res) => {
+  const file = path.basename(String(req.params.file || ''));
+  const full = path.join(UPLOAD_DIR, file);
+  try { if (fs.existsSync(full)) fs.unlinkSync(full); res.json({ ok: true }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+
 // ── 1. Microsoft login ───────────────────────────────────────────────────────
 app.get('/auth/microsoft/start', (req, res) => {
   if (!MS_CLIENT_ID) return res.status(500).send('Server missing MS_CLIENT_ID');
