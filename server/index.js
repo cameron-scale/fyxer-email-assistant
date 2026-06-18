@@ -64,8 +64,10 @@ const AI_MODEL = process.env.AI_MODEL || 'claude-haiku-4-5';
 
 // Where Microsoft sends the user back, and where we then bounce them into the app.
 const APP_REDIRECT = 'brisk://auth';
-// User.ReadWrite lets us set the user's M365 profile photo (what recipients see).
-const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.ReadWrite', 'Mail.Read', 'Mail.Send'];
+// Keep the core scope set to what existing sign-ins consented to (User.Read), so
+// mail keeps loading. Setting the M365 profile photo would need User.ReadWrite and
+// a re-consent; that's an optional opt-in rather than something that breaks login.
+const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.Read', 'Mail.Read', 'Mail.Send'];
 // 'common' = any account (needs the Azure app set to multi-tenant). For a
 // single-tenant app, set MS_TENANT to your Directory (tenant) ID instead.
 const MS_TENANT = process.env.MS_TENANT || 'common';
