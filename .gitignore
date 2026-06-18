@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Locally-hosted signature images (ephemeral)
+uploads/
+server/uploads/

@@ -19,6 +19,8 @@
 
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 
 const app = express();
@@ -54,7 +56,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-5',
+    version: 'debug-6',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -78,6 +80,50 @@ app.get('/debug', (req, res) =>
     forwardedProto: req.headers['x-forwarded-proto'] || null,
   })
 );
+
+// ── Signature image hosting ──────────────────────────────────────────────────
+// The app uploads a (small, pre-resized) signature photo here; we store it and
+// hand back a public https URL. Emailed signatures point an <img> at that URL,
+// which renders everywhere (Gmail included) — unlike inline data: URIs, which
+// Gmail strips. Images are written to disk so they survive a process restart.
+// Note: on Render's free tier the disk is wiped on each *redeploy*, so a photo
+// may need re-uploading after a server update. (Upgrade path: a Render persistent
+// disk, or an object store like Cloudinary/S3 — the API here stays the same.)
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
+try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch (e) {}
+
+const EXT_BY_TYPE = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' };
+const TYPE_BY_EXT = { jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
+const MAX_IMG_BYTES = 500 * 1024;
+
+app.post('/upload', (req, res) => {
+  try {
+    const { dataUri } = req.body || {};
+    const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(String(dataUri || ''));
+    if (!m) return res.status(400).json({ error: 'Expected an image data URI.' });
+    const type = m[1].toLowerCase();
+    const ext = EXT_BY_TYPE[type];
+    if (!ext) return res.status(415).json({ error: 'Unsupported image type.' });
+    const buf = Buffer.from(m[2], 'base64');
+    if (buf.length > MAX_IMG_BYTES) return res.status(413).json({ error: 'Image too large.' });
+    const id = newId();
+    fs.writeFileSync(path.join(UPLOAD_DIR, `${id}.${ext}`), buf);
+    res.json({ url: `${serverUrl(req)}/img/${id}.${ext}` });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'upload failed' });
+  }
+});
+
+app.get('/img/:file', (req, res) => {
+  const file = path.basename(String(req.params.file || '')); // no path traversal
+  const ext = file.split('.').pop().toLowerCase();
+  const type = TYPE_BY_EXT[ext];
+  const full = path.join(UPLOAD_DIR, file);
+  if (!type || !fs.existsSync(full)) return res.status(404).send('not found');
+  res.set('Content-Type', type);
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  fs.createReadStream(full).pipe(res);
+});
 
 // ── 1. Microsoft login ───────────────────────────────────────────────────────
 app.get('/auth/microsoft/start', (req, res) => {
@@ -166,7 +212,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-5', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-6', recentCallbacks }));
 
 app.get('/auth/microsoft/callback', async (req, res) => {
   const appRedirect = decodeAppRedirect(req);

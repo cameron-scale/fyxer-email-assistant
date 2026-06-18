@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { colors, radius } from '../theme';
 import { useStore } from '../store';
+import { uploadSignatureImage } from '../lib/backend';
 import {
   EMPTY_SIG, ACCENTS, TEMPLATES, hasSignature, templateKey, photoSource, initials,
   SCALEMAIL_FOOTER_TEXT,
@@ -167,6 +168,7 @@ export default function SignatureScreen({ goBack }) {
   const { prefs, setPrefs } = useStore();
   const [sig, setSig] = useState({ ...EMPTY_SIG, name: prefs.signature || '', ...(prefs.sig || {}) });
   const [uploading, setUploading] = useState(false);
+  const serverUrl = prefs.serverUrl;
 
   const set = (patch) => setSig((s) => ({ ...s, ...patch }));
 
@@ -197,7 +199,19 @@ export default function SignatureScreen({ goBack }) {
         Alert.alert('Photo is a bit large', 'Try a tighter crop or a simpler logo so it stays light enough to email.');
         return;
       }
+      // Show it instantly from the device, then host it on the server so the
+      // emailed <img> works everywhere (Gmail included). If hosting fails we keep
+      // the embedded copy as a fallback.
       set({ photoUri: dataUri, photoUrl: '' });
+      try {
+        const { url } = await uploadSignatureImage(serverUrl, dataUri);
+        if (url) set({ photoUrl: url, photoUri: '' });
+      } catch (e) {
+        Alert.alert(
+          'Photo saved on your phone',
+          "We couldn't reach the server to host it, so it'll be embedded in the email instead (this may not show in Gmail). You can re-upload later to host it.",
+        );
+      }
     } catch (e) {
       Alert.alert('Could not add photo', e.message || 'Please try again.');
     } finally {
