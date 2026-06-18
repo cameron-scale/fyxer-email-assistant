@@ -98,7 +98,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-12',
+    version: 'debug-13',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -301,7 +301,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-12', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-13', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -315,7 +315,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-12',
+    version: 'debug-13',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -461,9 +461,14 @@ function trimSummaryCache(max = 4000) {
 // Summarize whatever in `emails` isn't cached yet (bounded), then attach
 // `aiSummary` to every email from the cache. Best-effort: never throws.
 const INBOX_SUMMARY_CAP = parseInt(process.env.INBOX_SUMMARY_CAP || '30', 10);
-async function attachSummaries(emails) {
+async function attachSummaries(emails, { summarizeNew = true } = {}) {
   try {
-    const todo = emails.filter((e) => e.id && !summaryCache[e.id]).slice(0, INBOX_SUMMARY_CAP);
+    // Cost control: only spend AI on NEW summaries for the mail the user actually
+    // sees (the first page). Deeper backlog pages still attach any cached summary
+    // but don't generate new ones, so a full-mailbox sync can't drain the AI cap.
+    const todo = summarizeNew
+      ? emails.filter((e) => e.id && !summaryCache[e.id]).slice(0, INBOX_SUMMARY_CAP)
+      : [];
     if (todo.length) {
       const got = await aiSummarize(todo.map((e) => ({ id: e.id, from: e.from, subject: e.subject, body: e.body })));
       const n = Object.keys(got).length;
@@ -546,8 +551,9 @@ app.post('/inbox', async (req, res) => {
     });
 
     // Attach AI TL;DRs (cached) so the cards show real summaries, not raw text.
-    // Only for incoming mail — Sent/Drafts don't need a "why it matters" line.
-    if (!outgoing) await attachSummaries(emails);
+    // Only for incoming mail; only GENERATE new summaries on the first page so the
+    // background full-mailbox sync doesn't burn the AI budget on old backlog.
+    if (!outgoing) await attachSummaries(emails, { summarizeNew: skipN === 0 });
 
     record({ stage: 'inbox_success', folder: fkey, count: emails.length, skip: skipN, unread: unreadCount });
     res.json({ emails, refreshToken: newRt, unreadCount, totalCount, skip: skipN, hasMore: emails.length >= pageSize });

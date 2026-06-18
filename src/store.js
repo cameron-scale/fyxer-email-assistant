@@ -381,7 +381,8 @@ export function StoreProvider({ children }) {
             const add = tagged.filter((e) => !seen.has(e.id));
             return add.length ? [...prev, ...add] : prev;
           });
-          summarizeBatch(tagged);
+          // Deep backlog pages keep any cached summary the server attaches but we
+          // don't request new AI summaries here — that keeps the bill bounded.
         }
         if (!hasMore || !page || page.length < 50) break;
         skip += 50;
