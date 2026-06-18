@@ -471,6 +471,33 @@ app.post('/inbox', async (req, res) => {
   }
 });
 
+// Strip the genuinely dangerous bits but keep formatting + links so the email
+// renders like a real message (scripts/iframes/handlers/js: are the XSS risk).
+function sanitizeHtml(html = '') {
+  return String(html)
+    .replace(/<\s*script[\s\S]*?<\/\s*script\s*>/gi, '')
+    .replace(/<\s*style[\s\S]*?<\/\s*style\s*>/gi, '')
+    .replace(/<\s*(script|iframe|object|embed|link|meta|base)\b[^>]*>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, '');
+}
+
+// Find the first meeting link (Join button) in the message.
+function detectMeeting(s = '') {
+  const text = String(s);
+  const patterns = [
+    { provider: 'Zoom', re: /https?:\/\/[\w.-]*zoom\.us\/[^\s"'<>)]+/i },
+    { provider: 'Microsoft Teams', re: /https?:\/\/teams\.(?:microsoft|live)\.com\/[^\s"'<>)]+/i },
+    { provider: 'Google Meet', re: /https?:\/\/meet\.google\.com\/[^\s"'<>)]+/i },
+    { provider: 'Webex', re: /https?:\/\/[\w.-]*webex\.com\/[^\s"'<>)]+/i },
+  ];
+  for (const p of patterns) {
+    const m = text.match(p.re);
+    if (m) return { provider: p.provider, url: m[0].replace(/&amp;/g, '&') };
+  }
+  return null;
+}
+
 // Fetch the full body of one message (on demand, when an email is opened).
 app.post('/message', async (req, res) => {
   try {
@@ -482,7 +509,13 @@ app.post('/message', async (req, res) => {
     });
     const m = await r.json();
     if (!r.ok) throw new Error(m.error?.message || 'fetch failed');
-    res.json({ body: stripHtml(m.body?.content || m.bodyPreview || '') });
+    const rawHtml = m.body?.contentType === 'html' ? (m.body?.content || '') : '';
+    const text = stripHtml(m.body?.content || m.bodyPreview || '');
+    res.json({
+      body: text,
+      bodyHtml: rawHtml ? sanitizeHtml(rawHtml) : '',
+      meeting: detectMeeting(`${m.body?.content || ''} ${text}`),
+    });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

@@ -4,13 +4,24 @@
 
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, SafeAreaView,
+  View, Text, StyleSheet, ScrollView, Pressable, SafeAreaView, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { WebView } from 'react-native-webview';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { bandFor } from '../lib/bands';
+
+// Wrap raw email HTML in a responsive page for the WebView.
+function emailDocument(html) {
+  return `<!doctype html><html><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<style>body{margin:0;padding:0;font-family:-apple-system,Segoe UI,Arial,sans-serif;` +
+    `font-size:15px;line-height:1.55;color:#1d1d1f;word-wrap:break-word;overflow-wrap:break-word}` +
+    `img{max-width:100%;height:auto}a{color:#0071E3}table{max-width:100%!important}` +
+    `*{max-width:100%;box-sizing:border-box}</style></head><body>${html}</body></html>`;
+}
 
 function initials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -25,6 +36,7 @@ const BAND_PALETTE = { urgent: 'urgent', clients: 'clients', work: 'work', meeti
 export default function DetailScreen({ params, goBack, navigate }) {
   const { emails, archive, snooze, markRead, toggleVip, loadFullBody, setPalette } = useStore();
   const email = emails.find((e) => e.id === params.id);
+  const [webHeight, setWebHeight] = React.useState(360);
 
   React.useEffect(() => {
     if (email && email.read === false) markRead(email.id);
@@ -117,9 +129,36 @@ export default function DetailScreen({ params, goBack, navigate }) {
           </View>
           <Text style={styles.tldrText}>{p.tldr}</Text>
         </View>
-        {(email.body || '').split('\n\n').map((para, i) => (
-          <Text key={i} style={[styles.para, i === 0 && styles.salutation]}>{para}</Text>
-        ))}
+
+        {/* Join meeting button when a Zoom/Teams/Meet/Webex link is detected */}
+        {!!email.meeting?.url && (
+          <Pressable style={styles.joinBtn} onPress={() => Linking.openURL(email.meeting.url)}>
+            <Ionicons name="videocam" size={18} color="#fff" />
+            <Text style={styles.joinText}>Join {email.meeting.provider}</Text>
+            <Ionicons name="open-outline" size={15} color="rgba(255,255,255,0.8)" />
+          </Pressable>
+        )}
+
+        {email.bodyHtml ? (
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: emailDocument(email.bodyHtml) }}
+            style={{ height: webHeight, backgroundColor: 'transparent' }}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            injectedJavaScript={'setTimeout(function(){window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));},60);true;'}
+            onMessage={(e) => { const h = Number(e.nativeEvent.data); if (h && h > 40) setWebHeight(h + 24); }}
+            onShouldStartLoadWithRequest={(r) => {
+              if (r.url === 'about:blank' || r.url.startsWith('data:')) return true;
+              Linking.openURL(r.url).catch(() => {}); // open links in the real browser
+              return false;
+            }}
+          />
+        ) : (
+          (email.body || '').split('\n\n').map((para, i) => (
+            <Text key={i} style={[styles.para, i === 0 && styles.salutation]}>{para}</Text>
+          ))
+        )}
       </ScrollView>
 
       {/* Reply bar — opens the full-screen composer */}
@@ -165,6 +204,12 @@ const styles = StyleSheet.create({
   tldrHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   tldrLabel: { color: colors.blue, fontWeight: '700', fontSize: 12 },
   tldrText: { color: colors.ink2, fontSize: 14, lineHeight: 20 },
+  joinBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#2D8CFF', borderRadius: 12, paddingVertical: 13, marginBottom: 18,
+    shadowColor: '#2D8CFF', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+  },
+  joinText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   para: { fontFamily: 'Georgia', fontSize: 16, lineHeight: 27, color: colors.ink2, marginBottom: 18 },
   salutation: { color: colors.ink },
   replyBar: {

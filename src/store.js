@@ -198,12 +198,16 @@ export function StoreProvider({ children }) {
   }, [prefs.serverUrl]);
 
   // Load the full body of one email on demand (the list only carries a preview).
+  // Keeps the stripped text for priority/summary, plus sanitized HTML + any
+  // detected meeting link for rich display.
   const loadFullBody = useCallback(async (id) => {
     const target = raw.find((e) => e.id === id);
     if (!target || target.account !== 'outlook' || target.fullBody) return;
     try {
-      const { body } = await fetchMessageBody(prefs.serverUrl, outlookRefresh, id);
-      if (body) setRaw((prev) => prev.map((e) => (e.id === id ? { ...e, body, fullBody: true } : e)));
+      const { body, bodyHtml, meeting } = await fetchMessageBody(prefs.serverUrl, outlookRefresh, id);
+      setRaw((prev) => prev.map((e) => (
+        e.id === id ? { ...e, body: body || e.body, bodyHtml: bodyHtml || '', meeting: meeting || null, fullBody: true } : e
+      )));
     } catch (e) { /* keep the preview if the fetch fails */ }
   }, [raw, outlookRefresh, prefs.serverUrl]);
 
