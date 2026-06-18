@@ -4,14 +4,29 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, TextInput, Alert, ScrollView, ActivityIndicator,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { useStore } from '../store';
-import { sendReply, saveDraft, isBackendConfigured } from '../lib/backend';
+import { sendReply, saveDraft, voiceFormat, isBackendConfigured } from '../lib/backend';
 import { composeText, composeHtml } from '../lib/signature';
 import ComposeAssistant from './ComposeAssistant';
+
+function atHour(d, h) { const x = new Date(d); x.setHours(h, 0, 0, 0); return x; }
+function schedulePresets() {
+  const now = new Date();
+  const tonight = atHour(now, 18); if (tonight <= now) tonight.setDate(tonight.getDate() + 1);
+  const tom = atHour(now, 8); tom.setDate(tom.getDate() + 1);
+  const mon = atHour(now, 8); mon.setDate(mon.getDate() + ((1 - mon.getDay() + 7) % 7 || 7));
+  return [
+    { label: 'In 1 hour', ts: now.getTime() + 3600000 },
+    { label: 'This evening', ts: tonight.getTime() },
+    { label: 'Tomorrow morning', ts: tom.getTime() },
+    { label: 'Monday morning', ts: mon.getTime() },
+  ];
+}
+const fmt = (ts) => new Date(ts).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 
 export default function ComposeSheet({ onClose }) {
   const { prefs, accounts, outlookRefresh } = useStore();
@@ -21,35 +36,39 @@ export default function ComposeSheet({ onClose }) {
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [bodyHeight, setBodyHeight] = useState(180);
+  const [polishing, setPolishing] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const canSend = isBackendConfigured(prefs.serverUrl) && accounts.outlook;
   const toEmailOf = () => (to.match(/[^\s<>]+@[^\s<>]+/) || [to])[0];
 
-  const send = async () => {
-    if (!to.trim()) {
-      Alert.alert('Add a recipient', 'Enter who this message is going to first.');
-      return;
-    }
-    if (!canSend) {
-      Alert.alert('Connect Outlook to send', 'Connect your Outlook account first, then your messages will actually send.');
-      return;
-    }
+  const doSend = async (sendAt) => {
+    if (!to.trim()) { Alert.alert('Add a recipient', 'Enter who this message is going to first.'); return; }
+    if (!canSend) { Alert.alert('Connect Outlook to send', 'Connect your Outlook account first.'); return; }
     setSending(true);
     try {
       await sendReply(prefs.serverUrl, {
-        refreshToken: outlookRefresh,
-        toEmail: toEmailOf(),
-        subject,
-        body: composeText(body, prefs.sig),
-        html: composeHtml(body, prefs.sig),
+        refreshToken: outlookRefresh, toEmail: toEmailOf(), subject,
+        body: composeText(body, prefs.sig), html: composeHtml(body, prefs.sig), sendAt,
       });
-      Alert.alert('Sent ✓', 'Your message is on its way.');
+      Alert.alert(sendAt ? 'Scheduled ✓' : 'Sent ✓', sendAt ? `It'll send ${fmt(sendAt)}.` : 'Your message is on its way.');
       onClose();
     } catch (e) {
-      Alert.alert('Send failed', e.message || 'Please try again.');
-    } finally {
-      setSending(false);
-    }
+      Alert.alert(sendAt ? 'Schedule failed' : 'Send failed', e.message || 'Please try again.');
+    } finally { setSending(false); }
   };
+
+  const polish = async () => {
+    if (!body.trim()) { Alert.alert('Dictate or type first', 'Use the keyboard mic 🎤 to dictate, then polish.'); return; }
+    setPolishing(true);
+    try {
+      const { subject: s, body: b } = await voiceFormat(prefs.serverUrl, body);
+      if (b) setBody(b);
+      if (s && !subject.trim()) setSubject(s);
+    } catch (e) { Alert.alert('Could not polish', e.message || 'Try again.'); }
+    finally { setPolishing(false); }
+  };
+
+  const send = () => doSend(null);
 
   const saveToDrafts = async () => {
     if (!canSend) {
@@ -82,8 +101,13 @@ export default function ComposeSheet({ onClose }) {
       <View style={styles.header}>
         <Pressable onPress={onClose} hitSlop={10}><Text style={styles.cancel}>Cancel</Text></Pressable>
         <Text style={styles.title}>New Message</Text>
-        <Pressable onPress={send} style={styles.sendBtn} disabled={sending}>
-          {sending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.sendText}>Send</Text>}
+        <Pressable onPress={send} onLongPress={() => setScheduleOpen(true)} style={styles.sendBtn} disabled={sending}>
+          {sending ? <ActivityIndicator size="small" color="#fff" /> : (
+            <>
+              <Text style={styles.sendText}>Send</Text>
+              <Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.85)" />
+            </>
+          )}
         </Pressable>
       </View>
 
@@ -102,11 +126,22 @@ export default function ComposeSheet({ onClose }) {
         <TextInput
           style={[styles.body, { height: Math.max(180, bodyHeight) }]}
           value={body} onChangeText={setBody}
-          placeholder="Write your message…" placeholderTextColor={colors.ink4}
+          placeholder="Write your message… (tip: tap the keyboard 🎤 to dictate)" placeholderTextColor={colors.ink4}
           multiline scrollEnabled={false}
           onContentSizeChange={(e) => setBodyHeight(e.nativeEvent.contentSize.height)}
         />
         <Text style={styles.sig}>{`\n${prefs.signature || 'Cameron'}`}</Text>
+
+        {isBackendConfigured(prefs.serverUrl) && (
+          <Pressable style={styles.voiceBtn} onPress={polish} disabled={polishing}>
+            {polishing ? <ActivityIndicator size="small" color={colors.blue} /> : (
+              <>
+                <Ionicons name="mic" size={15} color={colors.blue} />
+                <Text style={styles.voiceText}>Dictate &amp; polish with AI</Text>
+              </>
+            )}
+          </Pressable>
+        )}
 
         {isBackendConfigured(prefs.serverUrl) && (
           <ComposeAssistant
@@ -127,6 +162,22 @@ export default function ComposeSheet({ onClose }) {
         </Pressable>
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* Schedule send (long-press Send) */}
+      <Modal visible={scheduleOpen} transparent animationType="fade" onRequestClose={() => setScheduleOpen(false)}>
+        <Pressable style={styles.schedBackdrop} onPress={() => setScheduleOpen(false)} />
+        <View style={styles.schedSheet}>
+          <Text style={styles.schedTitle}>Schedule send</Text>
+          {schedulePresets().map((o) => (
+            <Pressable key={o.label} style={styles.schedRow} onPress={() => { setScheduleOpen(false); doSend(o.ts); }}>
+              <Ionicons name="time-outline" size={18} color={colors.ink2} />
+              <Text style={styles.schedLabel}>{o.label}</Text>
+              <Text style={styles.schedWhen}>{fmt(o.ts)}</Text>
+            </Pressable>
+          ))}
+          <Pressable style={styles.schedCancel} onPress={() => setScheduleOpen(false)}><Text style={styles.schedCancelText}>Cancel</Text></Pressable>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -139,7 +190,18 @@ const styles = StyleSheet.create({
   },
   cancel: { color: colors.ink3, fontSize: 16, fontWeight: '500' },
   title: { color: colors.ink, fontSize: 17, fontWeight: '700' },
+  voiceBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 14, backgroundColor: colors.blueLight, borderRadius: 12, paddingVertical: 11 },
+  voiceText: { color: colors.blue, fontWeight: '700', fontSize: 14 },
+  schedBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  schedSheet: { position: 'absolute', left: 20, right: 20, top: '32%', backgroundColor: colors.surface, borderRadius: 18, padding: 16 },
+  schedTitle: { fontSize: 16, fontWeight: '800', color: colors.ink, marginBottom: 8 },
+  schedRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.hairline },
+  schedLabel: { flex: 1, fontSize: 15, color: colors.ink, fontWeight: '500' },
+  schedWhen: { fontSize: 13, color: colors.ink3 },
+  schedCancel: { alignItems: 'center', paddingVertical: 12, marginTop: 4 },
+  schedCancelText: { color: colors.ink3, fontWeight: '600' },
   sendBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: colors.blue, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 18,
     shadowColor: colors.blue, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
   },

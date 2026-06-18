@@ -34,7 +34,7 @@ function Row({ icon, bg, color, title, onPress, right }) {
   );
 }
 
-export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect }) {
+export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, onOpenDigest, onOpenHealth }) {
   const { vips, prefs, updateAvatar, accounts, startTour } = useStore();
   const [focused, setFocused] = useState(true);
   const [notifs, setNotifs] = useState(true);
@@ -51,9 +51,10 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect })
       setPhotoBusy(true);
       const manip = await ImageManipulator.manipulateAsync(res.assets[0].uri, [{ resize: { width: 360 } }], { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true });
       const dataUri = `data:image/jpeg;base64,${manip.base64}`;
-      const r = await updateAvatar(dataUri);
-      if (!accounts.outlook) Alert.alert('Saved in the app', 'Connect Outlook to also show this photo to people you email.');
-      else if (r && r.synced === false) Alert.alert('Saved in the app', "We couldn't update your Outlook photo (your organization may block it), but it's set here.");
+      await updateAvatar(dataUri);
+      // The photo visibly updates everywhere in the app — that's the feedback.
+      // We intentionally don't surface the M365-photo-sync result as an error: many
+      // orgs block API photo changes, and the in-app avatar is what matters here.
     } catch (e) {
       Alert.alert('Could not set photo', e.message || 'Please try again.');
     } finally {
@@ -101,6 +102,12 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect })
             ? `${usage.summaries} summaries · ${usage.drafts} drafts · ${usage.signatures} signatures · ${usage.suggests} edits`
             : 'Loading usage…'}
         </Text>
+      </View>
+
+      <Text style={styles.section}>Insights</Text>
+      <View style={styles.group}>
+        <Row icon="sunny" bg="#FFF7E6" color="#B45309" title="Today's digest" onPress={() => go(onOpenDigest)} right={chevron} />
+        <Row icon="pulse" bg="#E8F8F1" color="#2E7D32" title="Inbox health" onPress={() => go(onOpenHealth)} right={chevron} />
       </View>
 
       <Text style={styles.section}>Account</Text>

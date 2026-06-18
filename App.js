@@ -17,6 +17,8 @@ import ReplyScreen from './src/screens/ReplyScreen';
 import SignatureScreen from './src/screens/SignatureScreen';
 import SignatureEditorScreen from './src/screens/SignatureEditorScreen';
 import CategoriesScreen from './src/screens/CategoriesScreen';
+import DigestScreen from './src/screens/DigestScreen';
+import HealthScreen from './src/screens/HealthScreen';
 import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
 import OnboardingTour from './src/components/OnboardingTour';
@@ -40,6 +42,8 @@ const SCREENS = {
   Signature: SignatureScreen,
   SignatureEditor: SignatureEditorScreen,
   Categories: CategoriesScreen,
+  Digest: DigestScreen,
+  Health: HealthScreen,
 };
 
 // Screens that show the bottom tab bar and can be switched between as tabs.
@@ -119,6 +123,8 @@ function AppShell() {
           onClose={closeSheet}
           onOpenSettings={() => { closeSheet(); navigate('Settings'); }}
           onOpenConnect={() => navigate('Connect')}
+          onOpenDigest={() => navigate('Digest')}
+          onOpenHealth={() => navigate('Health')}
         />
       </BottomSheet>
 
