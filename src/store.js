@@ -439,12 +439,26 @@ export function StoreProvider({ children }) {
   }, [mailAccounts, loadAccountsList]);
 
   // Add another linked Outlook mailbox (from a fresh sign-in) and load it.
-  const addMailAccount = useCallback(async (refreshToken, email) => {
-    const acc = { id: `outlook-${Date.now()}`, type: 'outlook', email: email || null, refreshToken };
+  const addMailAccount = useCallback(async (refreshToken, emailArg) => {
+    // Resolve which mailbox this is so we can dedupe by email — a reconnect (e.g.
+    // to grant the calendar scope) returns a NEW refresh token for the SAME inbox,
+    // and we must update it in place rather than show the mailbox twice.
+    let email = emailArg || null;
+    if (!email) { try { const r = await listFolders(prefs.serverUrl, refreshToken); email = r.email || null; } catch (e) { /* ignore */ } }
+    let acc;
     let list;
     setMailAccounts((prev) => {
-      if (prev.some((a) => a.refreshToken === refreshToken)) { list = prev; return prev; }
-      list = [...prev, acc];
+      const existing = email && prev.find((a) => a.email && a.email.toLowerCase() === email.toLowerCase());
+      if (existing) {
+        acc = { ...existing, refreshToken, email };
+        list = prev.map((a) => (a.id === existing.id ? acc : a));
+      } else if (prev.some((a) => a.refreshToken === refreshToken)) {
+        acc = prev.find((a) => a.refreshToken === refreshToken);
+        list = prev;
+      } else {
+        acc = { id: `outlook-${Date.now()}`, type: 'outlook', email, refreshToken };
+        list = [...prev, acc];
+      }
       persistAccounts(list);
       return list;
     });
