@@ -56,7 +56,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-7',
+    version: 'debug-8',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -132,7 +132,11 @@ app.get('/auth/microsoft/start', (req, res) => {
   // in `state` so we get it back on the callback. This makes it work in Expo Go
   // (an exp:// URL) and in a real build (brisk://) alike.
   const appRedirect = String(req.query.app_redirect || APP_REDIRECT);
-  const state = Buffer.from(appRedirect).toString('base64url');
+  // `claim` is a secret nonce the app generated and already holds. We carry it
+  // through OAuth `state` and store the token under it, so the app can claim the
+  // token with a key it NEVER had to read back out of the (lossy) deep link.
+  const claim = String(req.query.claim || '');
+  const state = Buffer.from(JSON.stringify({ r: appRedirect, c: claim })).toString('base64url');
   const params = new URLSearchParams({
     client_id: MS_CLIENT_ID,
     response_type: 'code',
@@ -145,10 +149,15 @@ app.get('/auth/microsoft/start', (req, res) => {
   res.redirect(`${MS_AUTH}?${params.toString()}`);
 });
 
-function decodeAppRedirect(req) {
-  const stateRaw = req.query.state ? String(req.query.state) : '';
-  try { if (stateRaw) return Buffer.from(stateRaw, 'base64url').toString('utf8'); } catch (e) {}
-  return APP_REDIRECT;
+function decodeState(req) {
+  const raw = req.query.state ? String(req.query.state) : '';
+  try {
+    const obj = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    if (obj && typeof obj === 'object' && obj.r) return { appRedirect: obj.r, claim: obj.c || '' };
+  } catch (e) {}
+  // Back-compat: older state was just base64(appRedirect).
+  try { if (raw) return { appRedirect: Buffer.from(raw, 'base64url').toString('utf8'), claim: '' }; } catch (e) {}
+  return { appRedirect: APP_REDIRECT, claim: '' };
 }
 
 function debugPage(ok, detail) {
@@ -210,8 +219,9 @@ try { fs.mkdirSync(HANDOFF_DIR, { recursive: true }); } catch (e) {}
 const handoffs = new Map(); // in-memory fast path; disk is the source of truth
 const HANDOFF_TTL = 5 * 60 * 1000;
 
-function makeHandoff(refreshToken) {
-  const id = newId();
+function makeHandoff(refreshToken, presetId) {
+  // Prefer the app-supplied nonce (it already holds it); fall back to a fresh id.
+  const id = presetId && String(presetId).length >= 16 ? String(presetId) : newId();
   const entry = { refreshToken, at: Date.now(), instance: INSTANCE_ID };
   handoffs.set(id, entry);
   try { fs.writeFileSync(path.join(HANDOFF_DIR, `${id}.json`), JSON.stringify(entry)); } catch (e) {}
@@ -241,10 +251,10 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-7', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-8', recentCallbacks }));
 
 app.get('/auth/microsoft/callback', async (req, res) => {
-  const appRedirect = decodeAppRedirect(req);
+  const { appRedirect, claim } = decodeState(req);
   const debug = appRedirect === 'debug';
   const finish = (query, ok, detail) => {
     if (debug) return res.send(debugPage(ok, detail || query));
@@ -268,10 +278,11 @@ app.get('/auth/microsoft/callback', async (req, res) => {
     const tokens = await redeemCode(String(code), redirectUri(req));
     // Hand the app a short id (safe through the deep link); it claims the real
     // token over HTTPS. This is what fixes the "malformed" inbox error.
-    const session = makeHandoff(tokens.refresh_token);
-    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind, code: fp, duplicate, handoff: true, sid: session.slice(0, 10), instance: INSTANCE_ID });
+    const session = makeHandoff(tokens.refresh_token, claim);
+    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind, code: fp, duplicate, handoff: true, usedClaim: Boolean(claim), sid: session, sidLen: session.length, instance: INSTANCE_ID });
+    // `session` goes FIRST so a tail-truncated deep link can't clip it.
     return finish(
-      `provider=outlook&session=${encodeURIComponent(session)}`,
+      `session=${encodeURIComponent(session)}&provider=outlook`,
       true,
       `Refresh token received (length ${String(tokens.refresh_token || '').length}).`
     );
@@ -287,13 +298,13 @@ app.get('/auth/microsoft/callback', async (req, res) => {
 // The app trades its one-time session id for the real refresh token, over HTTPS.
 app.post('/auth/claim', (req, res) => {
   const { session } = req.body || {};
-  const sid = String(session || '').slice(0, 10);
+  const sid = String(session || '');
   const entry = session ? takeHandoff(session) : null;
   if (!entry) {
-    record({ stage: 'claim_miss', sid, instance: INSTANCE_ID });
+    record({ stage: 'claim_miss', sid, sidLen: sid.length, instance: INSTANCE_ID });
     return res.status(400).json({ error: 'This sign-in link expired. Please connect Outlook again.' });
   }
-  record({ stage: 'claim_success', refreshLen: String(entry.refreshToken || '').length, sid, storedOn: entry.instance, instance: INSTANCE_ID });
+  record({ stage: 'claim_success', refreshLen: String(entry.refreshToken || '').length, sid, sidLen: sid.length, storedOn: entry.instance, instance: INSTANCE_ID });
   res.json({ refreshToken: entry.refreshToken });
 });
 

@@ -15,9 +15,12 @@ export function isBackendConfigured(serverUrl) {
 
 // The URL the app opens in a browser to start Microsoft login. `appRedirect` is
 // where the server bounces the user back to (this app's deep link).
-export function microsoftLoginUrl(serverUrl, appRedirect) {
-  const q = appRedirect ? `?app_redirect=${encodeURIComponent(appRedirect)}` : '';
-  return `${base(serverUrl)}/auth/microsoft/start${q}`;
+export function microsoftLoginUrl(serverUrl, appRedirect, claim) {
+  const params = new URLSearchParams();
+  if (appRedirect) params.set('app_redirect', appRedirect);
+  if (claim) params.set('claim', claim); // secret nonce the app already holds
+  const q = params.toString();
+  return `${base(serverUrl)}/auth/microsoft/start${q ? `?${q}` : ''}`;
 }
 
 async function post(serverUrl, path, body) {

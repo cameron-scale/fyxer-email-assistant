@@ -35,6 +35,10 @@ export function StoreProvider({ children }) {
   // Microsoft refresh token (kept in the encrypted keychain) for backend login.
   const [outlookRefresh, setOutlookRefresh] = useState(null);
 
+  // Which aurora-background palette is active (driven by the current folder/email).
+  const [palette, setPaletteState] = useState('default');
+  const setPalette = useCallback((name) => setPaletteState(name || 'default'), []);
+
   // Load saved VIPs + prefs + tokens once when the app starts.
   useEffect(() => {
     (async () => {
@@ -238,6 +242,8 @@ export function StoreProvider({ children }) {
     outlookRefresh,
     refresh,
     disconnect,
+    palette,
+    setPalette,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

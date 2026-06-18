@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import * as Crypto from 'expo-crypto';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { useProviders } from '../auth/useProviders';
@@ -49,23 +50,34 @@ export default function ConnectScreen({ goBack, navigate }) {
     }
     setBusy('outlook');
     try {
+      // A secret nonce WE generate and keep. The server stores the token under it,
+      // so we claim with a key we already hold — never read back out of the deep
+      // link (which can truncate/corrupt it). This is what makes sign-in reliable.
+      const nonce = Array.from(Crypto.getRandomValues(new Uint8Array(24)))
+        .map((b) => b.toString(16).padStart(2, '0')).join('');
       // Where the server should send us back — exp:// in Expo Go, brisk:// in a build.
       const returnUrl = AuthSession.makeRedirectUri({ scheme: 'brisk', path: 'auth' });
       const result = await WebBrowser.openAuthSessionAsync(
-        microsoftLoginUrl(prefs.serverUrl, returnUrl),
+        microsoftLoginUrl(prefs.serverUrl, returnUrl, nonce),
         returnUrl
       );
       if (result.type !== 'success' || !result.url) return; // user cancelled
       const params = new URLSearchParams(result.url.split('?')[1] || '');
       const err = params.get('error');
       if (err) throw new Error(err);
-      // Preferred path: a short, deep-link-safe session id we trade for the real
-      // token over HTTPS (the token itself is too long to pass through the URL).
-      const session = params.get('session');
+      // Claim with our own nonce first; fall back to the URL's session id if present.
       let refresh = params.get('refresh');
-      if (session) {
-        const claimed = await claimSession(prefs.serverUrl, session);
+      try {
+        const claimed = await claimSession(prefs.serverUrl, nonce);
         refresh = claimed.refreshToken;
+      } catch (e) {
+        const session = params.get('session');
+        if (session) {
+          const claimed = await claimSession(prefs.serverUrl, session);
+          refresh = claimed.refreshToken;
+        } else if (!refresh) {
+          throw e;
+        }
       }
       if (!refresh) throw new Error('No token returned');
       await connectOutlook(refresh);
