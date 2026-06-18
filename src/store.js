@@ -25,7 +25,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 60;
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null };
 
 const StoreContext = createContext(null);
 
@@ -100,7 +100,7 @@ export function StoreProvider({ children }) {
       if (e.snoozedUntil && e.snoozedUntil > now) return false;
       return true;
     });
-    const ranked = prioritize(visible, vips); // importance order + attaches .priority
+    const ranked = prioritize(visible, vips, prefs.categories); // importance order + attaches .priority
     const byName = (a, b) => (a.priority.senderName || '').localeCompare(b.priority.senderName || '');
     const byDate = (a, b) => new Date(b.date) - new Date(a.date);
     const sorted = [...ranked];
@@ -110,7 +110,7 @@ export function StoreProvider({ children }) {
     else if (sortBy === 'name-desc') sorted.sort((a, b) => -byName(a, b));
     // 'importance' keeps the prioritize() order.
     return sorted;
-  }, [raw, overrides, vips, summaries, sortBy]);
+  }, [raw, overrides, vips, summaries, sortBy, prefs.categories]);
 
   // Prioritized view of whole-mailbox search results (null when not searching).
   const searchEmails = useMemo(() => {
@@ -118,8 +118,8 @@ export function StoreProvider({ children }) {
     const merged = searchResults.map((e) => ({
       ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id],
     }));
-    return prioritize(merged, vips);
-  }, [searchResults, overrides, summaries, vips]);
+    return prioritize(merged, vips, prefs.categories);
+  }, [searchResults, overrides, summaries, vips, prefs.categories]);
 
   const counts = useMemo(() => {
     const c = { urgent: 0, important: 0, fyi: 0, noise: 0, total: emails.length };

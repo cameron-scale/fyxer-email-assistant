@@ -16,6 +16,7 @@ import MailboxScreen from './src/screens/MailboxScreen';
 import ReplyScreen from './src/screens/ReplyScreen';
 import SignatureScreen from './src/screens/SignatureScreen';
 import SignatureEditorScreen from './src/screens/SignatureEditorScreen';
+import CategoriesScreen from './src/screens/CategoriesScreen';
 import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
 import BottomSheet from './src/components/BottomSheet';
@@ -36,6 +37,7 @@ const SCREENS = {
   Reply: ReplyScreen,
   Signature: SignatureScreen,
   SignatureEditor: SignatureEditorScreen,
+  Categories: CategoriesScreen,
 };
 
 // Screens that show the bottom tab bar and can be switched between as tabs.

@@ -15,10 +15,27 @@ export const BANDS = {
   FYI:             { grad: ['#64748B', '#334155'], tagBg: '#F1F3F6', tagColor: '#475569' },
 };
 
+// Darken a hex color by a factor (for the gradient's second stop).
+function darken(hex, f = 0.72) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const r = Math.round(((n >> 16) & 255) * f);
+  const g = Math.round(((n >> 8) & 255) * f);
+  const b = Math.round((n & 255) * f);
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+// Build a band from a single custom color (gradient + matching pill).
+export function customBand(color) {
+  return { grad: [color, darken(color)], tagBg: '#F1F3F6', tagColor: color };
+}
+
 // Returns { key, grad, tagBg, tagColor, label } for an email's card band + tag,
-// driven purely by its consolidated category.
+// driven purely by its category. Custom categories carry their own color.
 export function bandFor(email) {
   const cat = email.priority?.category || 'FYI';
-  const b = BANDS[cat] || BANDS.FYI;
-  return { key: cat, ...b, label: cat };
+  if (BANDS[cat]) return { key: cat, ...BANDS[cat], label: cat };
+  const color = email.priority?.categoryColor || '#475569';
+  return { key: cat, ...customBand(color), label: cat };
 }

@@ -205,6 +205,30 @@ export function scoreEmail(email, options = {}) {
   // ...but a genuinely urgent message always shows as Urgent (highest priority).
   if (bucket === 'urgent') category = 'Urgent';
 
+  // --- User-defined custom categories (sender maps + keyword rules) ---
+  // A sender match is an explicit user choice and wins over everything; a keyword
+  // match wins over the default tag but not over Urgent. We keep up to 3 tags.
+  const customDefs = options.categories || [];
+  let categoryColor = null;
+  const extraTags = [];
+  let senderCat = null;
+  let keywordCat = null;
+  for (const c of customDefs) {
+    if (!c || !c.name) continue;
+    const senderHit = (c.senders || []).some((s) => s && sender.email.includes(String(s).toLowerCase().trim()));
+    const kwHit = (c.keywords || []).some((k) => k && haystack.includes(String(k).toLowerCase().trim()));
+    if (senderHit) { senderCat = c; extraTags.push(c); }
+    else if (kwHit) { keywordCat = keywordCat || c; extraTags.push(c); }
+  }
+  if (senderCat) { category = senderCat.name; categoryColor = senderCat.color || null; }
+  else if (category !== 'Urgent' && keywordCat) { category = keywordCat.name; categoryColor = keywordCat.color || null; }
+
+  // Up to 3 tags: the primary category first, then any other custom matches.
+  const categories = [];
+  const pushCat = (name, color) => { if (name && !categories.find((x) => x.name === name)) categories.push({ name, color: color || null }); };
+  pushCat(category, categoryColor);
+  extraTags.forEach((c) => pushCat(c.name, c.color));
+
   // Extra guard: a noisy/automated sender shouldn't be urgent either.
   if ((noisySender || noiseHits >= 2) && bucket === 'urgent' && !isVip) bucket = 'noise';
 
@@ -215,6 +239,8 @@ export function scoreEmail(email, options = {}) {
     score,
     bucket,
     category,
+    categoryColor,                       // custom category color (null for the built-in 6)
+    categories: categories.slice(0, 3),  // up to 3 tags (primary first)
     isVip,
     reason: reasons[0] || 'General message',
     reasons,
@@ -235,9 +261,10 @@ export const BUCKETS = {
 
 // Take raw emails -> attach priority -> sort best-first.
 // vips = array of lowercased sender emails the user marked important.
-export function prioritize(rawEmails, vips = []) {
+// categories = optional user-defined custom categories.
+export function prioritize(rawEmails, vips = [], categories = []) {
   return rawEmails
-    .map((e) => ({ ...e, priority: scoreEmail(e, { vips }) }))
+    .map((e) => ({ ...e, priority: scoreEmail(e, { vips, categories }) }))
     .sort((a, b) => {
       const ord =
         BUCKETS[a.priority.bucket].order - BUCKETS[b.priority.bucket].order;

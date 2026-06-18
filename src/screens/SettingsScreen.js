@@ -58,6 +58,18 @@ export default function SettingsScreen({ navigate, goBack }) {
           </View>
         </Pressable>
 
+        {/* Custom categories */}
+        <Text style={styles.sectionLabel}>Categories</Text>
+        <Pressable style={styles.group} onPress={() => navigate('Categories')}>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: '#EEF2FF' }]}>
+              <Ionicons name="pricetags" size={16} color="#4338CA" />
+            </View>
+            <Text style={styles.rowTitle}>Customize categories & rules</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.ink4} />
+          </View>
+        </Pressable>
+
         {/* Backend server */}
         <Text style={styles.sectionLabel}>Backend server URL</Text>
         <Text style={styles.help}>
