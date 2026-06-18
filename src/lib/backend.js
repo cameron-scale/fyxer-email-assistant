@@ -56,9 +56,16 @@ export function claimSession(serverUrl, session) {
 
 // Fetch a mailbox folder (inbox | sent | drafts | archive). Returns
 // { emails, refreshToken, unreadCount, totalCount, skip, hasMore }.
-// `skip` pages further back through the mailbox (50 at a time).
-export function fetchInbox(serverUrl, refreshToken, limit = 50, folder = 'inbox', skip = 0) {
-  return post(serverUrl, '/inbox', { refreshToken, limit, folder, skip });
+// `skip` pages further back through the mailbox (50 at a time); `folderId`
+// targets a specific Graph folder (from listFolders).
+export function fetchInbox(serverUrl, refreshToken, limit = 50, folder = 'inbox', skip = 0, folderId = null) {
+  return post(serverUrl, '/inbox', { refreshToken, limit, folder, skip, folderId });
+}
+
+// List the mailbox's folders + counts for the drawer. Returns
+// { email, displayName, folders, refreshToken }.
+export function listFolders(serverUrl, refreshToken) {
+  return post(serverUrl, '/folders', { refreshToken });
 }
 
 // Fetch one message's full body on demand. Returns { body }.

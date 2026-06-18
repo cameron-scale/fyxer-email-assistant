@@ -11,7 +11,7 @@ import { DEMO_EMAILS } from './lib/demo';
 import { fetchGmail } from './api/gmail';
 import {
   fetchInbox, fetchMessageBody, summarizeEmails, searchMail, askMail, setMyPhoto,
-  DEFAULT_SERVER_URL,
+  listFolders, DEFAULT_SERVER_URL,
 } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 
@@ -75,12 +75,39 @@ export function StoreProvider({ children }) {
   const [folders, setFolders] = useState({ sent: [], drafts: [] });
   const [folderLoading, setFolderLoading] = useState(false);
 
-  // True mailbox totals from Graph (so the badge matches Outlook even before all
-  // mail is loaded), plus background "sync the rest" progress.
-  const [mailboxUnread, setMailboxUnread] = useState(null); // server truth, or null
-  const [mailboxTotal, setMailboxTotal] = useState(null);
+  // Per-account mailbox totals from Graph (so the badge matches Outlook even
+  // before all mail is loaded), plus background "sync the rest" progress.
+  const [accountStats, setAccountStats] = useState({}); // id -> { unread, total }
   const [syncingAll, setSyncingAll] = useState(false);
   const syncAbort = useRef(false);
+
+  // Multiple linked mailboxes. Each: { id, type:'outlook', email, refreshToken }.
+  // `activeAccountId` is a specific account id, or 'all' for a unified inbox.
+  const [mailAccounts, setMailAccounts] = useState([]);
+  const [activeAccountId, setActiveAccountId] = useState('all');
+  // The active account's folder list + who it belongs to (for the drawer).
+  const [mailFolders, setMailFolders] = useState([]);
+  const [folderMeta, setFolderMeta] = useState(null); // { email, displayName }
+  const [foldersLoading, setFoldersLoading] = useState(false);
+  // Which folder the list is showing (null = Inbox / unified).
+  const [currentFolder, setCurrentFolder] = useState(null); // { id, name, kind }
+
+  // The account ids in the active scope ('all' = every linked mailbox).
+  const scopeIds = useMemo(() => {
+    if (mailAccounts.length) return activeAccountId === 'all' ? mailAccounts.map((a) => a.id) : [activeAccountId];
+    return ['legacy'];
+  }, [mailAccounts, activeAccountId]);
+  // Unread/total for the active scope (sum across accounts), matching Outlook.
+  const mailboxUnread = useMemo(() => {
+    let any = false; let sum = 0;
+    for (const id of scopeIds) { const s = accountStats[id]; if (s && s.unread != null) { any = true; sum += s.unread; } }
+    return any ? sum : null;
+  }, [accountStats, scopeIds]);
+  const mailboxTotal = useMemo(() => {
+    let any = false; let sum = 0;
+    for (const id of scopeIds) { const s = accountStats[id]; if (s && s.total != null) { any = true; sum += s.total; } }
+    return any ? sum : null;
+  }, [accountStats, scopeIds]);
 
   // Whole-mailbox search results (Graph), shown in place of the inbox while active.
   const [searchResults, setSearchResults] = useState(null); // null = not searching
@@ -95,8 +122,21 @@ export function StoreProvider({ children }) {
         if (v) setVips(JSON.parse(v));
         const p = await getToken('prefs');
         if (p) setPrefsState({ ...DEFAULT_PREFS, ...JSON.parse(p) });
+        // Restore linked mailboxes. Migrate a legacy single token into the list.
+        let list = [];
+        try { list = JSON.parse((await getToken('mail_accounts')) || '[]') || []; } catch (e) { list = []; }
         const rt = await getToken('outlook_refresh');
-        if (rt) {
+        if (rt && !list.some((a) => a.refreshToken === rt)) {
+          list = [{ id: `outlook-${Date.now()}`, type: 'outlook', email: null, refreshToken: rt }, ...list];
+        }
+        if (list.length) {
+          setMailAccounts(list);
+          setActiveAccountId(list.length > 1 ? 'all' : list[0].id);
+          const primary = list[0].refreshToken;
+          setOutlookRefresh(primary);
+          setAccounts((a) => ({ ...a, outlook: true }));
+          await saveToken('mail_accounts', JSON.stringify(list));
+        } else if (rt) {
           setOutlookRefresh(rt);
           setAccounts((a) => ({ ...a, outlook: true }));
         }
@@ -107,21 +147,8 @@ export function StoreProvider({ children }) {
     })();
   }, []);
 
-  // Build the prioritized, filtered, sorted list the UI shows.
-  const emails = useMemo(() => {
-    if (demoMode) return DEMO_EMAILS; // fake walkthrough inbox (already prioritized)
-    const now = Date.now();
-    const merged = raw.map((e) => ({
-      ...e,
-      ...(overrides[e.id] || {}),
-      aiSummary: e.aiSummary || summaries[e.id], // feed the cached TL;DR into priority.tldr
-    }));
-    const visible = merged.filter((e) => {
-      if (e.status === 'archived' || e.status === 'done') return false;
-      if (e.snoozedUntil && e.snoozedUntil > now) return false;
-      return true;
-    });
-    const ranked = prioritize(visible, vips, prefs.categories); // importance order + attaches .priority
+  // Sort a prioritized list by the chosen order.
+  const applySort = useCallback((ranked) => {
     const byName = (a, b) => (a.priority.senderName || '').localeCompare(b.priority.senderName || '');
     const byDate = (a, b) => new Date(b.date) - new Date(a.date);
     const sorted = [...ranked];
@@ -129,9 +156,43 @@ export function StoreProvider({ children }) {
     else if (sortBy === 'date-asc') sorted.sort((a, b) => -byDate(a, b));
     else if (sortBy === 'name-asc') sorted.sort(byName);
     else if (sortBy === 'name-desc') sorted.sort((a, b) => -byName(a, b));
-    // 'importance' keeps the prioritize() order.
-    return sorted;
-  }, [raw, overrides, vips, summaries, sortBy, prefs.categories, demoMode]);
+    return sorted; // 'importance' keeps the prioritize() order
+  }, [sortBy]);
+
+  // Build the prioritized, filtered, sorted list the UI shows.
+  const emails = useMemo(() => {
+    if (demoMode) return DEMO_EMAILS; // fake walkthrough inbox (already prioritized)
+    const now = Date.now();
+    const visible = raw
+      // Keep the main inbox clean: only Inbox-folder Outlook mail (folder browsing
+      // loads other folders too), plus any non-Outlook accounts. Honor the active
+      // account filter ('all' shows every mailbox).
+      .filter((e) => {
+        const isOutlook = e.account === 'outlook';
+        if (isOutlook && e.folder && e.folder !== 'inbox') return false;
+        if (activeAccountId !== 'all' && isOutlook && e.accountId && e.accountId !== activeAccountId) return false;
+        return true;
+      })
+      .map((e) => ({ ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id] }))
+      .filter((e) => {
+        if (e.status === 'archived' || e.status === 'done') return false;
+        if (e.snoozedUntil && e.snoozedUntil > now) return false;
+        return true;
+      });
+    const ranked = prioritize(visible, vips, prefs.categories);
+    return applySort(ranked);
+  }, [raw, overrides, vips, summaries, sortBy, prefs.categories, demoMode, activeAccountId, applySort]);
+
+  // The list for the currently-open folder (Junk, Archive, custom folders…).
+  const folderEmails = useMemo(() => {
+    if (!currentFolder) return null;
+    const now = Date.now();
+    const visible = raw
+      .filter((e) => e.folder === currentFolder.id)
+      .map((e) => ({ ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id] }))
+      .filter((e) => e.status !== 'archived' && e.status !== 'done' && !(e.snoozedUntil && e.snoozedUntil > now));
+    return applySort(prioritize(visible, vips, prefs.categories));
+  }, [raw, overrides, vips, summaries, prefs.categories, currentFolder, applySort]);
 
   // Prioritized view of whole-mailbox search results (null when not searching).
   const searchEmails = useMemo(() => {
@@ -245,63 +306,160 @@ export function StoreProvider({ children }) {
   const loadFullBody = useCallback(async (id) => {
     const target = raw.find((e) => e.id === id);
     if (!target || target.account !== 'outlook' || target.fullBody) return;
+    // Use the token of the account this email belongs to (multi-account aware).
+    const acc = mailAccounts.find((a) => a.id === target.accountId);
+    const rt = acc?.refreshToken || outlookRefresh;
     try {
-      const { body, bodyHtml, meeting } = await fetchMessageBody(prefs.serverUrl, outlookRefresh, id);
+      const { body, bodyHtml, meeting } = await fetchMessageBody(prefs.serverUrl, rt, id);
       setRaw((prev) => prev.map((e) => (
         e.id === id ? { ...e, body: body || e.body, bodyHtml: bodyHtml || '', meeting: meeting || null, fullBody: true } : e
       )));
     } catch (e) { /* keep the preview if the fetch fails */ }
-  }, [raw, outlookRefresh, prefs.serverUrl]);
+  }, [raw, outlookRefresh, prefs.serverUrl, mailAccounts]);
 
-  // Pull the latest Outlook inbox from the backend (fast: one page of 50).
-  const loadOutlook = useCallback(async (refreshToken) => {
-    const rt = refreshToken || outlookRefresh;
-    if (!rt) throw new Error('Outlook not connected');
-    const { emails: fetched, refreshToken: newRt, unreadCount, totalCount } = await fetchInbox(prefs.serverUrl, rt, 50, 'inbox', 0);
-    if (newRt && newRt !== rt) {
-      await saveToken('outlook_refresh', newRt);
-      setOutlookRefresh(newRt);
+  // Persist the linked-account list (keeps the legacy single token in sync too).
+  const persistAccounts = useCallback(async (list) => {
+    try { await saveToken('mail_accounts', JSON.stringify(list)); } catch (e) {}
+    if (list[0]?.refreshToken) { try { await saveToken('outlook_refresh', list[0].refreshToken); } catch (e) {} }
+  }, []);
+
+  // Which accounts a load should touch, given the active scope.
+  const accountsToLoad = useCallback(() => {
+    if (mailAccounts.length) return activeAccountId === 'all' ? mailAccounts : mailAccounts.filter((a) => a.id === activeAccountId);
+    return outlookRefresh ? [{ id: 'legacy', type: 'outlook', email: null, refreshToken: outlookRefresh }] : [];
+  }, [mailAccounts, activeAccountId, outlookRefresh]);
+
+  // Core loader: fetch each given account's inbox (page 1), tag by account, and
+  // merge into raw — replacing only the loaded accounts' mail so others survive.
+  const loadAccountsList = useCallback(async (targets) => {
+    if (!targets || !targets.length) throw new Error('Outlook not connected');
+    const all = [];
+    for (const acc of targets) {
+      try {
+        const { emails: fetched, refreshToken: newRt, unreadCount, totalCount } =
+          await fetchInbox(prefs.serverUrl, acc.refreshToken, 50, 'inbox', 0);
+        if (newRt && newRt !== acc.refreshToken) {
+          if (acc.id === 'legacy') { await saveToken('outlook_refresh', newRt); setOutlookRefresh(newRt); }
+          else setMailAccounts((prev) => { const next = prev.map((a) => (a.id === acc.id ? { ...a, refreshToken: newRt } : a)); persistAccounts(next); return next; });
+        }
+        setAccountStats((s) => ({ ...s, [acc.id]: { unread: unreadCount ?? s[acc.id]?.unread ?? null, total: totalCount ?? s[acc.id]?.total ?? null } }));
+        const tagged = fetched.map((e) => ({ ...e, accountId: acc.id, accountEmail: acc.email }));
+        all.push(...tagged);
+        summarizeBatch(tagged);
+      } catch (e) { /* one account failing shouldn't kill the others */ }
     }
-    if (unreadCount != null) setMailboxUnread(unreadCount);
-    if (totalCount != null) setMailboxTotal(totalCount);
-    // Replace old outlook mail with the fresh batch.
+    const loaded = new Set(targets.map((a) => a.id));
     setRaw((prev) => {
-      const others = prev.filter((e) => e.account !== 'outlook');
-      return [...others, ...fetched];
+      const others = prev.filter((e) => e.account !== 'outlook' || (e.accountId && !loaded.has(e.accountId)));
+      return [...others, ...all];
     });
-    summarizeBatch(fetched); // fire-and-forget; only summarizes new, uncached mail
-    // Then keep pulling the rest of the mailbox in the background so the inbox
-    // reflects ALL mail, not just the first page.
-    syncAllOutlook(newRt && newRt !== rt ? newRt : rt);
-  }, [outlookRefresh, prefs.serverUrl, summarizeBatch]); // eslint-disable-line
+    targets.forEach((acc) => syncAllOutlook(acc));
+  }, [prefs.serverUrl, summarizeBatch, persistAccounts]); // eslint-disable-line
 
-  // Background pagination: page back through the whole mailbox 50 at a time,
-  // appending as we go, until there's no more (or we hit a safety cap). Cheap to
-  // run because fetching is free and summaries are cached per id server-side.
-  const syncAllOutlook = useCallback(async (refreshToken) => {
-    const rt = refreshToken || outlookRefresh;
-    if (!rt || syncingAll) return;
+  // Pull the latest Outlook inbox(es) for the active scope.
+  const loadOutlook = useCallback(async () => {
+    await loadAccountsList(accountsToLoad());
+  }, [loadAccountsList, accountsToLoad]);
+
+  // Background pagination per account: page back 50 at a time, appending as we go
+  // (de-duped), until exhausted or a safety cap. Fetching is free; summaries cache.
+  const syncAllOutlook = useCallback(async (acc) => {
+    const rt = acc?.refreshToken || outlookRefresh;
+    const accId = acc?.id || 'legacy';
+    if (!rt) return;
     setSyncingAll(true);
     syncAbort.current = false;
-    const CAP = 2000; // safety ceiling on how much we hold in memory
+    const CAP = 2000; // safety ceiling on how much we hold in memory per account
     try {
       let skip = 50; // page 0 already loaded
       while (skip < CAP && !syncAbort.current) {
         const { emails: page, hasMore } = await fetchInbox(prefs.serverUrl, rt, 50, 'inbox', skip);
         if (page && page.length) {
+          const tagged = page.map((e) => ({ ...e, accountId: accId, accountEmail: acc?.email }));
           setRaw((prev) => {
             const seen = new Set(prev.map((e) => e.id));
-            const add = page.filter((e) => !seen.has(e.id));
+            const add = tagged.filter((e) => !seen.has(e.id));
             return add.length ? [...prev, ...add] : prev;
           });
-          summarizeBatch(page);
+          summarizeBatch(tagged);
         }
         if (!hasMore || !page || page.length < 50) break;
         skip += 50;
       }
     } catch (e) { /* partial sync is fine — we keep what loaded */ }
     finally { setSyncingAll(false); }
-  }, [outlookRefresh, prefs.serverUrl, summarizeBatch, syncingAll]);
+  }, [outlookRefresh, prefs.serverUrl, summarizeBatch]);
+
+  // Load the messages of a specific folder (Junk, Archive, custom…) into raw,
+  // tagged with the folder id so the folder view (and only it) shows them.
+  const openFolder = useCallback(async (folder) => {
+    setCurrentFolder(folder);
+    if (!folder) return;
+    const rt = (mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0])?.refreshToken || outlookRefresh;
+    if (!rt) return;
+    setFolderLoading(true);
+    try {
+      const { emails: fetched } = await fetchInbox(prefs.serverUrl, rt, 50, null, 0, folder.id);
+      const tagged = fetched.map((e) => ({ ...e, folder: folder.id }));
+      setRaw((prev) => {
+        const others = prev.filter((e) => e.folder !== folder.id);
+        return [...others, ...tagged];
+      });
+      summarizeBatch(tagged);
+    } catch (e) { /* leave previous */ } finally { setFolderLoading(false); }
+  }, [mailAccounts, activeAccountId, outlookRefresh, prefs.serverUrl, summarizeBatch]);
+
+  // Load the account's folder list for the drawer.
+  const loadMailFolders = useCallback(async () => {
+    const rt = (mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0])?.refreshToken || outlookRefresh;
+    if (!rt) return;
+    setFoldersLoading(true);
+    try {
+      const { email, displayName, folders: fl } = await listFolders(prefs.serverUrl, rt);
+      setMailFolders(fl || []);
+      setFolderMeta({ email, displayName });
+      // Backfill the active account's email if we didn't have it yet.
+      if (email && activeAccountId !== 'all') {
+        setMailAccounts((prev) => { const next = prev.map((a) => (a.id === activeAccountId && !a.email ? { ...a, email } : a)); persistAccounts(next); return next; });
+      }
+    } catch (e) { /* drawer just shows fewer folders */ } finally { setFoldersLoading(false); }
+  }, [mailAccounts, activeAccountId, outlookRefresh, prefs.serverUrl, persistAccounts]);
+
+  // Switch the active mailbox (or 'all' for the unified inbox) and reload.
+  const switchMailAccount = useCallback((id) => {
+    setActiveAccountId(id);
+    setCurrentFolder(null);
+    setMailFolders([]); setFolderMeta(null);
+    const targets = id === 'all' ? mailAccounts : mailAccounts.filter((a) => a.id === id);
+    setLoading(true);
+    loadAccountsList(targets).catch((e) => setError(e.message)).finally(() => setLoading(false));
+  }, [mailAccounts, loadAccountsList]);
+
+  // Add another linked Outlook mailbox (from a fresh sign-in) and load it.
+  const addMailAccount = useCallback(async (refreshToken, email) => {
+    const acc = { id: `outlook-${Date.now()}`, type: 'outlook', email: email || null, refreshToken };
+    let list;
+    setMailAccounts((prev) => {
+      if (prev.some((a) => a.refreshToken === refreshToken)) { list = prev; return prev; }
+      list = [...prev, acc];
+      persistAccounts(list);
+      return list;
+    });
+    setAccounts((a) => ({ ...a, outlook: true }));
+    setActiveAccountId('all');
+    setLoading(true);
+    try { await loadAccountsList([acc]); } finally { setLoading(false); }
+  }, [loadAccountsList, persistAccounts]);
+
+  // Remove a linked mailbox.
+  const removeMailAccount = useCallback(async (id) => {
+    let list;
+    setMailAccounts((prev) => { list = prev.filter((a) => a.id !== id); persistAccounts(list); return list; });
+    setRaw((prev) => prev.filter((e) => e.accountId !== id));
+    setAccountStats((s) => { const n = { ...s }; delete n[id]; return n; });
+    setActiveAccountId((cur) => (cur === id ? 'all' : cur));
+    if (!list || !list.length) { setAccounts((a) => ({ ...a, outlook: false })); setOutlookRefresh(null); try { await clearToken('outlook_refresh'); } catch (e) {} }
+  }, [persistAccounts]);
 
   // Load the Sent or Drafts folder on demand (for those tabs).
   const loadFolder = useCallback(async (name) => {
@@ -360,21 +518,21 @@ export function StoreProvider({ children }) {
     if (outlookRefresh && !didInitialLoad.current) {
       didInitialLoad.current = true;
       setLoading(true);
-      loadOutlook(outlookRefresh)
+      loadOutlook()
         .catch((e) => setError(e.message || 'Could not load mail'))
         .finally(() => setLoading(false));
     }
   }, [outlookRefresh, loadOutlook]);
 
-  // Called after Microsoft login hands back a refresh token.
+  // Called after Microsoft login hands back a refresh token. Adds it as a linked
+  // mailbox (the first one, or an additional account) and loads it.
   const connectOutlook = useCallback(async (refreshToken) => {
     setLoading(true);
     setError(null);
     try {
-      await saveToken('outlook_refresh', refreshToken);
       setOutlookRefresh(refreshToken);
       setAccounts((a) => ({ ...a, outlook: true }));
-      await loadOutlook(refreshToken);
+      await addMailAccount(refreshToken);
     } catch (e) {
       setError(e.message || 'Could not load Outlook mail');
       throw e;
@@ -475,6 +633,20 @@ export function StoreProvider({ children }) {
     mailboxUnread,
     mailboxTotal,
     syncingAll,
+    // Multi-account + folder browsing
+    mailAccounts,
+    activeAccountId,
+    accountStats,
+    switchMailAccount,
+    addMailAccount,
+    removeMailAccount,
+    mailFolders,
+    foldersLoading,
+    loadMailFolders,
+    folderMeta,
+    openFolder,
+    currentFolder,
+    folderEmails,
     loadFullBody,
     folders,
     folderLoading,

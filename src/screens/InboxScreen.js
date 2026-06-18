@@ -112,7 +112,13 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.topRow}>
-              <View>
+              <View style={styles.leftGroup}>
+                {!starred && (
+                  <Pressable style={styles.menuBtn} hitSlop={8} onPress={() => navigate('MailboxDrawer')}>
+                    <Ionicons name="menu" size={24} color="#fff" />
+                  </Pressable>
+                )}
+                <View>
                 <Text style={styles.eyebrow}>{starred ? 'Mailbox' : "Cameron's Inbox"}</Text>
                 <View ref={wordmarkRef} collapsable={false} style={styles.logoRow}>
                   <Text style={styles.logoScale}>Scale</Text>
@@ -124,6 +130,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                       <Text style={styles.countBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                     </View>
                   ) : null}
+                </View>
                 </View>
               </View>
               <View ref={avatarRef} collapsable={false}>
@@ -304,6 +311,8 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 120 },
   header: { paddingHorizontal: 6, paddingTop: 4 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  leftGroup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  menuBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
   eyebrow: {
     fontSize: 12, fontWeight: '500', letterSpacing: 0.7, textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.35)', marginBottom: 6,

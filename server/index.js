@@ -478,25 +478,29 @@ async function attachSummaries(emails) {
 // fetching is FREE; summaries are a separate cached step (/summarize).
 app.post('/inbox', async (req, res) => {
   try {
-    const { refreshToken, limit, folder, skip } = req.body || {};
+    const { refreshToken, limit, folder, skip, folderId } = req.body || {};
     const want = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 300);
     const skipN = Math.max(parseInt(skip, 10) || 0, 0);
     const fkey = WELL_KNOWN_FOLDER[String(folder || 'inbox').toLowerCase()] || 'inbox';
-    const outgoing = fkey === 'sentitems' || fkey === 'drafts';
+    // A specific Graph folder id (from /folders) overrides the well-known key, so
+    // we can open any custom folder (Junk, Archive, "SCALE INVOICES", …).
+    const fid = String(folderId || '').trim();
+    const folderSeg = fid ? `mailFolders/${encodeURIComponent(fid)}` : `mailFolders/${fkey}`;
+    const outgoing = !fid && (fkey === 'sentitems' || fkey === 'drafts');
     const { accessToken, refreshToken: newRt } = await accessTokenFromRefresh(refreshToken);
 
     // Folder totals (cheap) so the app can show the TRUE unread count even when
     // only some messages are loaded — matches what Outlook shows.
     let unreadCount = null; let totalCount = null;
     try {
-      const fr = await graphGet(`${GRAPH}/me/mailFolders/${fkey}?$select=unreadItemCount,totalItemCount`, accessToken);
+      const fr = await graphGet(`${GRAPH}/me/${folderSeg}?$select=unreadItemCount,totalItemCount`, accessToken);
       const fd = await fr.json();
       if (fr.ok) { unreadCount = fd.unreadItemCount ?? null; totalCount = fd.totalItemCount ?? null; }
     } catch (e) { /* counts are best-effort */ }
 
     const pageSize = Math.min(want, 50); // Graph caps $top at 50 for messages
     let url =
-      `${GRAPH}/me/mailFolders/${fkey}/messages?$top=${pageSize}&$skip=${skipN}` +
+      `${GRAPH}/me/${folderSeg}/messages?$top=${pageSize}&$skip=${skipN}` +
       `&$select=subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification` +
       `&$orderby=receivedDateTime desc`;
     const raw = [];
@@ -520,7 +524,7 @@ app.post('/inbox', async (req, res) => {
       return {
         id: m.id,
         account: 'outlook',
-        folder: fkey,
+        folder: fid || fkey,
         from: party ? `${party.name || party.address} <${party.address}>` : (outgoing ? 'Me' : ''),
         subject: m.subject || '(no subject)',
         body: stripHtml(m.bodyPreview || ''),
@@ -540,6 +544,64 @@ app.post('/inbox', async (req, res) => {
     res.json({ emails, refreshToken: newRt, unreadCount, totalCount, skip: skipN, hasMore: emails.length >= pageSize });
   } catch (e) {
     record({ stage: 'inbox_error', message: e.message, detail: e.detail || null });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// List the mailbox's folders (with unread/total counts) for the Outlook-style
+// drawer. Returns top-level folders, each with any child folders, plus the
+// account's email address. Well-known folders are tagged so the app can order
+// and icon them (Inbox, Sent, Drafts, Deleted, Archive, Junk).
+const FOLDER_KIND = {
+  inbox: 'inbox', sentitems: 'sent', drafts: 'drafts', deleteditems: 'deleted',
+  archive: 'archive', junkemail: 'junk', outbox: 'outbox',
+};
+app.post('/folders', async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+    const { accessToken, refreshToken: newRt } = await accessTokenFromRefresh(refreshToken);
+
+    // Who is this? (shown in the drawer header)
+    let email = null; let displayName = null;
+    try {
+      const me = await graphGet(`${GRAPH}/me?$select=mail,userPrincipalName,displayName`, accessToken);
+      const md = await me.json();
+      if (me.ok) { email = md.mail || md.userPrincipalName || null; displayName = md.displayName || null; }
+    } catch (e) { /* best-effort */ }
+
+    const select = '$select=id,displayName,unreadItemCount,totalItemCount,childFolderCount,wellKnownName';
+    const top = await graphGet(`${GRAPH}/me/mailFolders?${select}&$top=60`, accessToken);
+    const td = await top.json();
+    if (!top.ok) throw new Error(td.error?.message || 'folders fetch failed');
+
+    const mapFolder = (f) => ({
+      id: f.id,
+      name: f.displayName,
+      kind: FOLDER_KIND[String(f.wellKnownName || '').toLowerCase()] || null,
+      unread: f.unreadItemCount ?? 0,
+      total: f.totalItemCount ?? 0,
+      childCount: f.childFolderCount ?? 0,
+    });
+
+    const folders = [];
+    for (const f of (td.value || [])) {
+      const folder = mapFolder(f);
+      folder.children = [];
+      // Pull one level of children for folders that have them (e.g. custom trees).
+      if (folder.childCount > 0) {
+        try {
+          const ch = await graphGet(`${GRAPH}/me/mailFolders/${f.id}/childFolders?${select}&$top=40`, accessToken);
+          const cd = await ch.json();
+          if (ch.ok) folder.children = (cd.value || []).map(mapFolder);
+        } catch (e) { /* skip children on error */ }
+      }
+      folders.push(folder);
+    }
+
+    record({ stage: 'folders_ok', count: folders.length });
+    res.json({ email, displayName, folders, refreshToken: newRt });
+  } catch (e) {
+    record({ stage: 'folders_error', message: e.message });
     res.status(400).json({ error: e.message });
   }
 });
