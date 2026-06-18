@@ -100,6 +100,13 @@ export default function MailboxDrawerScreen({ goBack, navigate }) {
           </Pressable>
         </View>
 
+        {/* Quick links */}
+        <Pressable style={styles.calRow} onPress={() => navigate('Calendar')}>
+          <Ionicons name="calendar" size={19} color={colors.blue} style={styles.folderIcon} />
+          <Text style={styles.folderName}>Calendar</Text>
+          <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" />
+        </Pressable>
+
         {/* Folders */}
         <Text style={styles.sectionLabel}>Folders</Text>
         {foldersLoading && !flat.length ? (
@@ -164,6 +171,7 @@ const styles = StyleSheet.create({
   acctBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   addChip: { alignItems: 'center', justifyContent: 'center', width: 60 },
   addChipText: { color: colors.blue, fontSize: 11, marginTop: 5, fontWeight: '600' },
+  calRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginTop: 4 },
   folderList: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, overflow: 'hidden' },
   folderRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
   folderChild: { paddingLeft: 34, backgroundColor: 'rgba(255,255,255,0.03)' },

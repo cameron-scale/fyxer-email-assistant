@@ -106,6 +106,7 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, o
 
       <Text style={styles.section}>Insights</Text>
       <View style={styles.group}>
+        <Row icon="calendar" bg="#E8F1FE" color="#1565C0" title="Calendar" onPress={() => go(onOpenCalendar)} right={chevron} />
         <Row icon="sunny" bg="#FFF7E6" color="#B45309" title="Today's digest" onPress={() => go(onOpenDigest)} right={chevron} />
         <Row icon="pulse" bg="#E8F8F1" color="#2E7D32" title="Inbox health" onPress={() => go(onOpenHealth)} right={chevron} />
       </View>

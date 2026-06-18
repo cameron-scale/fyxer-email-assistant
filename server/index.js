@@ -75,7 +75,10 @@ const APP_REDIRECT = 'brisk://auth';
 // Keep the core scope set to what existing sign-ins consented to (User.Read), so
 // mail keeps loading. Setting the M365 profile photo would need User.ReadWrite and
 // a re-consent; that's an optional opt-in rather than something that breaks login.
-const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.Read', 'Mail.Read', 'Mail.Send'];
+// Calendars.ReadWrite lets the app show upcoming events and RSVP to invites. It's
+// only requested at sign-in (authorize), never on refresh, so existing tokens keep
+// working — a user re-connects once to grant calendar access.
+const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.Read', 'Mail.Read', 'Mail.Send', 'Calendars.ReadWrite'];
 // 'common' = any account (needs the Azure app set to multi-tenant). For a
 // single-tenant app, set MS_TENANT to your Directory (tenant) ID instead.
 const MS_TENANT = process.env.MS_TENANT || 'common';
@@ -95,7 +98,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-11',
+    version: 'debug-12',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -298,7 +301,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-11', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-12', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -312,7 +315,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-11',
+    version: 'debug-12',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -395,12 +398,18 @@ app.post('/auth/claim', (req, res) => {
 
 // Exchange a code or refresh token for Microsoft access tokens.
 async function msToken(extra) {
-  const body = new URLSearchParams({
+  const params = {
     client_id: MS_CLIENT_ID,
     client_secret: MS_CLIENT_SECRET,
-    scope: MS_SCOPES.join(' '),
     ...extra,
-  });
+  };
+  // Only request a specific scope set when first exchanging the auth code. On a
+  // refresh grant we intentionally OMIT scope so Microsoft returns a token for
+  // whatever the user already consented to — requesting MORE than was consented
+  // (e.g. a newly-added Calendars scope) would fail with AADSTS65001 and break
+  // mail for existing users. New/re-consented sign-ins pick up the wider set.
+  if (extra?.grant_type !== 'refresh_token') params.scope = MS_SCOPES.join(' ');
+  const body = new URLSearchParams(params);
   const r = await fetch(MS_TOKEN, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -884,6 +893,70 @@ app.post('/relationship', async (req, res) => {
     }
     res.json({ total: msgs.length, received, sent, awaiting, lastIso: last ? last.toISOString() : null });
   } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── 4f-2. Calendar: upcoming events + RSVP (Outlook calendar via Graph) ───────
+// Lists events in a window so the app can show what's coming up and let the user
+// accept/decline meeting invites — exactly what they'd do in Outlook itself.
+app.post('/calendar/upcoming', async (req, res) => {
+  try {
+    const { refreshToken, days } = req.body || {};
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const span = Math.min(Math.max(parseInt(days, 10) || 14, 1), 60);
+    const now = new Date();
+    const end = new Date(now.getTime() + span * 86400000);
+    const url =
+      `${GRAPH}/me/calendarView?startDateTime=${now.toISOString()}&endDateTime=${end.toISOString()}` +
+      `&$select=subject,start,end,location,organizer,isAllDay,isOrganizer,onlineMeeting,onlineMeetingUrl,responseStatus,attendees,webLink` +
+      `&$orderby=start/dateTime&$top=50`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC"' } });
+    const data = await r.json();
+    // 403 = the token predates the Calendars scope → ask the user to reconnect.
+    if (r.status === 403) return res.json({ events: [], needsReconnect: true });
+    if (!r.ok) throw new Error(data.error?.message || 'calendar fetch failed');
+    const events = (data.value || []).map((e) => ({
+      id: e.id,
+      subject: e.subject || '(no title)',
+      start: e.start?.dateTime ? `${e.start.dateTime}Z`.replace(/Z+$/, 'Z') : null,
+      end: e.end?.dateTime ? `${e.end.dateTime}Z`.replace(/Z+$/, 'Z') : null,
+      allDay: !!e.isAllDay,
+      location: e.location?.displayName || '',
+      organizer: e.organizer?.emailAddress?.name || e.organizer?.emailAddress?.address || '',
+      isOrganizer: !!e.isOrganizer,
+      joinUrl: e.onlineMeeting?.joinUrl || e.onlineMeetingUrl || null,
+      response: e.responseStatus?.response || 'none', // none|organizer|accepted|declined|tentativelyAccepted|notResponded
+      attendeeCount: Array.isArray(e.attendees) ? e.attendees.length : 0,
+    }));
+    record({ stage: 'calendar_ok', count: events.length });
+    res.json({ events });
+  } catch (e) {
+    record({ stage: 'calendar_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/calendar/rsvp', async (req, res) => {
+  try {
+    const { refreshToken, id, response } = req.body || {};
+    if (!id) throw new Error('missing event id');
+    const action = { accept: 'accept', decline: 'decline', tentative: 'tentativelyAccept' }[String(response || '').toLowerCase()];
+    if (!action) throw new Error('response must be accept | decline | tentative');
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const r = await fetch(`${GRAPH}/me/events/${encodeURIComponent(id)}/${action}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sendResponse: true }),
+    });
+    if (!r.ok && r.status !== 202) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.error?.message || 'RSVP failed');
+    }
+    record({ stage: 'calendar_rsvp', response });
+    res.json({ ok: true, response });
+  } catch (e) {
+    record({ stage: 'calendar_rsvp_error', message: e.message });
     res.status(400).json({ error: e.message });
   }
 });

@@ -114,6 +114,16 @@ export function healthStats(serverUrl, refreshToken) {
   return post(serverUrl, '/health-stats', { refreshToken });
 }
 
+// Upcoming calendar events (Outlook). Returns { events, needsReconnect? }.
+export function upcomingEvents(serverUrl, refreshToken, days = 14) {
+  return post(serverUrl, '/calendar/upcoming', { refreshToken, days });
+}
+
+// RSVP to a meeting invite: response = 'accept' | 'decline' | 'tentative'.
+export function rsvpEvent(serverUrl, refreshToken, id, response) {
+  return post(serverUrl, '/calendar/rsvp', { refreshToken, id, response });
+}
+
 // Daily narrative digest. Returns { digest }.
 export function digestNarrative(serverUrl, items) {
   return post(serverUrl, '/digest', { items });
