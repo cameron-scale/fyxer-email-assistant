@@ -27,7 +27,13 @@
       "expo-web-browser",
       "expo-secure-store",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Scale Mail uses your photos so you can add a headshot or logo to your email signature."
+        }
+      ]
     ],
     "extra": {
       "eas": {
