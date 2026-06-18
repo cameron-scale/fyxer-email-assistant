@@ -54,7 +54,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-2',
+    version: 'debug-3',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -135,6 +135,14 @@ function redeemCode(code, redirectUriValue) {
   return promise;
 }
 
+// Flight recorder: last few callback attempts (no secrets) so we can debug remotely.
+const recentCallbacks = [];
+function record(entry) {
+  recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
+  recentCallbacks.length = Math.min(recentCallbacks.length, 12);
+}
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-3', recentCallbacks }));
+
 app.get('/auth/microsoft/callback', async (req, res) => {
   const appRedirect = decodeAppRedirect(req);
   const debug = appRedirect === 'debug';
@@ -145,18 +153,25 @@ app.get('/auth/microsoft/callback', async (req, res) => {
   };
 
   const { code, error, error_description } = req.query;
-  if (error) return finish(`error=${encodeURIComponent(error_description || error)}`, false, String(error_description || error));
-  if (!code) return finish('error=missing_code', false, 'No authorization code was returned by Microsoft.');
+  const appRedirectKind = appRedirect.startsWith('exp') ? 'expo-go' : appRedirect.startsWith('brisk') ? 'native' : appRedirect.slice(0, 16);
+  if (error) {
+    record({ stage: 'authorize_error', error, error_description: String(error_description || ''), appRedirectKind });
+    return finish(`error=${encodeURIComponent(error_description || error)}`, false, String(error_description || error));
+  }
+  if (!code) {
+    record({ stage: 'missing_code', appRedirectKind });
+    return finish('error=missing_code', false, 'No authorization code was returned by Microsoft.');
+  }
   try {
     const tokens = await redeemCode(String(code), redirectUri(req));
-    // Hand the refresh token back to the app. The app stores it securely and sends
-    // it to us on each request to mint a fresh access token.
+    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind });
     return finish(
       `provider=outlook&refresh=${encodeURIComponent(tokens.refresh_token)}`,
       true,
       `Refresh token received (length ${String(tokens.refresh_token || '').length}).`
     );
   } catch (e) {
+    record({ stage: 'token_error', message: e.message, detail: e.detail || null, redirectUri: redirectUri(req), appRedirectKind });
     const full = e.detail
       ? `${e.message}\n\nredirect_uri used: ${redirectUri(req)}\ntenant: ${MS_TENANT}\n\nFull Microsoft response:\n${JSON.stringify(e.detail, null, 2)}`
       : e.message;
@@ -223,8 +238,10 @@ app.post('/inbox', async (req, res) => {
     const summaries = await aiSummarize(emails);
     emails.forEach((e) => { if (summaries[e.id]) e.aiSummary = summaries[e.id]; });
 
+    record({ stage: 'inbox_success', count: emails.length });
     res.json({ emails, refreshToken: newRt });
   } catch (e) {
+    record({ stage: 'inbox_error', message: e.message, detail: e.detail || null });
     res.status(400).json({ error: e.message });
   }
 });
