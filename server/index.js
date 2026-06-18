@@ -54,7 +54,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-3',
+    version: 'debug-4',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
@@ -135,13 +135,20 @@ function redeemCode(code, redirectUriValue) {
   return promise;
 }
 
+// A non-reversible fingerprint of an auth code: enough to tell two callbacks
+// apart (or spot a duplicate) without ever logging the secret code itself.
+function codeFingerprint(code) {
+  const s = String(code || '');
+  return { len: s.length, head: s.slice(0, 6), tail: s.slice(-6) };
+}
+
 // Flight recorder: last few callback attempts (no secrets) so we can debug remotely.
 const recentCallbacks = [];
 function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-3', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-4', recentCallbacks }));
 
 app.get('/auth/microsoft/callback', async (req, res) => {
   const appRedirect = decodeAppRedirect(req);
@@ -162,16 +169,18 @@ app.get('/auth/microsoft/callback', async (req, res) => {
     record({ stage: 'missing_code', appRedirectKind });
     return finish('error=missing_code', false, 'No authorization code was returned by Microsoft.');
   }
+  const fp = codeFingerprint(code);
+  const duplicate = codeRedemptions.has(String(code));
   try {
     const tokens = await redeemCode(String(code), redirectUri(req));
-    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind });
+    record({ stage: 'token_success', refreshLen: String(tokens.refresh_token || '').length, appRedirectKind, code: fp, duplicate });
     return finish(
       `provider=outlook&refresh=${encodeURIComponent(tokens.refresh_token)}`,
       true,
       `Refresh token received (length ${String(tokens.refresh_token || '').length}).`
     );
   } catch (e) {
-    record({ stage: 'token_error', message: e.message, detail: e.detail || null, redirectUri: redirectUri(req), appRedirectKind });
+    record({ stage: 'token_error', message: e.message, detail: e.detail || null, redirectUri: redirectUri(req), appRedirectKind, code: fp, duplicate });
     const full = e.detail
       ? `${e.message}\n\nredirect_uri used: ${redirectUri(req)}\ntenant: ${MS_TENANT}\n\nFull Microsoft response:\n${JSON.stringify(e.detail, null, 2)}`
       : e.message;
