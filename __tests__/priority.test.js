@@ -53,7 +53,7 @@ describe('scoreEmail buckets', () => {
   it('treats a real person asking a question as needs-attention', () => {
     const p = scoreEmail(make({ subject: 'Quick question?', body: 'Can you confirm the date?' }));
     expect(['urgent', 'important', 'fyi']).toContain(p.bucket);
-    expect(p.category).toBe('To Respond');
+    expect(p.category).toBe('Action Needed');
   });
 
   it('never marks a promotional sender as urgent even with urgent words', () => {
@@ -61,7 +61,7 @@ describe('scoreEmail buckets', () => {
       make({ from: 'Deals <offers@amazon.com>', subject: 'Sale ends today!', body: 'Limited time, shop now.' })
     );
     expect(p.bucket).toBe('noise');
-    expect(p.category).toBe('Promotions');
+    expect(p.category).toBe('Newsletter');
   });
 });
 

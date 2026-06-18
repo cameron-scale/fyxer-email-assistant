@@ -30,8 +30,11 @@ function initials(name = '') {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// Aurora palette for an open email, from its band/category.
-const BAND_PALETTE = { urgent: 'urgent', clients: 'clients', work: 'work', meeting: 'meeting', finance: 'finance' };
+// Aurora palette for an open email, from its category.
+const BAND_PALETTE = {
+  Urgent: 'urgent', 'Action Needed': 'clients', Meeting: 'meeting',
+  Client: 'clients', Newsletter: 'default', FYI: 'default',
+};
 
 export default function DetailScreen({ params, goBack, navigate }) {
   const { emails, archive, snooze, markRead, toggleVip, loadFullBody, setPalette } = useStore();

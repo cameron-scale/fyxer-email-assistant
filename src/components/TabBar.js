@@ -1,6 +1,7 @@
 // TabBar.js — the frosted bottom tab bar from the ScaleMail design.
-// Six tabs (Inbox · Starred · Zip · Sent · Drafts · Settings) with a raised blue
-// Compose button in the middle that opens a slide-up sheet.
+// Tabs: Inbox · Starred · Triage · Sent · Drafts, with a raised blue compose
+// (pencil) button in the middle that opens a slide-up sheet. Settings lives
+// behind the profile avatar.
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -10,7 +11,7 @@ import { colors } from '../theme';
 const LEFT = [
   { key: 'Inbox', label: 'Inbox', icon: 'mail-outline', activeIcon: 'mail' },
   { key: 'Starred', label: 'Starred', icon: 'star-outline', activeIcon: 'star' },
-  { key: 'Triage', label: 'Zip', icon: 'flash-outline', activeIcon: 'flash' },
+  { key: 'Triage', label: 'Triage', icon: 'play-forward-outline', activeIcon: 'play-forward' },
 ];
 const RIGHT = [
   { key: 'Sent', label: 'Sent', icon: 'paper-plane-outline', activeIcon: 'paper-plane' },
@@ -40,7 +41,7 @@ export default function TabBar({ active, onNavigate, onCompose, inboxBadge = 0 }
       ))}
       <Pressable style={styles.composeWrap} onPress={onCompose}>
         <View style={styles.composeBtn}>
-          <Ionicons name="create-outline" size={22} color="#fff" />
+          <Ionicons name="pencil-sharp" size={21} color="#fff" />
         </View>
       </Pressable>
       {RIGHT.map((t) => (

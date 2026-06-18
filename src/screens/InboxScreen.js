@@ -20,12 +20,13 @@ const FILTERS = [
   { key: 'unread', label: 'Unread' },
   { key: 'urgent', label: 'Urgent' },
   { key: 'starred', label: 'Starred' },
-  { key: 'To Respond', label: 'To Respond' },
+  { key: 'Action Needed', label: 'Action Needed' },
   { key: 'Meeting', label: 'Meeting' },
-  { key: 'Notification', label: 'Notification' },
+  { key: 'Client', label: 'Client' },
   { key: 'Newsletter', label: 'Newsletter' },
-  { key: 'Promotions', label: 'Promotions' },
+  { key: 'FYI', label: 'FYI' },
 ];
+const CATEGORY_FILTERS = ['Action Needed', 'Meeting', 'Client', 'Newsletter', 'FYI'];
 
 const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
@@ -63,8 +64,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
       if (filter === 'unread' && e.read !== false) return false;
       if (filter === 'urgent' && e.priority.bucket !== 'urgent') return false;
       if (filter === 'starred' && !e.priority.isVip) return false;
-      if (['To Respond', 'Meeting', 'Notification', 'Newsletter', 'Promotions'].includes(filter) &&
-        e.priority.category !== filter) return false;
+      if (CATEGORY_FILTERS.includes(filter) && e.priority.category !== filter) return false;
     }
     return true; // server already matched the query text when searching
   });
@@ -105,9 +105,11 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                   <Text style={styles.logoMail}>Mail</Text>
                   {starred ? (
                     <Text style={styles.logoSuffix}>  Starred</Text>
-                  ) : (
-                    <Text style={styles.logoCount}>{` ·${unreadCount}`}</Text>
-                  )}
+                  ) : unreadCount > 0 ? (
+                    <View style={styles.countBadge}>
+                      <Text style={styles.countBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
               <Pressable style={styles.avatar} onPress={() => openSheet && openSheet('profile')}>
@@ -291,6 +293,12 @@ const styles = StyleSheet.create({
   logoScale: { fontSize: 32, fontWeight: '800', color: '#fff', letterSpacing: -1.3 },
   logoMail: { fontSize: 32, fontWeight: '800', color: colors.blue, letterSpacing: -1.3 },
   logoCount: { fontSize: 32, fontWeight: '800', color: colors.blue, letterSpacing: -1.3, opacity: 0.7 },
+  countBadge: {
+    backgroundColor: colors.blue, borderRadius: 11, minWidth: 22, height: 22,
+    paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center',
+    marginLeft: 8, marginTop: 4, alignSelf: 'flex-start',
+  },
+  countBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   logoSuffix: { fontSize: 26, fontWeight: '800', color: colors.blue, letterSpacing: -1, opacity: 0.55 },
   avatar: { marginTop: 4 },
   avatarFill: {

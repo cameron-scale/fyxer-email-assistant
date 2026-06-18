@@ -74,19 +74,24 @@ export function summarize(body = '', maxLen = 110) {
   return pick;
 }
 
-// Work out a Fyxer-style category label (what KIND of email this is).
-// This is separate from priority (how URGENT it is) so you get both:
-// e.g. "Important · To Respond" or "Noise · Promotions".
+// The consolidated category system — exactly six tags so the color language is
+// learnable in one session. Urgent + Client are assigned in scoreEmail (from the
+// bucket / VIP status); categorize() returns the other four.
+//   Promotions/sales/newsletters/digests  -> Newsletter
+//   meetings/calls/scheduling             -> Meeting
+//   questions / needs-an-action           -> Action Needed   (was To Respond / Action Required)
+//   automated notifications / everything else -> FYI          (Notification merged into FYI)
+export const CATEGORIES = ['Urgent', 'Client', 'Action Needed', 'Meeting', 'Newsletter', 'FYI'];
+// Highest-priority first — used to pick the single tag a card shows.
+export const CATEGORY_ORDER = ['Urgent', 'Client', 'Action Needed', 'Meeting', 'Newsletter', 'FYI'];
+
 function categorize(haystack, signals) {
   const { noisySender, isQuestion, importantHits, looksHuman } = signals;
-  if (/(% off|sale|discount|\bdeal\b|promo|limited time|shop now|offer|coupon)/.test(haystack))
-    return 'Promotions';
-  if (/(unsubscribe|newsletter|digest|weekly recap|view in browser|read more|this week)/.test(haystack))
+  if (/(% off|sale|discount|\bdeal\b|promo|limited time|shop now|offer|coupon|unsubscribe|newsletter|digest|weekly recap|view in browser|this week)/.test(haystack))
     return 'Newsletter';
   if (/(meeting|\bcall\b|schedule|reschedule|calendar|invite|catch up|\bsync\b|availability|book a)/.test(haystack))
     return 'Meeting';
-  if (noisySender && !isQuestion) return 'Notification';
-  if (isQuestion || importantHits > 0 || looksHuman) return 'To Respond';
+  if (isQuestion || importantHits > 0 || (looksHuman && !noisySender)) return 'Action Needed';
   return 'FYI';
 }
 
@@ -184,18 +189,21 @@ export function scoreEmail(email, options = {}) {
     bucket = 'fyi';
   }
 
-  const category = categorize(haystack, {
+  let category = categorize(haystack, {
     noisySender: noisySender || inferredOther,
     isQuestion,
     importantHits,
     looksHuman,
   });
 
-  // Promotional / newsletter mail is never urgent or important — it's noise,
-  // no matter how loudly it shouts ("Sale ends today!"). VIPs are exempt.
-  if ((category === 'Promotions' || category === 'Newsletter') && !isVip) {
+  // Newsletter/promotional mail is never urgent or important. VIPs are exempt.
+  if (category === 'Newsletter' && !isVip) {
     bucket = 'noise';
   }
+  // VIP senders are your clients / important people — tag them Client...
+  if (isVip) category = 'Client';
+  // ...but a genuinely urgent message always shows as Urgent (highest priority).
+  if (bucket === 'urgent') category = 'Urgent';
 
   // Extra guard: a noisy/automated sender shouldn't be urgent either.
   if ((noisySender || noiseHits >= 2) && bucket === 'urgent' && !isVip) bucket = 'noise';
