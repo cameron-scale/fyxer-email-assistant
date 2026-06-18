@@ -234,21 +234,52 @@ export default function SignatureScreen({ goBack, navigate }) {
   });
 
   // Ask Claude to design a signature in this style from the current details.
-  const generate = async (styleKey) => {
+  const generate = async (styleKey, accentOverride) => {
     if (!hasSignature(sig)) {
       Alert.alert('Add your details first', 'Fill in at least your name so the AI has something to design with.');
       return;
     }
     setGenerating(styleKey);
     try {
-      const { html } = await aiGenerateSignature(serverUrl, styleKey, signatureDetails(sig));
+      const details = signatureDetails({ ...sig, accent: accentOverride || sig.accent });
+      const { html } = await aiGenerateSignature(serverUrl, styleKey, details);
       if (!html) throw new Error('No signature returned');
-      setSig((s) => ({ ...s, html, style: styleKey, blocks: undefined }));
+      setSig((s) => ({ ...s, html, style: styleKey, accent: accentOverride || s.accent, blocks: undefined }));
     } catch (e) {
       reportClientEvent(serverUrl, 'error', 'sig_generate_failed', { style: styleKey, msg: e.message });
       Alert.alert('Could not design it', e.message || 'Please try again in a moment.');
     } finally {
       setGenerating(null);
+    }
+  };
+
+  // Changing the accent should actually re-color the signature. For a template/
+  // block design that's instant; for an AI design we re-generate with the new
+  // accent so the change is visible (the AI bakes color into its HTML).
+  const pickAccent = (color) => {
+    if (sig.html && sig.style) {
+      setSig((s) => ({ ...s, accent: color }));
+      generate(sig.style, color);
+    } else {
+      set({ accent: color });
+    }
+  };
+
+  // Prompt for a custom hex color (iOS Alert.prompt; falls back gracefully).
+  const pickCustomAccent = () => {
+    const apply = (txt) => {
+      let hex = String(txt || '').trim();
+      if (hex && !hex.startsWith('#')) hex = `#${hex}`;
+      if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex)) {
+        Alert.alert('Invalid color', 'Enter a hex code like #0071E3.');
+        return;
+      }
+      pickAccent(hex);
+    };
+    if (Alert.prompt) {
+      Alert.prompt('Custom accent color', 'Enter a hex code (e.g. #0071E3).', apply, 'plain-text', /^#/.test(sig.accent) ? sig.accent : '#');
+    } else {
+      set({ accent: sig.accent }); // no prompt API — no-op fallback
     }
   };
 
@@ -403,12 +434,23 @@ export default function SignatureScreen({ goBack, navigate }) {
           <Text style={styles.section}>Accent color</Text>
           <View style={styles.swatches}>
             {ACCENTS.map((c) => (
-              <Pressable key={c} onPress={() => set({ accent: c })}
+              <Pressable key={c} onPress={() => pickAccent(c)}
                 style={[styles.swatch, { backgroundColor: c }, sig.accent === c && styles.swatchActive]}>
                 {sig.accent === c && <Ionicons name="checkmark" size={16} color="#fff" />}
               </Pressable>
             ))}
+            {/* Custom hex color */}
+            {(() => {
+              const isCustom = sig.accent && !ACCENTS.includes(sig.accent);
+              return (
+                <Pressable onPress={pickCustomAccent}
+                  style={[styles.swatch, styles.customSwatch, isCustom && { backgroundColor: sig.accent }, isCustom && styles.swatchActive]}>
+                  {isCustom ? <Ionicons name="checkmark" size={16} color="#fff" /> : <Ionicons name="add" size={18} color={colors.ink3} />}
+                </Pressable>
+              );
+            })()}
           </View>
+          <Text style={styles.hint}>Tap a color (or + for a custom hex) to recolor — AI designs re-generate in the new accent.</Text>
 
           <Text style={styles.section}>Photo or logo</Text>
           <View style={styles.photoRow}>
@@ -575,6 +617,7 @@ const styles = StyleSheet.create({
 
   swatches: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  customSwatch: { backgroundColor: colors.surface2, borderWidth: 1.5, borderColor: colors.hairline, borderStyle: 'dashed' },
   swatchActive: { borderWidth: 2, borderColor: colors.ink },
 
   photoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },

@@ -43,13 +43,21 @@ app.use((req, res, next) => {
 });
 
 // ── AI usage meter (monthly) — keeps spend visible against a free-tier cap ─────
+// Disk-backed so the tally survives the server sleeping/waking (Render free tier),
+// instead of resetting to zero every time the process restarts.
 const AI_CAP = parseInt(process.env.AI_CAP || '1000', 10);
+const USAGE_FILE = path.join(process.cwd(), 'usage.json');
 const freshUsage = () => ({ month: new Date().toISOString().slice(0, 7), summaries: 0, drafts: 0, signatures: 0, suggests: 0, asks: 0 });
 let usage = freshUsage();
+try {
+  const saved = JSON.parse(fs.readFileSync(USAGE_FILE, 'utf8'));
+  if (saved && saved.month === usage.month) usage = { ...usage, ...saved };
+} catch (e) { /* no saved usage yet */ }
 function bumpUsage(kind, n = 1) {
   const m = new Date().toISOString().slice(0, 7);
   if (usage.month !== m) usage = freshUsage();
   usage[kind] = (usage[kind] || 0) + n;
+  try { fs.writeFileSync(USAGE_FILE, JSON.stringify(usage)); } catch (e) { /* best-effort */ }
 }
 app.get('/usage', (_req, res) => {
   const total = usage.summaries + usage.drafts + usage.signatures + usage.suggests + usage.asks;
@@ -424,6 +432,45 @@ async function graphGet(url, accessToken, timeoutMs = 15000) {
 
 const WELL_KNOWN_FOLDER = { inbox: 'inbox', sent: 'sentitems', drafts: 'drafts', archive: 'archive' };
 
+// ── AI summary cache (id -> TL;DR), disk-backed ──────────────────────────────
+// Summaries are attached to the inbox response so the cards show them
+// immediately. Cache by Graph message id so a re-load never re-bills the AI.
+const SUMMARY_CACHE_FILE = path.join(process.cwd(), 'summary-cache.json');
+let summaryCache = {};
+try { summaryCache = JSON.parse(fs.readFileSync(SUMMARY_CACHE_FILE, 'utf8')) || {}; } catch (e) { summaryCache = {}; }
+let summaryCacheDirty = false;
+function persistSummaryCache() {
+  if (!summaryCacheDirty) return;
+  try { fs.writeFileSync(SUMMARY_CACHE_FILE, JSON.stringify(summaryCache)); summaryCacheDirty = false; } catch (e) {}
+}
+// Keep the cache from growing without bound (oldest-inserted dropped first).
+function trimSummaryCache(max = 4000) {
+  const keys = Object.keys(summaryCache);
+  if (keys.length <= max) return;
+  for (const k of keys.slice(0, keys.length - max)) delete summaryCache[k];
+}
+// Summarize whatever in `emails` isn't cached yet (bounded), then attach
+// `aiSummary` to every email from the cache. Best-effort: never throws.
+const INBOX_SUMMARY_CAP = parseInt(process.env.INBOX_SUMMARY_CAP || '30', 10);
+async function attachSummaries(emails) {
+  try {
+    const todo = emails.filter((e) => e.id && !summaryCache[e.id]).slice(0, INBOX_SUMMARY_CAP);
+    if (todo.length) {
+      const got = await aiSummarize(todo.map((e) => ({ id: e.id, from: e.from, subject: e.subject, body: e.body })));
+      const n = Object.keys(got).length;
+      if (n) {
+        Object.assign(summaryCache, got);
+        summaryCacheDirty = true;
+        trimSummaryCache();
+        persistSummaryCache();
+        bumpUsage('summaries', n);
+      }
+    }
+  } catch (e) { record({ stage: 'inbox_summary_error', message: e.message }); }
+  for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
+  return emails;
+}
+
 // ── 2. Mailbox fetch (Graph) ─────────────────────────────────────────────────
 // Pulls one folder (Inbox by default; also Sent/Drafts/Archive), newest first.
 // Fast + resilient: pages up to `limit`, but if a later page fails or times out
@@ -474,6 +521,10 @@ app.post('/inbox', async (req, res) => {
         inferred: m.inferenceClassification || null, // 'focused' | 'other'
       };
     });
+
+    // Attach AI TL;DRs (cached) so the cards show real summaries, not raw text.
+    // Only for incoming mail — Sent/Drafts don't need a "why it matters" line.
+    if (!outgoing) await attachSummaries(emails);
 
     record({ stage: 'inbox_success', folder: fkey, count: emails.length });
     res.json({ emails, refreshToken: newRt });
@@ -947,6 +998,15 @@ const SIG_SYSTEM =
   'empty space with invented content or oversized decoration — restraint over clutter. The ' +
   'result must look polished and intentional with no empty gaps. Keep max width ~520px.\n' +
   '\n' +
+  'ACCENT COLOR (must obey):\n' +
+  '- An "accent" hex color is provided in the JSON. Treat it as the PRIMARY brand color and ' +
+  'use it everywhere the reference uses its main brand color: colored panels/banners, the ' +
+  'highlighted part of the name, buttons, icon chips, dividers, accent underlines and links.\n' +
+  '- The reference image guides LAYOUT, composition and decorative feel ONLY — NOT the exact ' +
+  'hue. If the style notes mention a specific color (e.g. "blue panel"), recolor it to the ' +
+  'provided accent. You may derive a slightly darker/lighter shade of the SAME accent for ' +
+  'depth, plus neutral grays/cream/white, but do not introduce an unrelated brand color.\n' +
+  '\n' +
   '- For icons use simple emoji (📞 ✉️ 🌐 📍) or small colored shapes — never icon fonts.\n' +
   '- Make links real from the provided values only: tel:, mailto:, and https://.\n' +
   '- NEVER include the words "ScaleMail", "Scale Mail", "Sent using", or "Best Email Software ' +
@@ -987,8 +1047,9 @@ app.post('/signature/generate', async (req, res) => {
             `Person's details (JSON) — these are the ONLY values that exist. Render every key ` +
             `present and NOTHING that is absent. Do not add a website, slogan, tagline, or any ` +
             `text that is not a value below:\n${JSON.stringify(details || {}, null, 2)}\n\n` +
-            `Allowed fields present: ${Object.keys(details || {}).join(', ') || '(none)'}.\n\n` +
-            `Design the signature HTML now using only these values.` },
+            `Allowed fields present: ${Object.keys(details || {}).join(', ') || '(none)'}.\n` +
+            (details && details.accent ? `PRIMARY brand/accent color = ${details.accent}. Use THIS color (and shades of it) for every colored element; recolor the reference's brand color to it.\n` : '') +
+            `\nDesign the signature HTML now using only these values.` },
         ],
       }],
     });

@@ -10,11 +10,14 @@
 //
 // You can tweak the word lists below to teach it about your own world.
 
+// Genuinely time-sensitive language. Promo-urgency ("last chance", "expires",
+// "today only") deliberately lives in NOISE_WORDS instead — marketing shouting
+// "act now" is not the same as a real deadline.
 const URGENT_WORDS = [
   'urgent', 'asap', 'immediately', 'right away', 'eod', 'end of day',
   'deadline', 'overdue', 'past due', 'final notice', 'action required',
-  'time sensitive', 'expires', 'expiring', 'last chance', 'today', 'now',
-  'emergency', 'critical', 'important update', 'payment failed', 'declined',
+  'time sensitive', 'as soon as possible',
+  'emergency', 'critical', 'payment failed', 'card declined',
 ];
 
 const IMPORTANT_WORDS = [
@@ -29,6 +32,13 @@ const NOISE_WORDS = [
   'promotion', 'promotional', 'sale', '% off', 'discount', 'deal',
   'webinar', 'survey', 'digest', 'weekly recap', 'marketing', 'sponsored',
   'view in browser', 'manage preferences', 'opt out',
+  // Promo-urgency: marketing dressed up as a deadline.
+  'last chance', 'act now', 'today only', 'limited time', 'shop now',
+  'expires', 'expiring', 'ends soon', "don't miss", 'save now', 'hurry',
+  'final hours', 'flash sale',
+  // Content marketing / "thought leadership" blasts.
+  'how to', 'best practices', 'free trial', 'ebook', 'e-book',
+  'case study', 'new feature', 'introducing', 'register now', 'sign up today',
 ];
 
 // Senders that are almost always automated / low priority.
@@ -36,8 +46,19 @@ const NOISE_SENDER_HINTS = [
   'no-reply', 'noreply', 'donotreply', 'do-not-reply', 'notifications',
   'newsletter', 'mailer', 'marketing', 'updates@', 'info@', 'hello@',
   'support@', 'team@', 'news@', 'digest', 'offers@', 'deals@', 'sales@',
-  'promo', 'no_reply',
+  'promo', 'no_reply', 'panel', 'insights', 'academy', 'community',
 ];
+
+// A "list/brand" sender NAME (e.g. "Claude for HR Professionals", "Acme Weekly")
+// rather than a real person — almost always bulk/marketing. Returns true when the
+// from-name reads like a topic/brand instead of "First Last".
+function isBrandSender(sender) {
+  const name = String(sender.name || '').toLowerCase();
+  const local = String(sender.email || '').split('@')[0];
+  if (/\b(for|weekly|daily|newsletter|digest|insights|panel|academy|community|updates|team|news)\b/.test(name)) return true;
+  if (/(news|info|updates|hello|team|digest|insights|panel|academy|community|notif|mailer|marketing|promo)/.test(local)) return true;
+  return false;
+}
 
 // Map the raw score (~-20..120) to a nuanced 1.0–10.0 urgency rank.
 export function score10(score) {
@@ -45,10 +66,16 @@ export function score10(score) {
   return Math.round(Math.max(1, Math.min(10, 1 + v * 9)) * 10) / 10;
 }
 
+// Count keyword hits with word-ish boundaries so "now" doesn't match inside
+// "known", "sign" inside "design", or "call" inside "typically". A match must not
+// be flanked by another letter; digits/punctuation/spaces are fine.
 function countMatches(text, words) {
   let n = 0;
   for (const w of words) {
-    if (text.includes(w)) n += 1;
+    const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(?:^|[^a-z])${esc}(?![a-z])`, 'gi');
+    const m = text.match(re);
+    if (m) n += m.length;
   }
   return n;
 }
@@ -92,8 +119,11 @@ export const CATEGORIES = ['Urgent', 'Client', 'Action Needed', 'Meeting', 'News
 export const CATEGORY_ORDER = ['Urgent', 'Client', 'Action Needed', 'Meeting', 'Newsletter', 'FYI'];
 
 function categorize(haystack, signals) {
-  const { noisySender, isQuestion, importantHits, looksHuman } = signals;
-  if (/(% off|sale|discount|\bdeal\b|promo|limited time|shop now|offer|coupon|unsubscribe|newsletter|digest|weekly recap|view in browser|this week)/.test(haystack))
+  const { noisySender, isQuestion, importantHits, looksHuman, noiseHits, brandSender } = signals;
+  // Anything promotional/bulk/marketing (incl. content "how-to" blasts) is a Newsletter,
+  // even when it shouts a fake deadline.
+  if (noiseHits > 0 || brandSender
+    || /(% off|sale|discount|\bdeal\b|promo|limited time|shop now|offer|coupon|unsubscribe|newsletter|digest|weekly recap|view in browser|this week|how to|best practices|webinar|ebook|free trial|productivity)/.test(haystack))
     return 'Newsletter';
   if (/(meeting|\bcall\b|schedule|reschedule|calendar|invite|catch up|\bsync\b|availability|book a)/.test(haystack))
     return 'Meeting';
@@ -160,7 +190,8 @@ export function scoreEmail(email, options = {}) {
 
   // --- Signals that push importance DOWN (noise) ---
   const noiseHits = countMatches(haystack, NOISE_WORDS);
-  const noisySender = NOISE_SENDER_HINTS.some((h) => senderStr.includes(h));
+  const brandSender = isBrandSender(sender) && !isVip;
+  const noisySender = (NOISE_SENDER_HINTS.some((h) => senderStr.includes(h)) || brandSender) && !isVip;
   if (noiseHits) {
     score -= 20 + noiseHits * 8;
   }
@@ -200,6 +231,8 @@ export function scoreEmail(email, options = {}) {
     isQuestion,
     importantHits,
     looksHuman,
+    noiseHits,
+    brandSender,
   });
 
   // Newsletter/promotional mail is never urgent or important. VIPs are exempt.

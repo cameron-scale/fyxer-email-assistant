@@ -9,13 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, space, font } from '../theme';
 import { bandFor } from '../lib/bands';
 import { timeAgo } from '../lib/time';
-
-function initials(name = '') {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+import SenderAvatar from './SenderAvatar';
 
 function EmailCard({ email, onPress, tagRef }) {
   const p = email.priority;
@@ -31,9 +25,7 @@ function EmailCard({ email, onPress, tagRef }) {
         end={{ x: 1, y: 1 }}
         style={styles.band}
       >
-        <View style={styles.initialWrap}>
-          <Text style={styles.initial}>{initials(p.senderName)}</Text>
-        </View>
+        <SenderAvatar name={p.senderName} email={p.senderEmail} size={32} textStyle={styles.initial} />
         <Text style={styles.bandName} numberOfLines={1}>{p.senderName}</Text>
         {p.rank != null && (
           <View style={styles.rankPill}><Text style={styles.rankText}>{Number(p.rank).toFixed(1)}</Text></View>

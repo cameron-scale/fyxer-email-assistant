@@ -63,6 +63,25 @@ describe('scoreEmail buckets', () => {
     expect(p.bucket).toBe('noise');
     expect(p.category).toBe('Newsletter');
   });
+
+  it('treats a brand/list "how-to" blast as a newsletter, not urgent', () => {
+    const p = scoreEmail(make({
+      from: 'Claude for HR Professionals <newsletter@hrpanel.com>',
+      subject: 'Using Claude to Be More Productive as an HR Professional',
+      body: 'How to get more done. Best practices and tips inside.',
+    }));
+    expect(p.bucket).not.toBe('urgent');
+    expect(p.category).toBe('Newsletter');
+  });
+
+  it('does not let substrings (e.g. "now" in "knowledge") trigger urgency', () => {
+    const p = scoreEmail(make({
+      from: 'Pat Lee <pat@firm.com>',
+      subject: 'Sharing some knowledge',
+      body: 'Here is a rundown of what we know about the rollout.',
+    }));
+    expect(p.bucket).not.toBe('urgent');
+  });
 });
 
 describe('VIP boosting', () => {

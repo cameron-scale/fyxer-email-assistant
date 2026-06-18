@@ -217,7 +217,9 @@ export function StoreProvider({ children }) {
   // Summarize a batch of emails — but ONLY ones we haven't cached yet, capped, so
   // reloading the inbox is free and the bill stays small.
   const summarizeBatch = useCallback(async (list) => {
-    const todo = list.filter((e) => !summariesRef.current[e.id]).slice(0, SUMMARIZE_CAP);
+    // Skip anything the server already summarized (it attaches aiSummary to /inbox)
+    // or that we've already cached — only fill the gaps, so we never double-bill.
+    const todo = list.filter((e) => !e.aiSummary && !summariesRef.current[e.id]).slice(0, SUMMARIZE_CAP);
     for (let i = 0; i < todo.length; i += 15) {
       const chunk = todo.slice(i, i + 15);
       try {
