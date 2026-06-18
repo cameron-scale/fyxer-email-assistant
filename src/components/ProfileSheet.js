@@ -35,7 +35,7 @@ function Row({ icon, bg, color, title, onPress, right }) {
 }
 
 export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect }) {
-  const { vips, prefs, updateAvatar, accounts } = useStore();
+  const { vips, prefs, updateAvatar, accounts, startTour } = useStore();
   const [focused, setFocused] = useState(true);
   const [notifs, setNotifs] = useState(true);
   const [junk, setJunk] = useState(true);
@@ -115,6 +115,7 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect })
         <Row icon="checkmark-circle" bg="#E8F5E9" color="#2E7D32" title="Focused Inbox" right={<Toggle value={focused} onChange={setFocused} />} />
         <Row icon="notifications" bg="#FFF7E6" color="#B45309" title="Notifications" right={<Toggle value={notifs} onChange={setNotifs} />} />
         <Row icon="shield-checkmark" bg="#FDECEA" color="#C62828" title="Junk Filter" right={<Toggle value={junk} onChange={setJunk} />} />
+        <Row icon="play-circle" bg="#E8F1FE" color={colors.blue} title="Replay tutorial" onPress={() => go(startTour)} right={chevron} />
       </View>
 
       <View style={{ height: 24 }} />

@@ -19,6 +19,8 @@ import SignatureEditorScreen from './src/screens/SignatureEditorScreen';
 import CategoriesScreen from './src/screens/CategoriesScreen';
 import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
+import OnboardingTour from './src/components/OnboardingTour';
+import { DEMO_URGENT_ID } from './src/lib/demo';
 import BottomSheet from './src/components/BottomSheet';
 import ComposeSheet from './src/components/ComposeSheet';
 import ProfileSheet from './src/components/ProfileSheet';
@@ -49,9 +51,22 @@ const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts'];
 const SCREEN_PALETTE = { Starred: 'starred', Sent: 'sent', Drafts: 'drafts' };
 
 function AppShell() {
-  const { emails, setPalette } = useStore();
+  const { emails, setPalette, tourActive } = useStore();
   const [stack, setStack] = useState([{ name: 'Inbox', params: {} }]);
   const [sheet, setSheet] = useState(null); // 'compose' | 'profile' | null
+
+  // Drive the app through screens during the onboarding tour.
+  const handleTourAction = useCallback((action) => {
+    setSheet(null);
+    if (action === 'inbox') setStack([{ name: 'Inbox', params: {} }]);
+    else if (action === 'openEmail') setStack([{ name: 'Inbox', params: {} }, { name: 'Detail', params: { id: DEMO_URGENT_ID } }]);
+    else if (action === 'closeEmail') setStack([{ name: 'Inbox', params: {} }]);
+    else if (action === 'openZip') setStack([{ name: 'Inbox', params: {} }, { name: 'Triage', params: {} }]);
+    else if (action === 'closeZip') setStack([{ name: 'Inbox', params: {} }]);
+  }, []);
+
+  // When the tutorial starts, make sure we're on the Inbox behind the overlay.
+  useEffect(() => { if (tourActive) setStack([{ name: 'Inbox', params: {} }]); }, [tourActive]);
 
   const navigate = useCallback((name, params = {}) => setStack((s) => [...s, { name, params }]), []);
   const goBack = useCallback(() => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)), []);
@@ -106,6 +121,9 @@ function AppShell() {
           onOpenConnect={() => navigate('Connect')}
         />
       </BottomSheet>
+
+      {/* First-launch guided tour (sits above everything) */}
+      <OnboardingTour onAction={handleTourAction} />
     </View>
   );
 }

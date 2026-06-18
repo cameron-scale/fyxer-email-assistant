@@ -17,9 +17,9 @@ function initials(name = '') {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function EmailCard({ email, onPress }) {
+function EmailCard({ email, onPress, tagRef }) {
   const p = email.priority;
-  const band = bandFor(email);
+  const band = email.band || bandFor(email); // demo emails carry an explicit band
   const unread = email.read === false;
 
   return (
@@ -45,9 +45,12 @@ function EmailCard({ email, onPress }) {
         <Text style={[styles.subject, !unread && styles.subjectRead]} numberOfLines={1}>
           {email.subject}
         </Text>
-        <Text style={styles.preview} numberOfLines={2}>{p.tldr}</Text>
+        <View style={styles.previewRow}>
+          <Ionicons name="sparkles" size={11} color={colors.blue} style={styles.aiIcon} />
+          <Text style={styles.preview} numberOfLines={2}>{p.tldr}</Text>
+        </View>
         <View style={styles.footer}>
-          <View style={[styles.tag, { backgroundColor: band.tagBg }]}>
+          <View ref={tagRef} collapsable={false} style={[styles.tag, { backgroundColor: band.tagBg }]}>
             <Text style={[styles.tagText, { color: band.tagColor }]}>{band.label}</Text>
           </View>
         </View>
@@ -91,7 +94,9 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
   subject: { fontSize: 14, fontWeight: '600', color: colors.ink, letterSpacing: -0.2, marginBottom: 4 },
   subjectRead: { fontWeight: '500', color: colors.ink2 },
-  preview: { fontSize: 13, color: colors.ink3, lineHeight: 18 },
+  previewRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  aiIcon: { marginTop: 3, marginRight: 5 },
+  preview: { flex: 1, fontSize: 13, color: colors.ink3, lineHeight: 18, fontWeight: '400' },
   footer: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
   tag: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6 },
   tagText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.02 },

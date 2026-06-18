@@ -12,6 +12,7 @@ import { WebView } from 'react-native-webview';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { bandFor } from '../lib/bands';
+import { useTourTarget } from '../lib/tour';
 
 // Wrap raw email HTML in a responsive page for the WebView.
 function emailDocument(html) {
@@ -40,6 +41,8 @@ export default function DetailScreen({ params, goBack, navigate }) {
   const { emails, archive, snooze, markRead, toggleVip, loadFullBody, setPalette } = useStore();
   const email = emails.find((e) => e.id === params.id);
   const [webHeight, setWebHeight] = React.useState(360);
+  const actionsRef = useTourTarget('detail.actions');
+  const replyRef = useTourTarget('detail.reply');
 
   React.useEffect(() => {
     if (email && email.read === false) markRead(email.id);
@@ -84,7 +87,7 @@ export default function DetailScreen({ params, goBack, navigate }) {
           <Ionicons name="chevron-back" size={20} color={colors.blue} />
           <Text style={styles.backText}>Inbox</Text>
         </Pressable>
-        <View style={styles.actions}>
+        <View ref={actionsRef} collapsable={false} style={styles.actions}>
           <Pressable style={styles.actionIcon} onPress={() => toggleVip(p.senderEmail)}>
             <Ionicons name={p.isVip ? 'star' : 'star-outline'} size={18} color={p.isVip ? '#FF9F0A' : colors.ink2} />
           </Pressable>
@@ -165,7 +168,7 @@ export default function DetailScreen({ params, goBack, navigate }) {
       </ScrollView>
 
       {/* Reply bar — opens the full-screen composer */}
-      <View style={styles.replyBar}>
+      <View ref={replyRef} collapsable={false} style={styles.replyBar}>
         <Pressable style={styles.replyBtn} onPress={() => navigate('Reply', { id: email.id })}>
           <Ionicons name="arrow-undo" size={18} color="#fff" />
           <Text style={styles.replyText}>Reply</Text>

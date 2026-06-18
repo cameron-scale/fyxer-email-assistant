@@ -12,12 +12,14 @@ import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import Avatar from '../components/Avatar';
 import PriorityPill from '../components/PriorityPill';
+import { useTourTarget } from '../lib/tour';
 
 const { width } = Dimensions.get('window');
 const SWIPE = width * 0.28;
 
 export default function TriageScreen({ navigate, goBack }) {
   const { emails, archive, markRead, snooze } = useStore();
+  const triageActionsRef = useTourTarget('triage.actions');
   // Freeze the deck order when we enter so cards don't reshuffle as we act.
   const deck = useMemo(() => emails, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [index, setIndex] = useState(0);
@@ -157,7 +159,7 @@ export default function TriageScreen({ navigate, goBack }) {
 
       {/* Action buttons (for people who prefer tapping to swiping) */}
       {!done && (
-        <View style={styles.actions}>
+        <View ref={triageActionsRef} collapsable={false} style={styles.actions}>
           <ActionButton icon="archive-outline" color={colors.archive} label="Archive" onPress={() => fling('left')} />
           <ActionButton icon="time-outline" color={colors.snooze} label="Snooze" onPress={() => fling('up')} big />
           <ActionButton icon="mail-open-outline" color={colors.done} label="Mark read" onPress={() => fling('right')} />

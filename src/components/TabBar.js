@@ -7,6 +7,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
+import { useTourTarget } from '../lib/tour';
 
 const LEFT = [
   { key: 'Inbox', label: 'Inbox', icon: 'mail-outline', activeIcon: 'mail' },
@@ -34,8 +35,9 @@ function Tab({ t, active, onNavigate, badge }) {
 }
 
 export default function TabBar({ active, onNavigate, onCompose, inboxBadge = 0 }) {
+  const barRef = useTourTarget('tabbar');
   return (
-    <View style={styles.bar}>
+    <View ref={barRef} collapsable={false} style={styles.bar}>
       {LEFT.map((t) => (
         <Tab key={t.key} t={t} active={active} onNavigate={onNavigate} badge={t.key === 'Inbox' ? inboxBadge : 0} />
       ))}

@@ -15,6 +15,7 @@ import EmailCard from '../components/EmailCard';
 import SwipeableRow from '../components/SwipeableRow';
 import ProfileAvatar from '../components/ProfileAvatar';
 import { dayBucket, longToday } from '../lib/time';
+import { useTourTarget } from '../lib/tour';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -42,6 +43,14 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
   const [searching, setSearching] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [aiMode, setAiMode] = useState(false); // search bar becomes an AI chat
+
+  // Onboarding-tour spotlight targets.
+  const wordmarkRef = useTourTarget('inbox.wordmark');
+  const avatarRef = useTourTarget('inbox.avatar');
+  const searchRowRef = useTourTarget('inbox.searchRow');
+  const chipsRef = useTourTarget('inbox.chips');
+  const firstCardRef = useTourTarget('inbox.firstCard');
+  const firstTagRef = useTourTarget('inbox.firstTag');
 
   const q = query.trim().toLowerCase();
   // Whole-mailbox search runs server-side (debounced); Starred tab stays local.
@@ -101,7 +110,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
             <View style={styles.topRow}>
               <View>
                 <Text style={styles.eyebrow}>{starred ? 'Mailbox' : "Cameron's Inbox"}</Text>
-                <View style={styles.logoRow}>
+                <View ref={wordmarkRef} collapsable={false} style={styles.logoRow}>
                   <Text style={styles.logoScale}>Scale</Text>
                   <Text style={styles.logoMail}>Mail</Text>
                   {starred ? (
@@ -113,9 +122,11 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                   ) : null}
                 </View>
               </View>
-              <Pressable style={styles.avatar} onPress={() => openSheet && openSheet('profile')}>
-                <ProfileAvatar size={40} />
-              </Pressable>
+              <View ref={avatarRef} collapsable={false}>
+                <Pressable style={styles.avatar} onPress={() => openSheet && openSheet('profile')}>
+                  <ProfileAvatar size={40} />
+                </Pressable>
+              </View>
             </View>
 
             {/* Search */}
@@ -140,7 +151,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                 </Pressable>
               </View>
             ) : (
-              <View style={styles.searchRow}>
+              <View ref={searchRowRef} collapsable={false} style={styles.searchRow}>
                 <Pressable style={styles.searchPill} onPress={() => setSearching(true)}>
                   <Ionicons name="search" size={15} color={colors.onDarkFaint} />
                   <Text style={styles.searchText}>Search mail…</Text>
@@ -188,6 +199,8 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                 showsHorizontalScrollIndicator={false}
                 style={styles.chipsWrap}
                 contentContainerStyle={styles.chipsRow}
+                ref={chipsRef}
+                collapsable={false}
               >
                 {FILTERS.map((f) => {
                   const active = filter === f.key;
@@ -223,16 +236,19 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
         renderSectionHeader={({ section }) => (
           <Text style={styles.sectionEyebrow}>{section.title}</Text>
         )}
-        renderItem={({ item }) => (
-          <View style={styles.cardWrap}>
-            <SwipeableRow
-              onSwipeRight={() => markDone(item.id)}
-              onSwipeLeft={() => archive(item.id)}
-            >
-              <EmailCard email={item} onPress={() => navigate('Detail', { id: item.id })} />
-            </SwipeableRow>
-          </View>
-        )}
+        renderItem={({ item }) => {
+          const isFirst = item.id === shown[0]?.id;
+          return (
+            <View ref={isFirst ? firstCardRef : undefined} collapsable={false} style={styles.cardWrap}>
+              <SwipeableRow
+                onSwipeRight={() => markDone(item.id)}
+                onSwipeLeft={() => archive(item.id)}
+              >
+                <EmailCard email={item} tagRef={isFirst ? firstTagRef : undefined} onPress={() => navigate('Detail', { id: item.id })} />
+              </SwipeableRow>
+            </View>
+          );
+        }}
         ListEmptyComponent={
           usingSearch ? (
             <View style={styles.empty}>

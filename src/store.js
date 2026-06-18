@@ -7,6 +7,7 @@ import React, {
   createContext, useContext, useCallback, useMemo, useState, useEffect, useRef,
 } from 'react';
 import { prioritize } from './lib/priority';
+import { DEMO_EMAILS } from './lib/demo';
 import { fetchGmail } from './api/gmail';
 import {
   fetchInbox, fetchMessageBody, summarizeEmails, searchMail, askMail, setMyPhoto,
@@ -53,6 +54,15 @@ export function StoreProvider({ children }) {
   const [palette, setPaletteState] = useState('default');
   const setPalette = useCallback((name) => setPaletteState(name || 'default'), []);
 
+  // First-launch tutorial: demo mode swaps in fake emails during the walkthrough.
+  const [tourActive, setTourActive] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+  const startTour = useCallback(() => { setDemoMode(true); setTourActive(true); }, []);
+  const endTour = useCallback(() => {
+    setTourActive(false); setDemoMode(false);
+    saveToken('hasSeenTutorial', 'true');
+  }, []);
+
   // Inbox sort order.
   const [sortBy, setSortBy] = useState('date-desc');
 
@@ -83,12 +93,16 @@ export function StoreProvider({ children }) {
           setOutlookRefresh(rt);
           setAccounts((a) => ({ ...a, outlook: true }));
         }
+        // First-ever launch → run the tutorial with demo data.
+        const seen = await getToken('hasSeenTutorial');
+        if (!seen) { setDemoMode(true); setTourActive(true); }
       } catch (e) {}
     })();
   }, []);
 
   // Build the prioritized, filtered, sorted list the UI shows.
   const emails = useMemo(() => {
+    if (demoMode) return DEMO_EMAILS; // fake walkthrough inbox (already prioritized)
     const now = Date.now();
     const merged = raw.map((e) => ({
       ...e,
@@ -110,7 +124,7 @@ export function StoreProvider({ children }) {
     else if (sortBy === 'name-desc') sorted.sort((a, b) => -byName(a, b));
     // 'importance' keeps the prioritize() order.
     return sorted;
-  }, [raw, overrides, vips, summaries, sortBy, prefs.categories]);
+  }, [raw, overrides, vips, summaries, sortBy, prefs.categories, demoMode]);
 
   // Prioritized view of whole-mailbox search results (null when not searching).
   const searchEmails = useMemo(() => {
@@ -402,6 +416,10 @@ export function StoreProvider({ children }) {
     disconnect,
     palette,
     setPalette,
+    tourActive,
+    demoMode,
+    startTour,
+    endTour,
     sortBy,
     setSortBy,
     summaries,
