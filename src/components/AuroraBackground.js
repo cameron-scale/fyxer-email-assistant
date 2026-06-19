@@ -8,7 +8,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { View, StyleSheet, Animated, Dimensions, Easing } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme';
 import { useStore } from '../store';
 
@@ -117,7 +116,7 @@ export default function AuroraBackground() {
     <View style={styles.layer} pointerEvents="none">
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade }]}>
         <Orb
-          id="orb1" size={420} color={pal.o1} style={{ top: -80, left: -100 }} duration={18000}
+          id="orb1" size={420} color={pal.o1} style={{ top: -120, left: -100 }} duration={18000}
           keyframes={[{ at: 0, x: 0, y: 0, s: 1 }, { at: 0.33, x: 60, y: 40, s: 1.08 }, { at: 0.66, x: -30, y: 60, s: 0.94 }, { at: 1, x: 0, y: 0, s: 1 }]}
         />
         <Orb
@@ -130,17 +129,12 @@ export default function AuroraBackground() {
         />
         {particles.map((_, i) => <Particle key={i} color={pal.p} />)}
       </Animated.View>
-      {/* Top fade — the aurora eases in below the header (≈ CSS mask-image). */}
-      <LinearGradient
-        colors={[colors.bg, 'rgba(12,15,30,0)']}
-        style={styles.topFade}
-        pointerEvents="none"
-      />
+      {/* The aurora now fills the full screen — no top mask — so the glow bleeds
+          all the way up behind the status bar / dynamic island. */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   layer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0, overflow: 'hidden', backgroundColor: colors.bg },
-  topFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 90 },
 });

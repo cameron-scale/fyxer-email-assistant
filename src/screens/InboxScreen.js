@@ -160,6 +160,10 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* Scrim — darkens the aurora just enough to keep the email rows readable,
+          while sitting behind all interactive content (above the aurora layer). */}
+      <View style={styles.scrim} pointerEvents="none" />
+
       {/* Navy header glow */}
       <LinearGradient colors={gradients.header} style={styles.glow} pointerEvents="none" />
 
@@ -417,6 +421,7 @@ function SelAction({ icon, label, onPress, disabled, color }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' }, // aurora shows through
+  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(10,12,20,0.52)' },
   glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 230 },
   loadMore: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 22 },
   loadMoreText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '600' },

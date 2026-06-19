@@ -32,7 +32,7 @@ function EmailCard({ email, onPress, onLongPress, tagRef, selectMode, selected }
         style={styles.band}
       >
         <SenderAvatar name={p.senderName} email={p.senderEmail} size={32} textStyle={styles.initial} />
-        <Text style={styles.bandName} numberOfLines={1}>{p.senderName}</Text>
+        <Text style={[styles.bandName, !unread && styles.bandNameRead]} numberOfLines={1}>{p.senderName}</Text>
         {threadCount > 1 && (
           <View style={styles.threadPill}>
             <Ionicons name="chatbubbles" size={10} color="#fff" />
@@ -70,9 +70,11 @@ export default React.memo(EmailCard);
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(18,22,34,0.58)', // dark glass so the aurora glows through
     borderRadius: radius.lg,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -96,21 +98,22 @@ const styles = StyleSheet.create({
   },
   initial: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: -0.5 },
   bandName: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '700' },
+  bandNameRead: { color: 'rgba(255,255,255,0.72)' },
   threadPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 8, paddingHorizontal: 6, height: 18 },
   threadText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   rankPill: { backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, minWidth: 30, alignItems: 'center' },
   rankText: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  bandTime: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '500', textAlign: 'right' },
+  bandTime: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '500', textAlign: 'right' }, // timestamp
   vip: { marginLeft: 2 },
   unreadDot: {
     width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', opacity: 0.95,
   },
   body: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
-  subject: { fontSize: 14, fontWeight: '600', color: colors.ink, letterSpacing: -0.2, marginBottom: 4 },
-  subjectRead: { fontWeight: '500', color: colors.ink2 },
+  subject: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', letterSpacing: -0.2, marginBottom: 4 },
+  subjectRead: { fontWeight: '500', color: 'rgba(255,255,255,0.60)' },
   previewRow: { flexDirection: 'row', alignItems: 'flex-start' },
   aiIcon: { marginTop: 3, marginRight: 5 },
-  preview: { flex: 1, fontSize: 13, color: colors.ink3, lineHeight: 18, fontWeight: '400' },
+  preview: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.62)', lineHeight: 18, fontWeight: '400' },
   footer: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
   tag: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6 },
   tagText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.02 },
