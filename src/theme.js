@@ -32,7 +32,7 @@ export const colors = {
   onDarkBorder: 'rgba(255,255,255,0.1)',
   onDarkFill: 'rgba(255,255,255,0.06)',
 
-  tabBar: 'rgba(12,15,30,0.86)',
+  tabBar: 'rgba(10,12,24,0.985)',
   star: '#FFD60A',
 
   // ── Legacy tokens kept so the triage deck + older bits still render ──
