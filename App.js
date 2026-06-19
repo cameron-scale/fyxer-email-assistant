@@ -134,13 +134,17 @@ function AppShell() {
     <View style={styles.root}>
       <StatusBar style={DARK_SCREENS.includes(top.name) ? 'light' : 'dark'} />
       <AuroraBackground />
-      <Screen
-        navigate={navigate}
-        goBack={goBack}
-        params={top.params}
-        route={top.name}
-        openSheet={openSheet}
-      />
+      {/* Keep screens below the top MOUNTED (just hidden) so their scroll position
+          and state survive a push → pop (e.g. open an email, come back where you were). */}
+      {stack.map((entry, i) => {
+        const S = SCREENS[entry.name] || InboxScreen;
+        const isTop = i === stack.length - 1;
+        return (
+          <View key={`${entry.name}-${i}`} style={isTop ? styles.screenLayer : styles.hiddenLayer} pointerEvents={isTop ? 'auto' : 'none'}>
+            <S navigate={navigate} goBack={goBack} params={entry.params} route={entry.name} openSheet={openSheet} />
+          </View>
+        );
+      })}
       {top.name !== 'Triage' && <UndoSnackbar />}
       {showTabBar && (
         <TabBar
@@ -185,4 +189,6 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  screenLayer: { ...StyleSheet.absoluteFillObject },
+  hiddenLayer: { display: 'none' },
 });

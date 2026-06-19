@@ -77,13 +77,14 @@ function Message({ msg, defaultOpen }) {
 }
 
 export default function ThreadScreen({ goBack, navigate, params }) {
-  const { emails, searchEmails, folderEmails, findEmail, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk } = useStore();
+  const { emails, searchEmails, folderEmails, findEmail, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk, snooze, toggleVip, vips } = useStore();
   const seed = findEmail(params.id);
   const [messages, setMessages] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rsvpDone, setRsvpDone] = useState(null);
   const [attBusy, setAttBusy] = useState(null);
   const [attView, setAttView] = useState(null); // { uri, name, type }
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const { token, provider } = useMemo(() => {
     const acc = (mailAccounts || []).find((a) => a.id === seed?.accountId);
@@ -134,6 +135,7 @@ export default function ThreadScreen({ goBack, navigate, params }) {
 
   const senderEmail = (seed?.priority?.senderEmail || parseSender(seed?.from || '').email || '').toLowerCase();
   const senderNote = (prefs?.senderNotes || {})[senderEmail] || '';
+  const isVipSender = (vips || []).map((v) => String(v).toLowerCase()).includes(senderEmail);
 
   // Run a triage action, then jump straight to the next email's thread (instead of
   // bouncing back to the inbox). Compute the next id BEFORE acting.
@@ -182,11 +184,24 @@ export default function ThreadScreen({ goBack, navigate, params }) {
         <View style={styles.quickBar}>
           <QuickAction icon="archive-outline" label="Archive" onPress={() => advance(archive)} />
           <QuickAction icon="trash-outline" label="Trash" onPress={() => advance(trashEmail)} />
-          <QuickAction icon="bulb-outline" label="Teach AI" onPress={teachAI} />
           <QuickAction icon="alert-circle-outline" label="Report" onPress={() => advance(reportJunk)} />
           <QuickAction icon="mail-unread-outline" label="Unread" onPress={() => advance(markUnread)} />
+          <QuickAction icon="ellipsis-horizontal" label="More" onPress={() => setMoreOpen(true)} />
         </View>
       )}
+
+      {/* More actions menu */}
+      <Modal visible={moreOpen} transparent animationType="fade" onRequestClose={() => setMoreOpen(false)}>
+        <Pressable style={styles.moreBackdrop} onPress={() => setMoreOpen(false)}>
+          <View style={styles.moreSheet}>
+            <MoreItem icon="bulb-outline" label="Teach AI about this sender" onPress={() => { setMoreOpen(false); teachAI(); }} />
+            <MoreItem icon="time-outline" label="Snooze 4 hours" onPress={() => { setMoreOpen(false); if (seed) advance((id) => snooze(id, 4)); }} />
+            <MoreItem icon={isVipSender ? 'star' : 'star-outline'} label={isVipSender ? 'Remove from VIPs' : 'Add sender to VIPs'} onPress={() => { setMoreOpen(false); if (senderEmail) toggleVip(senderEmail); }} />
+            <MoreItem icon="mail-open-outline" label="Mark as read" onPress={() => { setMoreOpen(false); if (seed) { markRead(seed.id); goBack(); } }} />
+            <MoreItem icon="close" label="Cancel" onPress={() => setMoreOpen(false)} muted />
+          </View>
+        </Pressable>
+      </Modal>
 
       {loading ? <ActivityIndicator color={colors.blue} style={{ marginTop: 30 }} /> : (
         <ScrollView contentContainerStyle={styles.body2} showsVerticalScrollIndicator={false}>
@@ -272,6 +287,15 @@ export default function ThreadScreen({ goBack, navigate, params }) {
   );
 }
 
+function MoreItem({ icon, label, onPress, muted }) {
+  return (
+    <Pressable style={styles.moreItem} onPress={onPress}>
+      <Ionicons name={icon} size={20} color={muted ? 'rgba(255,255,255,0.5)' : '#fff'} />
+      <Text style={[styles.moreItemText, muted && { color: 'rgba(255,255,255,0.5)' }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function QuickAction({ icon, label, onPress }) {
   return (
     <Pressable style={styles.qaBtn} onPress={onPress} hitSlop={6}>
@@ -283,6 +307,10 @@ function QuickAction({ icon, label, onPress }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' },
+  moreBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  moreSheet: { backgroundColor: '#161B26', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 8, paddingBottom: 36 },
+  moreItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 15, paddingHorizontal: 22 },
+  moreItemText: { color: '#fff', fontSize: 16, fontWeight: '500' },
   attViewer: { flex: 1, backgroundColor: '#0B0E14' },
   attViewerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
   attViewerName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '700' },

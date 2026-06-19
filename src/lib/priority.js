@@ -120,14 +120,18 @@ export const CATEGORY_ORDER = ['Urgent', 'Client', 'Action Needed', 'Meeting', '
 
 function categorize(haystack, signals) {
   const { noisySender, isQuestion, importantHits, looksHuman, noiseHits, brandSender } = signals;
-  // Anything promotional/bulk/marketing (incl. content "how-to" blasts) is a Newsletter,
-  // even when it shouts a fake deadline.
-  if (noiseHits > 0 || brandSender
-    || /(% off|sale|discount|\bdeal\b|promo|limited time|shop now|offer|coupon|unsubscribe|newsletter|digest|weekly recap|view in browser|this week|how to|best practices|webinar|ebook|free trial|productivity)/.test(haystack))
+  // Automated / bulk / brand / Outlook-"Other" senders and promotional content are
+  // Newsletters — even when they ask a rhetorical question ("Do you know your...?")
+  // or shout a fake deadline. This is checked FIRST so marketing never lands in
+  // "Action Needed".
+  if (noisySender || brandSender || noiseHits > 0
+    || /(% off|sale|discount|\bdeal\b|promo|limited time|shop now|offer|coupon|unsubscribe|newsletter|digest|weekly recap|view in browser|this week|how to|best practices|webinar|ebook|free trial|productivity|new arrivals|best sellers|save up to|save big|exclusive|subscribe|bonus|rewards|points|cashback|gift card|don't miss|trending|featured)/.test(haystack))
     return 'Newsletter';
   if (/(meeting|\bcall\b|schedule|reschedule|calendar|invite|catch up|\bsync\b|availability|book a)/.test(haystack))
     return 'Meeting';
-  if (isQuestion || importantHits > 0 || (looksHuman && !noisySender)) return 'Action Needed';
+  // A real, direct ask from a human → Action Needed (noisy senders already excluded).
+  if ((isQuestion || importantHits > 0) && !noisySender) return 'Action Needed';
+  if (looksHuman && !noisySender) return 'Action Needed';
   return 'FYI';
 }
 
