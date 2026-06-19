@@ -113,7 +113,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-24',
+    version: 'debug-25',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-24', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-25', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-24',
+    version: 'debug-25',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -599,6 +599,12 @@ function auxSet(key, value) {
 // A hard ceiling on AI *generations* per day so a runaway loop or heavy day can't
 // rack up a big bill. Cached results never count against it.
 const DAILY_AI_CAP = parseInt(process.env.DAILY_AI_CAP || '400', 10);
+// How many OLD emails the one-time "learn my inbox" may scan per day. Scanning is
+// just free Graph metadata + a single cheap AI profiling call, so this is a volume
+// guard, not a cost guard.
+const LEARN_DAILY_CAP = parseInt(process.env.LEARN_DAILY_CAP || '5000', 10);
+let learnDay = new Date().toISOString().slice(0, 10);
+let learnCount = 0;
 let aiDay = new Date().toISOString().slice(0, 10);
 let aiDayCount = 0;
 function underDailyBudget() {
@@ -1327,6 +1333,106 @@ app.post('/relationship', async (req, res) => {
     }
     res.json({ total: msgs.length, received, sent, awaiting, lastIso: last ? last.toISOString() : null });
   } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── One-time "learn my inbox" ────────────────────────────────────────────────
+// Scans up to N old emails' METADATA (free Graph), aggregates the top senders,
+// then makes ONE cheap AI call to suggest VIP contacts + a short profile of the
+// user's email landscape. Deliberately does NOT summarize every email (that would
+// be expensive). Bounded by a daily email-scan cap.
+app.post('/learn', async (req, res) => {
+  try {
+    const { refreshToken, provider, max } = req.body || {};
+    const today = new Date().toISOString().slice(0, 10);
+    if (learnDay !== today) { learnDay = today; learnCount = 0; }
+    const remaining = Math.max(0, LEARN_DAILY_CAP - learnCount);
+    if (remaining <= 0) return res.json({ processed: 0, capped: true, suggestedVips: [], profile: '', dailyCap: LEARN_DAILY_CAP });
+    const want = Math.min(parseInt(max, 10) || 3000, remaining);
+
+    const senders = {}; // email -> { name, count }
+    const subjects = [];
+    let processed = 0;
+    const deadline = Date.now() + 22000; // keep the request well under any timeout
+    const note = (addr, name, subject) => {
+      if (addr) { const k = String(addr).toLowerCase(); senders[k] = senders[k] || { name: name || k, count: 0 }; senders[k].count += 1; }
+      if (subjects.length < 40 && subject) subjects.push(String(subject).slice(0, 100));
+      processed += 1;
+    };
+
+    if (provider === 'google') {
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      let pageToken = '';
+      while (processed < want && Date.now() < deadline) {
+        const lr = await gmailGet(`/messages?maxResults=100&labelIds=INBOX${pageToken ? `&pageToken=${pageToken}` : ''}`, accessToken);
+        const ld = await lr.json();
+        if (!lr.ok) break;
+        const ids = (ld.messages || []).map((m) => m.id);
+        if (!ids.length) break;
+        const metas = await Promise.all(ids.slice(0, want - processed).map(async (id) => {
+          try { const r = await gmailGet(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`, accessToken); const m = await r.json(); return r.ok ? m : null; } catch (e) { return null; }
+        }));
+        for (const m of metas) {
+          if (!m) { continue; }
+          const from = gmailHeader(m.payload, 'From');
+          const email = (from.match(/[^\s<>]+@[^\s<>]+/) || [''])[0];
+          note(email, from.replace(/<[^>]+>/, '').replace(/"/g, '').trim(), gmailHeader(m.payload, 'Subject'));
+        }
+        pageToken = ld.nextPageToken || '';
+        if (!pageToken) break;
+      }
+    } else {
+      const { accessToken } = await accessTokenFromRefresh(refreshToken);
+      let url = `${GRAPH}/me/messages?$top=100&$select=from,subject,receivedDateTime&$orderby=receivedDateTime desc`;
+      while (url && processed < want && Date.now() < deadline) {
+        const r = await graphGet(url, accessToken);
+        const d = await r.json();
+        if (!r.ok) break;
+        for (const m of (d.value || [])) {
+          const a = m.from?.emailAddress;
+          note(a?.address, a?.name, m.subject);
+          if (processed >= want) break;
+        }
+        url = d['@odata.nextLink'] || null;
+      }
+    }
+    learnCount += processed;
+
+    const top = Object.entries(senders)
+      .map(([email, v]) => ({ email, name: v.name, count: v.count }))
+      .filter((s) => s.email && s.email.includes('@'))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 100);
+
+    let suggestedVips = []; let profile = '';
+    if (ANTHROPIC_API_KEY && top.length && underDailyBudget()) {
+      try {
+        const msg = await anthropic().messages.create({
+          model: AI_MODEL, max_tokens: 700,
+          system:
+            'You are profiling a user from their email metadata. Given their most frequent ' +
+            'senders (with counts) and some subject lines, do two things: (1) pick up to 8 ' +
+            'people who are likely IMPORTANT human contacts worth marking VIP (real colleagues/' +
+            'clients/partners — NOT newsletters, no-reply, marketing, or automated senders); ' +
+            '(2) write a 1-2 sentence profile of the user (their work/role, key relationships, ' +
+            'recurring topics). Reply ONLY JSON: {"vips":[{"email","name","reason"}],"profile":"..."}.',
+          messages: [{ role: 'user', content: JSON.stringify({ topSenders: top.slice(0, 80), sampleSubjects: subjects }) }],
+        });
+        let t = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+        t = t.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
+        const parsed = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1));
+        suggestedVips = (parsed.vips || []).filter((v) => v && v.email && v.email.includes('@')).slice(0, 8)
+          .map((v) => ({ email: String(v.email).toLowerCase(), name: String(v.name || ''), reason: String(v.reason || '') }));
+        profile = String(parsed.profile || '');
+        countAi();
+        auxSet('profile', { profile, suggestedVips, at: Date.now() });
+      } catch (e) { /* profiling is best-effort */ }
+    }
+    record({ stage: 'learn_ok', processed, vips: suggestedVips.length });
+    res.json({ processed, suggestedVips, profile, capped: false, dailyCap: LEARN_DAILY_CAP });
+  } catch (e) {
+    record({ stage: 'learn_error', message: e.message });
     res.status(400).json({ error: e.message });
   }
 });

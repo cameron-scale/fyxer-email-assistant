@@ -128,6 +128,12 @@ export function nextSteps(serverUrl, payload) {
   return post(serverUrl, '/next-steps', payload);
 }
 
+// One-time "learn my inbox": scan old mail metadata → suggested VIPs + profile.
+// Returns { processed, suggestedVips:[{email,name,reason}], profile, capped }.
+export function learnInbox(serverUrl, refreshToken, provider = 'outlook', max = 3000) {
+  return post(serverUrl, '/learn', { refreshToken, provider, max });
+}
+
 // AI snooze-time suggestion. Returns { suggestion: { label, iso } | null }.
 export function snoozeSuggest(serverUrl, payload) {
   return post(serverUrl, '/snooze-suggest', payload);

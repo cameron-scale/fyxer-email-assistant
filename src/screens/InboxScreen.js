@@ -14,6 +14,7 @@ import { useStore, SORTS } from '../store';
 import EmailCard from '../components/EmailCard';
 import SwipeableRow from '../components/SwipeableRow';
 import ProfileAvatar from '../components/ProfileAvatar';
+import LearnInboxCard from '../components/LearnInboxCard';
 import { dayBucket, longToday } from '../lib/time';
 import { useTourTarget } from '../lib/tour';
 
@@ -311,6 +312,11 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
                 <Ionicons name="alert-circle" size={16} color="#fff" />
                 <Text style={styles.errorText} numberOfLines={3}>{error}</Text>
               </View>
+            )}
+
+            {/* One-time "learn my inbox" after sign-in */}
+            {!starred && !usingSearch && connected && prefs?.learnedInbox === false && emails.length > 0 && (
+              <LearnInboxCard />
             )}
           </View>
         }
