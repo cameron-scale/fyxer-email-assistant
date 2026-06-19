@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-38',
+    version: 'debug-39',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-38', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-39', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-38',
+    version: 'debug-39',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -919,10 +919,12 @@ function detectMeeting(s = '') {
     .replace(/&amp;/gi, '&').replace(/&#0?38;/g, '&').replace(/&#0?61;/g, '=').replace(/&#0?47;/g, '/').replace(/&quot;/gi, '"');
   try { text += '\n' + decodeURIComponent(text.replace(/%(?![0-9a-fA-F]{2})/g, '%25')); } catch (e) { /* leave as-is */ }
   const patterns = [
-    { provider: 'Zoom', re: /https?:\/\/[\w.-]*zoom\.us\/[^\s"'<>)\]]+/i },
-    { provider: 'Microsoft Teams', re: /https?:\/\/teams\.(?:microsoft|live)\.com\/[^\s"'<>)\]]+/i },
-    { provider: 'Google Meet', re: /https?:\/\/meet\.google\.com\/[^\s"'<>)\]]+/i },
-    { provider: 'Webex', re: /https?:\/\/[\w.-]*webex\.com\/[^\s"'<>)\]]+/i },
+    // Require the real meeting path (/j/ /w/ /s/ /my/) so we never grab a Zoom
+    // logo/footer/branding link (which gives "Invalid meeting ID").
+    { provider: 'Zoom', re: /https?:\/\/[\w.-]*zoom\.us\/(?:j|w|s|my)\/[^\s"'<>)\]]+/i },
+    { provider: 'Microsoft Teams', re: /https?:\/\/teams\.(?:microsoft|live)\.com\/l\/meetup[^\s"'<>)\]]+/i },
+    { provider: 'Google Meet', re: /https?:\/\/meet\.google\.com\/[a-z]{2,}[^\s"'<>)\]]*/i },
+    { provider: 'Webex', re: /https?:\/\/[\w.-]*webex\.com\/[^\s"'<>)\]]*j\.php[^\s"'<>)\]]+/i },
   ];
   for (const p of patterns) {
     const m = text.match(p.re);
