@@ -195,29 +195,40 @@ export function StoreProvider({ children }) {
     return ki[activeAccountId] || [];
   }, [prefs.knownImportant, activeAccountId]);
 
-  // Build the prioritized, filtered, sorted list the UI shows.
-  const emails = useMemo(() => {
-    if (demoMode) return DEMO_EMAILS; // fake walkthrough inbox (already prioritized)
+  // Build the prioritized, filtered, sorted list the UI shows. We split this into
+  // two passes so AI summaries arriving (which happens constantly) don't re-run the
+  // expensive regex scoring over the whole mailbox:
+  //  1) rankedBase — filter + prioritize + sort. Recomputes only when mail / prefs
+  //     change (NOT when a summary lands).
+  //  2) emails — cheaply attach each summary on top, keeping the SAME object
+  //     reference for un-summarized rows so memoized cards don't re-render.
+  const rankedBase = useMemo(() => {
+    if (demoMode) return DEMO_EMAILS;
     const now = Date.now();
     const visible = raw
-      // Keep the main inbox clean: only Inbox-folder mailbox mail (folder browsing
-      // loads other folders too). Honor the active account filter ('all' = every
-      // mailbox). Works the same for Outlook and Gmail accounts.
       .filter((e) => {
         const isMailbox = e.account === 'outlook' || e.account === 'gmail' || e.account === 'icloud';
         if (isMailbox && e.folder && e.folder !== 'inbox') return false;
         if (activeAccountId !== 'all' && isMailbox && e.accountId && e.accountId !== activeAccountId) return false;
         return true;
       })
-      .map((e) => ({ ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id] }))
+      .map((e) => ({ ...e, ...(overrides[e.id] || {}) }))
       .filter((e) => {
         if (e.status === 'archived' || e.status === 'done') return false;
         if (e.snoozedUntil && e.snoozedUntil > now) return false;
         return true;
       });
-    const ranked = prioritize(visible, vips, prefs.categories, knownImportantList);
-    return applySort(ranked);
-  }, [raw, overrides, vips, summaries, sortBy, prefs.categories, prefs.knownImportant, demoMode, activeAccountId, applySort]);
+    return applySort(prioritize(visible, vips, prefs.categories, knownImportantList));
+  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, demoMode, activeAccountId, applySort]); // eslint-disable-line
+
+  const emails = useMemo(() => {
+    if (demoMode) return rankedBase;
+    return rankedBase.map((e) => {
+      const sum = e.aiSummary || summaries[e.id];
+      if (!sum || (e.aiSummary === sum && e.priority.aiSummarized)) return e; // unchanged ref → no re-render
+      return { ...e, aiSummary: sum, priority: { ...e.priority, tldr: sum, aiSummarized: true } };
+    });
+  }, [rankedBase, summaries, demoMode]);
 
   // The list for the currently-open folder (Junk, Archive, custom folders…).
   const folderEmails = useMemo(() => {
