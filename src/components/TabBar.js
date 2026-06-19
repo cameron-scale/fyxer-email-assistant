@@ -57,7 +57,13 @@ export default function TabBar({ active, onNavigate, onCompose, inboxBadge = 0 }
   }, [editMode]); // eslint-disable-line
 
   const persist = (next) => setPrefs({ tabs: normalizeTabs(next) });
-  const exitEdit = () => { setEditMode(false); setDrag(null); dragRef.current = null; };
+  // The "Customize Tab Bar" banner is a one-time hint: once it's been dismissed
+  // (Done or tapping away), never show it again.
+  const hintSeen = prefs?.tabHintSeen;
+  const exitEdit = () => {
+    setEditMode(false); setDrag(null); dragRef.current = null;
+    if (!hintSeen) setPrefs({ tabHintSeen: true });
+  };
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(''), 1600); };
 
   const removeSlot = (i) => { const next = slots.slice(); next[i] = null; persist(next); };
@@ -171,13 +177,20 @@ export default function TabBar({ active, onNavigate, onCompose, inboxBadge = 0 }
       {/* Dim overlay + header (above content, behind the bar). Tap to exit. */}
       {editMode && (
         <Pressable style={styles.overlay} onPress={exitEdit}>
-          <View style={styles.editHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.editTitle}>Customize Tab Bar</Text>
-              <Text style={styles.editSub}>Drag to reorder, minus to remove, plus to add.</Text>
+          {!hintSeen ? (
+            <View style={styles.editHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.editTitle}>Customize Tab Bar</Text>
+                <Text style={styles.editSub}>Drag to reorder, minus to remove, plus to add.</Text>
+              </View>
+              <Pressable style={styles.doneBtn} onPress={exitEdit}><Text style={styles.doneText}>Done</Text></Pressable>
             </View>
-            <Pressable style={styles.doneBtn} onPress={exitEdit}><Text style={styles.doneText}>Done</Text></Pressable>
-          </View>
+          ) : (
+            // After the first time, keep just a compact Done pill (no banner).
+            <View style={styles.donePillRow}>
+              <Pressable style={styles.doneBtn} onPress={exitEdit}><Text style={styles.doneText}>Done</Text></Pressable>
+            </View>
+          )}
         </Pressable>
       )}
 
@@ -302,6 +315,7 @@ const styles = StyleSheet.create({
   // Edit overlay
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', zIndex: 15 },
   editHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 96, marginHorizontal: 16, backgroundColor: colors.surface, borderRadius: 16, padding: 16 },
+  donePillRow: { alignItems: 'flex-end', marginBottom: 96, marginHorizontal: 16 },
   editTitle: { fontSize: 16, fontWeight: '800', color: colors.ink },
   editSub: { fontSize: 12.5, color: colors.ink3, marginTop: 2 },
   doneBtn: { backgroundColor: colors.blue, borderRadius: 18, paddingVertical: 8, paddingHorizontal: 18 },
