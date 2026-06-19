@@ -155,13 +155,18 @@ export async function icloudFolders(refreshToken) {
 
 // ── iCloud Calendar (CalDAV) ────────────────────────────────────────────────
 function icsDate(params, val) {
-  const m = String(val || '').match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?/);
+  const v = String(val || '');
+  const m = v.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?/);
   if (!m) return { iso: null, allDay: false };
   const [, y, mo, d, hh, mm, ss] = m;
   const allDay = /VALUE=DATE/i.test(params || '') || !hh;
-  if (allDay) return { iso: `${y}-${mo}-${d}T00:00:00Z`, allDay: true };
-  // No tz database here — treat as UTC (Z) or assume UTC for floating/TZID times.
-  return { iso: `${y}-${mo}-${d}T${hh}:${mm}:${ss || '00'}Z`, allDay: false };
+  if (allDay) return { iso: `${y}-${mo}-${d}T00:00:00`, allDay: true };
+  // Only mark UTC when the value literally ends in Z. For TZID/floating times emit
+  // WITHOUT a Z so the device shows them at their wall-clock time (correct when the
+  // user is in the event's own timezone — the common case). Forcing Z shifted every
+  // timed event by the UTC offset.
+  const utc = /Z\s*$/i.test(v);
+  return { iso: `${y}-${mo}-${d}T${hh}:${mm}:${ss || '00'}${utc ? 'Z' : ''}`, allDay: false };
 }
 
 function parseVEvents(data) {
