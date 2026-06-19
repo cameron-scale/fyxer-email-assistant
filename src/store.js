@@ -27,7 +27,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [] };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {} };
 
 const StoreContext = createContext(null);
 
@@ -286,7 +286,17 @@ export function StoreProvider({ children }) {
     persistAction(id, 'read'); // "done" also marks it read in the mailbox
   }, [setOverride, persistAction]);
 
-  const markRead = useCallback((id) => { setOverride(id, { read: true }); persistAction(id, 'read'); }, [setOverride, persistAction]);
+  const markRead = useCallback((id) => {
+    setOverride(id, { read: true });
+    persistAction(id, 'read');
+    // Opening a staged email resets its 7-day "archiving soon" countdown.
+    setPrefsState((p) => {
+      if (!p.archiveStaged || !p.archiveStaged[id]) return p;
+      const next = { ...p, archiveStaged: { ...p.archiveStaged, [id]: Date.now() } };
+      saveToken('prefs', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [setOverride, persistAction]);
 
   const markUnread = useCallback((id) => {
     setOverride(id, { read: false });
@@ -317,6 +327,46 @@ export function StoreProvider({ children }) {
     });
     setRecentAction(null);
   }, [setOverride, persistAction]);
+
+  // ── "Archiving Soon" — a passive, high-confidence auto-archive queue ─────────
+  // Low-priority bulk mail (the 'noise' bucket: newsletters/promos/notifications)
+  // is staged for archiving 7 days after it lands, unless you keep it. Removing an
+  // email from the queue keeps it for good. The 7-day expiry is checked lazily on
+  // each inbox refresh (no server cron needed).
+  const ARCHIVE_AFTER = 7 * 24 * 3600 * 1000;
+  const archiveKeptSet = useMemo(() => new Set((prefs.archiveKept || []).map(String)), [prefs.archiveKept]);
+  const archivingSoon = useMemo(
+    () => emails.filter((e) => e.priority.bucket === 'noise' && !archiveKeptSet.has(e.id)),
+    [emails, archiveKeptSet],
+  );
+  // Stamp newly-staged mail with a timestamp and auto-archive anything past 7 days.
+  useEffect(() => {
+    const staged = { ...(prefs.archiveStaged || {}) };
+    const now = Date.now();
+    let changed = false;
+    const expired = [];
+    const liveIds = new Set(archivingSoon.map((e) => e.id));
+    for (const e of archivingSoon) {
+      if (!staged[e.id]) { staged[e.id] = now; changed = true; }
+      else if (now - staged[e.id] > ARCHIVE_AFTER) expired.push(e.id);
+    }
+    // Drop stamps for mail no longer in the queue (archived/kept elsewhere).
+    for (const id of Object.keys(staged)) { if (!liveIds.has(id)) { delete staged[id]; changed = true; } }
+    if (expired.length) { expired.forEach((id) => { setOverride(id, { status: 'archived' }); persistAction(id, 'archive'); delete staged[id]; }); changed = true; }
+    if (changed) setPrefsState((p) => { const next = { ...p, archiveStaged: staged }; saveToken('prefs', JSON.stringify(next)).catch(() => {}); return next; });
+  }, [archivingSoon]); // eslint-disable-line
+
+  const keepFromArchive = useCallback((id) => {
+    setPrefsState((p) => {
+      const next = { ...p, archiveKept: Array.from(new Set([...(p.archiveKept || []), id])) };
+      saveToken('prefs', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+  const archiveStagedNow = useCallback((ids) => {
+    const list = ids || archivingSoon.map((e) => e.id);
+    bulkAction(list, 'archive');
+  }, [archivingSoon, bulkAction]);
 
   const snooze = useCallback((id, hours = 4) => {
     setOverride(id, { snoozedUntil: Date.now() + hours * 3600000 });
@@ -834,6 +884,9 @@ export function StoreProvider({ children }) {
     removeMailAccount,
     updateMailAccount,
     bootstrapped,
+    archivingSoon,
+    keepFromArchive,
+    archiveStagedNow,
     learnOpen,
     openLearn,
     closeLearn,

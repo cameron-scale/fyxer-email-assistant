@@ -37,9 +37,9 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const {
     emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
     searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
-    mailboxUnread, syncingAll, prefs,
+    mailboxUnread, syncingAll, prefs, archivingSoon,
   } = useStore();
-  const connected = accounts.outlook || accounts.gmail;
+  const connected = accounts.outlook || accounts.gmail || accounts.icloud;
   const [filter, setFilter] = useState(params?.filter || 'all');
   // A smart-folder tab opens the inbox pre-filtered; the plain Inbox tab clears it.
   useEffect(() => { setFilter(params?.filter || 'all'); }, [params?.filter]);
@@ -253,10 +253,10 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
               <View ref={searchRowRef} collapsable={false} style={styles.searchRow}>
                 <Pressable style={styles.searchPill} onPress={() => setSearching(true)}>
                   <Ionicons name="search" size={15} color={colors.onDarkFaint} />
-                  <Text style={styles.searchText}>Search mail…</Text>
-                </Pressable>
-                <Pressable style={[styles.sortBtn, styles.aiPillBtn]} onPress={() => { setSearching(true); setAiMode(true); }}>
-                  <Ionicons name="sparkles" size={17} color={colors.blue} />
+                  <Text style={[styles.searchText, { flex: 1 }]}>Search mail…</Text>
+                  <Pressable hitSlop={10} onPress={() => { setSearching(true); setAiMode(true); }} style={styles.searchAi}>
+                    <Ionicons name="sparkles" size={16} color={colors.blue} />
+                  </Pressable>
                 </Pressable>
                 <Pressable style={styles.sortBtn} onPress={() => setSortOpen((v) => !v)}>
                   <Ionicons name="swap-vertical" size={18} color="#fff" />
@@ -329,6 +329,18 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
                 <Ionicons name="alert-circle" size={16} color="#fff" />
                 <Text style={styles.errorText} numberOfLines={3}>{error}</Text>
               </View>
+            )}
+
+            {/* Archiving Soon — passive auto-archive queue */}
+            {!starred && !usingSearch && filter === 'all' && (archivingSoon?.length || 0) > 0 && (
+              <Pressable style={styles.archiveBar} onPress={() => navigate('ArchivingSoon')}>
+                <Ionicons name="time-outline" size={17} color="#F59E0B" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.archiveBarTitle}>{archivingSoon.length.toLocaleString()} archiving soon</Text>
+                  <Text style={styles.archiveBarSub} numberOfLines={1}>Low-priority mail · clears in 7 days unless you keep it</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="rgba(245,158,11,0.7)" />
+              </Pressable>
             )}
 
             {/* One-time "learn my inbox" after sign-in */}
@@ -478,6 +490,7 @@ const styles = StyleSheet.create({
     borderRadius: 14, paddingVertical: 12, paddingHorizontal: 15,
   },
   searchText: { fontSize: 14, color: 'rgba(255,255,255,0.3)' },
+  searchAi: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,113,227,0.16)', alignItems: 'center', justifyContent: 'center' },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 14 },
   sortBtn: {
     width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
@@ -506,6 +519,9 @@ const styles = StyleSheet.create({
   aiAnswerText: { color: '#fff', fontSize: 13.5, flex: 1, lineHeight: 19 },
   cancel: { color: colors.blue, fontSize: 15, fontWeight: '500' },
   chipsWrap: { marginBottom: 12, marginHorizontal: -6 },
+  archiveBar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: 14, paddingVertical: 11, paddingHorizontal: 13, marginBottom: 12 },
+  archiveBarTitle: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  archiveBarSub: { color: 'rgba(255,255,255,0.55)', fontSize: 12, marginTop: 1 },
   chipsRow: { gap: 7, paddingHorizontal: 6, paddingRight: 24, paddingTop: 8 },
   chip: {
     paddingVertical: 6, paddingHorizontal: 14, borderRadius: 20,

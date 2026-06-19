@@ -26,6 +26,7 @@ import HealthScreen from './src/screens/HealthScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import ProfilingScreen from './src/screens/ProfilingScreen';
 import BulkTriageScreen from './src/screens/BulkTriageScreen';
+import ArchivingSoonScreen from './src/screens/ArchivingSoonScreen';
 import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
 import OnboardingTour from './src/components/OnboardingTour';
@@ -60,12 +61,13 @@ const SCREENS = {
   Onboarding: OnboardingScreen,
   Profiling: ProfilingScreen,
   BulkTriage: BulkTriageScreen,
+  ArchivingSoon: ArchivingSoonScreen,
 };
 
 // Screens that show the bottom tab bar and can be switched between as tabs.
 // Settings now lives behind the profile avatar, not the tab bar.
 const TAB_SCREENS = ['Inbox', 'Starred', 'Sent', 'Drafts'];
-const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDrawer', 'Folder', 'Calendar', 'Thread', 'Onboarding', 'Profiling', 'BulkTriage', 'Digest'];
+const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDrawer', 'Folder', 'Calendar', 'Thread', 'Onboarding', 'Profiling', 'BulkTriage', 'Digest', 'ArchivingSoon'];
 
 // Which aurora palette a top-level screen uses (Detail sets its own per-email).
 const SCREEN_PALETTE = { Starred: 'starred', Sent: 'sent', Drafts: 'drafts' };
