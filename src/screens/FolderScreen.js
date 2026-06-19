@@ -46,7 +46,7 @@ export default function FolderScreen({ goBack, navigate }) {
           renderSectionHeader={({ section }) => <Text style={styles.sectionEyebrow}>{section.title}</Text>}
           renderItem={({ item }) => (
             <View style={styles.cardWrap}>
-              <EmailCard email={item} onPress={() => navigate('Detail', { id: item.id })} />
+              <EmailCard email={item} onPress={() => navigate('Thread', { id: item.id })} />
             </View>
           )}
           ListEmptyComponent={<Text style={styles.empty}>This folder is empty.</Text>}

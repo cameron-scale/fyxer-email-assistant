@@ -323,7 +323,7 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
             <EmailCard
               email={item} tagRef={isFirst ? firstTagRef : undefined}
               selectMode={selectMode} selected={selected.has(item.id)}
-              onPress={selectMode ? () => toggleSelect(item.id) : () => navigate(item.threadCount > 1 ? 'Thread' : 'Detail', { id: item.id })}
+              onPress={selectMode ? () => toggleSelect(item.id) : () => navigate('Thread', { id: item.id })}
               onLongPress={() => enterSelect(item.id)}
             />
           );
