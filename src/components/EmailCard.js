@@ -1,12 +1,12 @@
-// EmailCard.js — the ScaleMail-style inbox card: a white rounded card with a
-// colored gradient "band" at the top (driven by the email's priority/category),
-// the sender + time, an unread dot, then subject, 2-line preview and a tag pill.
+// EmailCard.js — a clean inbox list row (Apple Mail / Spark style): a small
+// colored priority dot, the sender's avatar, the sender + time, then the subject
+// and a 2-line AI preview. The dot's color comes from the email's category so the
+// priority/category is readable at a glance without a heavy colored band.
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, space, font } from '../theme';
+import { colors } from '../theme';
 import { bandFor } from '../lib/bands';
 import { timeAgo } from '../lib/time';
 import SenderAvatar from './SenderAvatar';
@@ -16,50 +16,34 @@ function EmailCard({ email, onPress, onLongPress, tagRef, selectMode, selected }
   const band = email.band || bandFor(email); // demo emails carry an explicit band
   const unread = email.read === false;
   const threadCount = email.threadCount || 1;
+  const dotColor = band.grad?.[0] || colors.blue; // category color
 
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.card, selected && styles.cardSelected, pressed && styles.pressed]}>
-      {selectMode && (
-        <View style={[styles.selDot, selected && styles.selDotOn]}>
-          {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
-        </View>
-      )}
-      {/* Colored band — single dense row: avatar · name · time */}
-      <LinearGradient
-        colors={band.grad}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.band}
-      >
-        <SenderAvatar name={p.senderName} email={p.senderEmail} size={32} textStyle={styles.initial} />
-        <Text style={[styles.bandName, !unread && styles.bandNameRead]} numberOfLines={1}>{p.senderName}</Text>
-        {threadCount > 1 && (
-          <View style={styles.threadPill}>
-            <Ionicons name="chatbubbles" size={10} color="#fff" />
-            <Text style={styles.threadText}>{threadCount}</Text>
-          </View>
+    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.row, selected && styles.rowSelected, pressed && styles.pressed]}>
+      {/* Priority/category dot — bright when unread, dim once read */}
+      <View ref={tagRef} collapsable={false} style={styles.dotCol}>
+        {selectMode ? (
+          <View style={[styles.selDot, selected && styles.selDotOn]}>{selected && <Ionicons name="checkmark" size={12} color="#fff" />}</View>
+        ) : (
+          <View style={[styles.dot, { backgroundColor: dotColor }, !unread && styles.dotRead]} />
         )}
-        {p.rank != null && (
-          <View style={styles.rankPill}><Text style={styles.rankText}>{Number(p.rank).toFixed(1)}</Text></View>
-        )}
-        {p.isVip && <Ionicons name="star" size={13} color={colors.star} style={styles.vip} />}
-        {unread && <View style={styles.unreadDot} />}
-        <Text style={styles.bandTime} numberOfLines={1}>{timeAgo(email.date)}</Text>
-      </LinearGradient>
+      </View>
 
-      {/* Body */}
-      <View style={styles.body}>
-        <Text style={[styles.subject, !unread && styles.subjectRead]} numberOfLines={1}>
-          {email.subject}
-        </Text>
+      <SenderAvatar name={p.senderName} email={p.senderEmail} size={40} textStyle={styles.initial} />
+
+      <View style={styles.main}>
+        <View style={styles.topLine}>
+          <Text style={[styles.sender, !unread && styles.senderRead]} numberOfLines={1}>{p.senderName}</Text>
+          {p.isVip && <Ionicons name="star" size={12} color={colors.star} style={styles.vip} />}
+          {threadCount > 1 && (
+            <View style={styles.threadPill}><Ionicons name="chatbubbles" size={9} color="rgba(255,255,255,0.6)" /><Text style={styles.threadText}>{threadCount}</Text></View>
+          )}
+          <Text style={styles.time} numberOfLines={1}>{timeAgo(email.date)}</Text>
+        </View>
+        <Text style={[styles.subject, !unread && styles.subjectRead]} numberOfLines={1}>{email.subject}</Text>
         <View style={styles.previewRow}>
           {p.aiSummarized && <Ionicons name="sparkles" size={11} color={colors.blue} style={styles.aiIcon} />}
           <Text style={styles.preview} numberOfLines={2}>{p.tldr}</Text>
-        </View>
-        <View style={styles.footer}>
-          <View ref={tagRef} collapsable={false} style={[styles.tag, { backgroundColor: band.tagBg }]}>
-            <Text style={[styles.tagText, { color: band.tagColor }]}>{band.label}</Text>
-          </View>
         </View>
       </View>
     </Pressable>
@@ -69,52 +53,36 @@ function EmailCard({ email, onPress, onLongPress, tagRef, selectMode, selected }
 export default React.memo(EmailCard);
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: 'rgba(18,22,34,0.58)', // dark glass so the aurora glows through
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  pressed: { transform: [{ scale: 0.975 }] },
-  cardSelected: { borderWidth: 2, borderColor: colors.blue },
-  selDot: { position: 'absolute', top: 8, right: 8, zIndex: 10, width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#fff', backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
-  selDotOn: { backgroundColor: colors.blue, borderColor: colors.blue },
-  band: {
-    height: 44,
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 8,
+    alignItems: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 11,
+    backgroundColor: 'rgba(18,22,34,0.55)', // dark glass so the aurora glows through
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
   },
-  initialWrap: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  initial: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: -0.5 },
-  bandName: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '700' },
-  bandNameRead: { color: 'rgba(255,255,255,0.72)' },
-  threadPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 8, paddingHorizontal: 6, height: 18 },
-  threadText: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  rankPill: { backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, minWidth: 30, alignItems: 'center' },
-  rankText: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  bandTime: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '500', textAlign: 'right' }, // timestamp
-  vip: { marginLeft: 2 },
-  unreadDot: {
-    width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', opacity: 0.95,
-  },
-  body: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
-  subject: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', letterSpacing: -0.2, marginBottom: 4 },
-  subjectRead: { fontWeight: '500', color: 'rgba(255,255,255,0.60)' },
-  previewRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  aiIcon: { marginTop: 3, marginRight: 5 },
-  preview: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.62)', lineHeight: 18, fontWeight: '400' },
-  footer: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
-  tag: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6 },
-  tagText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.02 },
+  rowSelected: { borderColor: colors.blue, backgroundColor: 'rgba(0,113,227,0.16)' },
+  pressed: { backgroundColor: 'rgba(30,36,52,0.7)' },
+  dotCol: { width: 10, alignItems: 'center', paddingTop: 15 },
+  dot: { width: 9, height: 9, borderRadius: 5 },
+  dotRead: { opacity: 0.28 },
+  selDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+  selDotOn: { backgroundColor: colors.blue, borderColor: colors.blue },
+  initial: { color: '#fff', fontWeight: '800', fontSize: 15, letterSpacing: -0.5 },
+  main: { flex: 1, minWidth: 0 },
+  topLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sender: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  senderRead: { color: 'rgba(255,255,255,0.72)', fontWeight: '600' },
+  vip: { marginLeft: -2 },
+  threadPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 8, paddingHorizontal: 5, height: 17 },
+  threadText: { color: 'rgba(255,255,255,0.7)', fontSize: 10.5, fontWeight: '800' },
+  time: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '500' },
+  subject: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', letterSpacing: -0.2, marginTop: 2 },
+  subjectRead: { fontWeight: '500', color: 'rgba(255,255,255,0.6)' },
+  previewRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 3 },
+  aiIcon: { marginTop: 2.5, marginRight: 5 },
+  preview: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 18, fontWeight: '400' },
 });
