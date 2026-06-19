@@ -187,7 +187,10 @@ export default function ConnectScreen({ goBack, navigate }) {
         <Section title="Mailbox" />
         <View style={styles.group}>
           <Row icon="pencil" color="#7C3AED" title={hasSignature(prefs.sig) ? 'Edit signature' : 'Create your signature'} onPress={() => navigate('Signature')} />
-          <Row icon="pricetags" color="#4338CA" title="Categories & rules" onPress={() => navigate('Categories')} last />
+          <Row icon="pricetags" color="#4338CA" title="Categories & rules" onPress={() => navigate('Categories')} />
+          <Row icon="sparkles" color={colors.blue} title="Learn my old emails"
+            value="Re-scan your inbox to refine priorities"
+            onPress={() => { setPrefs({ learnedInbox: false }); goBack(); }} last />
         </View>
 
         <Section title="Default reply tone" />
@@ -251,7 +254,7 @@ export default function ConnectScreen({ goBack, navigate }) {
           <Ionicons name="lock-closed" size={14} color="#34C759" />
           <Text style={styles.privacyText}>ScaleMail sorts everything for you and only ever requests read/send access. Your VIPs, tone and signature stay private on this phone.</Text>
         </View>
-        <View style={{ height: 40 }} />
+        <View style={{ height: 140 }} />
       </ScrollView>
     </SafeAreaView>
   );
