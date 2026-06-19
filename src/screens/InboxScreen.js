@@ -120,6 +120,12 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
         emitted.add(key);
         const group = groups.get(key);
         if (group.length === 1) { out.push(group[0]); continue; }
+        // Only collapse a REAL conversation: a reply/forward, or more than one
+        // distinct sender. Bulk senders (marketing blasts) often share one Outlook
+        // conversationId, which isn't a thread — show those as separate rows.
+        const senders = new Set(group.map((g) => (g.priority?.senderEmail || '').toLowerCase()));
+        const hasReply = group.some((g) => /^\s*(re|fwd|fw)\s*:/i.test(g.subject || ''));
+        if (!hasReply && senders.size <= 1) { group.forEach((g) => out.push(g)); continue; }
         const rep = group.reduce((best, x) => ((x.priority?.score ?? 0) > (best.priority?.score ?? 0) ? x : best), group[0]);
         out.push({ ...rep, threadCount: group.length });
       }
