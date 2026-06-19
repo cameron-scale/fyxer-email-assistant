@@ -101,11 +101,7 @@ export default function ComposeSheet({ onClose }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.wrap}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-    >
+    <View style={styles.wrap}>
       <View style={styles.header}>
         <Pressable onPress={onClose} hitSlop={10}><Text style={styles.cancel}>Cancel</Text></Pressable>
         <Text style={styles.title}>New Message</Text>
@@ -130,7 +126,7 @@ export default function ComposeSheet({ onClose }) {
           placeholder="Subject" placeholderTextColor={colors.ink4} />
       </View>
 
-      <ScrollView style={styles.bodyWrap} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
+      <ScrollView style={styles.bodyWrap} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets contentInsetAdjustmentBehavior="always" contentContainerStyle={{ paddingBottom: 120 }}>
         <TextInput
           style={[styles.body, { height: Math.max(180, bodyHeight) }]}
           value={body} onChangeText={setBody}
@@ -186,7 +182,7 @@ export default function ComposeSheet({ onClose }) {
           <Pressable style={styles.schedCancel} onPress={() => setScheduleOpen(false)}><Text style={styles.schedCancelText}>Cancel</Text></Pressable>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

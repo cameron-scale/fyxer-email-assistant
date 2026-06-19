@@ -42,7 +42,7 @@ export default function BottomSheet({ visible, onClose, heightPct = 0.9, childre
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'android' ? 'height' : undefined}
         style={styles.kav}
         pointerEvents="box-none"
       >

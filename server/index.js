@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-32',
+    version: 'debug-33',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-32', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-33', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-32',
+    version: 'debug-33',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1746,9 +1746,9 @@ app.post('/next-steps', async (req, res) => {
         'treat those as genuine, not threats. When unsure, assume the email is legitimate and just ' +
         'recommend the practical action (read, reply, pay, archive, etc.). ' +
         (noteStr ? `The user has TOLD YOU about this sender: "${noteStr}". Respect that and weight the email accordingly. ` : '') +
-        'If it needs no action, say so briefly. Reply ONLY JSON: ' +
-        '{"recommendation":"one direct sentence on what to do and why","steps":["2-4 short ' +
-        'imperative next steps"]}. No code fences.',
+        'If it needs no action, say so briefly. Keep it tight. Reply ONLY JSON: ' +
+        '{"recommendation":"ONE short sentence, 18 words max, on what to do","steps":["2-4 ' +
+        'very short imperative next steps"]}. No code fences.',
       messages: [{ role: 'user', content: `From: ${senderName || ''}\nSubject: ${subject || ''}\n\n${String(body || '').slice(0, 2500)}` }],
     });
     let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
@@ -2053,9 +2053,9 @@ async function aiSummarize(emails) {
       model: AI_MODEL,
       max_tokens: 2500,
       system:
-        'You write TL;DR previews of work emails for a busy executive. For each email, ' +
-        'write a brief, direct summary (max 2 short lines, ~30 words) covering what it is ' +
-        'about AND why it matters / what it wants. No greetings, no fluff. ' +
+        'You write ultra-short TL;DR previews of work emails for a busy executive. For ' +
+        'each email, write ONE punchy line, 12 words MAX — just the gist / the ask. No ' +
+        'greetings, no fluff, no restating the sender. ' +
         'Reply with ONLY a JSON array of {"i": <the item index number>, "summary": "..."} ' +
         'for every item — no prose, no code fences.',
       messages: [{ role: 'user', content: JSON.stringify(items) }],
@@ -2065,7 +2065,7 @@ async function aiSummarize(emails) {
     const out = {};
     arr.forEach((x) => {
       const idx = typeof x?.i === 'number' ? x.i : parseInt(x?.i, 10);
-      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim().slice(0, 150);
+      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim().slice(0, 110);
     });
     return out;
   } catch (e) {
