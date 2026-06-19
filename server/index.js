@@ -113,7 +113,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-20',
+    version: 'debug-22',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-20', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-22', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-20',
+    version: 'debug-22',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -646,10 +646,7 @@ app.post('/inbox', async (req, res) => {
         if (lr.ok) { unreadCount = ld.messagesUnread ?? null; totalCount = ld.messagesTotal ?? null; }
       } catch (e) { /* counts are best-effort */ }
       const outgoingG = fkey === 'sentitems' || fkey === 'drafts';
-      if (!outgoingG) {
-        for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
-        if (skipN === 0) attachSummaries(emails.slice(), { summarizeNew: true }).catch(() => {});
-      }
+      if (!outgoingG) { for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; } }
       record({ stage: 'gmail_inbox_ok', count: emails.length, label: labelId });
       return res.json({ emails, unreadCount, totalCount, skip: 0, hasMore: false });
     }
@@ -711,13 +708,10 @@ app.post('/inbox', async (req, res) => {
     });
 
     // Attach any cached AI TL;DRs INSTANTLY (no AI call here, so the inbox returns
-    // fast). For the first page, warm the cache in the BACKGROUND (not awaited) so
-    // the next load is instant; the client also requests summaries for anything
-    // still missing, so the cards fill in within a couple seconds either way.
-    if (!outgoing) {
-      for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
-      if (skipN === 0) attachSummaries(emails.slice(), { summarizeNew: true }).catch(() => {});
-    }
+    // fast). Generation is driven solely by the client's /summarize call so each
+    // message is summarized exactly once — no server/client race that would make
+    // the text flicker.
+    if (!outgoing) { for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; } }
 
     const { unreadCount = null, totalCount = null } = await countsPromise;
 
@@ -859,22 +853,47 @@ app.post('/message', async (req, res) => {
       if (!r.ok) throw new Error(m.error?.message || 'fetch failed');
       const { html, text } = gmailExtractBody(m.payload);
       const plain = text || stripHtml(html) || m.snippet || '';
+      const attachments = [];
+      const walkA = (part) => {
+        if (!part) return;
+        if (part.filename && part.body?.attachmentId) {
+          attachments.push({ id: part.body.attachmentId, name: part.filename, size: part.body.size || 0, contentType: part.mimeType || '' });
+        }
+        (part.parts || []).forEach(walkA);
+      };
+      walkA(m.payload);
       return res.json({
         body: plain,
         bodyHtml: html ? sanitizeHtml(html) : '',
         meeting: detectMeeting(`${html} ${plain}`),
         invite: null,
+        attachments,
       });
     }
 
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
-    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime,meetingMessageType`, {
+    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime,meetingMessageType,hasAttachments`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const m = await r.json();
     if (!r.ok) throw new Error(m.error?.message || 'fetch failed');
-    const rawHtml = m.body?.contentType === 'html' ? (m.body?.content || '') : '';
-    const text = stripHtml(m.body?.content || m.bodyPreview || '');
+    // Graph's contentType can be "html"/"HTML"/"Html" — compare case-insensitively,
+    // and also treat content that clearly contains tags as HTML. This is what was
+    // dropping the rich body (logos, buttons, tables, links) to plain text.
+    const content = m.body?.content || '';
+    const isHtml = String(m.body?.contentType || '').toLowerCase() === 'html' || /<\s*(html|body|div|table|p|a|img|br|span|h[1-6])\b/i.test(content);
+    const rawHtml = isHtml ? content : '';
+    const text = stripHtml(content || m.bodyPreview || '');
+
+    // Real (non-inline) attachments, shown as chips in the reader.
+    let attachments = [];
+    if (m.hasAttachments) {
+      try {
+        const ar = await fetch(`${GRAPH}/me/messages/${id}/attachments?$select=id,name,size,contentType,isInline`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        const ad = await ar.json();
+        if (ar.ok) attachments = (ad.value || []).filter((a) => !a.isInline && a.name).map((a) => ({ id: a.id, name: a.name, size: a.size || 0, contentType: a.contentType || '' }));
+      } catch (e) { /* attachments are best-effort */ }
+    }
 
     // If this email is a meeting invite, look up the linked calendar event so the
     // app can show Accept / Maybe / Decline inline. Best-effort — never fatal.
@@ -898,12 +917,39 @@ app.post('/message', async (req, res) => {
       } catch (e) { /* not all invites expose an event — just skip RSVP */ }
     }
 
+    const outHtml = rawHtml ? sanitizeHtml(rawHtml) : '';
+    record({ stage: 'message_ok', isHtml, htmlLen: outHtml.length, textLen: text.length, atts: attachments.length });
     res.json({
       body: text,
-      bodyHtml: rawHtml ? sanitizeHtml(rawHtml) : '',
-      meeting: detectMeeting(`${m.body?.content || ''} ${text}`),
+      bodyHtml: outHtml,
+      meeting: detectMeeting(`${content} ${text}`),
       invite,
+      attachments,
     });
+  } catch (e) {
+    record({ stage: 'message_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Download one attachment's bytes as a data URI (for opening/sharing in the app).
+app.post('/attachment', async (req, res) => {
+  try {
+    const { refreshToken, id, attachmentId, provider } = req.body || {};
+    if (!id || !attachmentId) throw new Error('missing id or attachmentId');
+    if (provider === 'google') {
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      const r = await gmailGet(`/messages/${id}/attachments/${attachmentId}`, accessToken);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error?.message || 'attachment fetch failed');
+      const b64 = String(d.data || '').replace(/-/g, '+').replace(/_/g, '/');
+      return res.json({ base64: b64 });
+    }
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const r = await fetch(`${GRAPH}/me/messages/${id}/attachments/${attachmentId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'attachment fetch failed');
+    res.json({ base64: d.contentBytes || '', contentType: d.contentType || '' });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -1700,7 +1746,7 @@ async function aiSummarize(emails) {
     const out = {};
     arr.forEach((x) => {
       const idx = typeof x?.i === 'number' ? x.i : parseInt(x?.i, 10);
-      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim();
+      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim().slice(0, 220);
     });
     return out;
   } catch (e) {

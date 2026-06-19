@@ -9,11 +9,28 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WebView } from 'react-native-webview';
+import * as WebBrowser from 'expo-web-browser';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { bandFor } from '../lib/bands';
 import { useTourTarget } from '../lib/tour';
-import { quickReplies, isBackendConfigured, rsvpEvent } from '../lib/backend';
+import { quickReplies, isBackendConfigured, rsvpEvent, fetchAttachment } from '../lib/backend';
+
+function fmtBytes(n = 0) {
+  if (!n) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1048576).toFixed(1)} MB`;
+}
+function attachIcon(type = '', name = '') {
+  const t = `${type} ${name}`.toLowerCase();
+  if (t.includes('pdf')) return 'document-text';
+  if (/(png|jpe?g|gif|webp|image)/.test(t)) return 'image';
+  if (/(zip|rar|7z)/.test(t)) return 'file-tray-full';
+  if (/(xls|sheet|csv)/.test(t)) return 'grid';
+  if (/(doc|word)/.test(t)) return 'document';
+  return 'attach';
+}
 import SnoozeSheet from '../components/SnoozeSheet';
 import RelationshipSheet from '../components/RelationshipSheet';
 
@@ -41,13 +58,31 @@ const BAND_PALETTE = {
 };
 
 export default function DetailScreen({ params, goBack, navigate }) {
-  const { emails, searchEmails, folderEmails, archive, snooze, snoozeUntil, markRead, toggleVip, loadFullBody, setPalette, prefs, outlookRefresh } = useStore();
+  const { emails, searchEmails, folderEmails, archive, snooze, snoozeUntil, markRead, toggleVip, loadFullBody, setPalette, prefs, outlookRefresh, mailAccounts } = useStore();
   // The opened email may live in the inbox, a search result, or a browsed folder.
   const email = emails.find((e) => e.id === params.id)
     || (searchEmails || []).find((e) => e.id === params.id)
     || (folderEmails || []).find((e) => e.id === params.id);
   const [rsvpBusy, setRsvpBusy] = React.useState(false);
   const [rsvpDone, setRsvpDone] = React.useState(null);
+  const [attBusy, setAttBusy] = React.useState(null);
+
+  // Download an attachment and open it (best-effort — opens in the browser).
+  const openAttachment = async (a) => {
+    if (!email) return;
+    setAttBusy(a.id);
+    try {
+      const acct = (mailAccounts || []).find((x) => x.id === email.accountId);
+      const rt = acct?.refreshToken || outlookRefresh;
+      const provider = acct?.type || (email.account === 'gmail' ? 'google' : 'outlook');
+      const { base64, contentType } = await fetchAttachment(prefs.serverUrl, rt, email.id, a.id, provider);
+      if (!base64) throw new Error('Empty attachment');
+      const uri = `data:${a.contentType || contentType || 'application/octet-stream'};base64,${base64}`;
+      try { await WebBrowser.openBrowserAsync(uri); } catch (e) { await Linking.openURL(uri); }
+    } catch (e) {
+      Alert.alert('Could not open', e.message || 'This attachment could not be opened here.');
+    } finally { setAttBusy(null); }
+  };
   const [webHeight, setWebHeight] = React.useState(360);
   const [replies, setReplies] = React.useState([]);
   const [showSnooze, setShowSnooze] = React.useState(false);
@@ -239,6 +274,23 @@ export default function DetailScreen({ params, goBack, navigate }) {
             <Text key={i} style={[styles.para, i === 0 && styles.salutation]}>{para}</Text>
           ))
         )}
+
+        {/* Attachments */}
+        {Array.isArray(email.attachments) && email.attachments.length > 0 && (
+          <View style={styles.attachWrap}>
+            <Text style={styles.attachHead}>{email.attachments.length} attachment{email.attachments.length === 1 ? '' : 's'}</Text>
+            {email.attachments.map((a) => (
+              <Pressable key={a.id} style={styles.attachRow} onPress={() => openAttachment(a)}>
+                <View style={styles.attachIcon}><Ionicons name={attachIcon(a.contentType, a.name)} size={20} color={colors.blue} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.attachName} numberOfLines={1}>{a.name}</Text>
+                  <Text style={styles.attachMeta}>{fmtBytes(a.size)}{a.contentType ? ` · ${a.contentType.split('/').pop().toUpperCase()}` : ''}</Text>
+                </View>
+                {attBusy === a.id ? <ActivityIndicator color={colors.blue} /> : <Ionicons name="download-outline" size={20} color={colors.ink4} />}
+              </Pressable>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
       {/* Reply bar — opens the full-screen composer */}
@@ -323,6 +375,12 @@ const styles = StyleSheet.create({
   rsvpAccept: { backgroundColor: '#1E9E63' },
   rsvpAcceptText: { fontSize: 13.5, fontWeight: '700', color: '#fff' },
   rsvpChange: { marginTop: 10, fontSize: 13, fontWeight: '600', color: colors.blue },
+  attachWrap: { marginTop: 20, borderTopWidth: 1, borderTopColor: colors.hairline, paddingTop: 14 },
+  attachHead: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: colors.ink4, marginBottom: 10 },
+  attachRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, marginBottom: 8 },
+  attachIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.blueLight, alignItems: 'center', justifyContent: 'center' },
+  attachName: { fontSize: 14, fontWeight: '600', color: colors.ink },
+  attachMeta: { fontSize: 12, color: colors.ink3, marginTop: 1 },
   para: { fontFamily: 'Georgia', fontSize: 16, lineHeight: 27, color: colors.ink2, marginBottom: 18 },
   salutation: { color: colors.ink },
   replyBar: {

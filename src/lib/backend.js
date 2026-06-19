@@ -92,6 +92,11 @@ export function mailAction(serverUrl, refreshToken, id, action, provider = 'outl
   return post(serverUrl, '/action', { refreshToken, id, action, provider });
 }
 
+// Download an attachment's bytes (base64). Returns { base64, contentType }.
+export function fetchAttachment(serverUrl, refreshToken, id, attachmentId, provider = 'outlook') {
+  return post(serverUrl, '/attachment', { refreshToken, id, attachmentId, provider });
+}
+
 // Summarize a batch of emails (only send ones not already cached). Returns
 // { summaries: { id: tldr } }.
 export function summarizeEmails(serverUrl, items) {

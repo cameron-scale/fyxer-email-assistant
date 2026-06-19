@@ -73,6 +73,9 @@ export function StoreProvider({ children }) {
   const [summaries, setSummaries] = useState({});
   const summariesRef = useRef({});
   useEffect(() => { summariesRef.current = summaries; }, [summaries]);
+  // Ids we've already SENT to summarize — so a message is summarized exactly once
+  // (the AI is non-deterministic; without this the text flickers as raw churns).
+  const requestedRef = useRef(new Set());
 
   // Sent / Drafts folders (fetched on demand from Graph), kept separate from inbox.
   const [folders, setFolders] = useState({ sent: [], drafts: [] });
@@ -309,9 +312,13 @@ export function StoreProvider({ children }) {
   // Summarize a batch of emails — but ONLY ones we haven't cached yet, capped, so
   // reloading the inbox is free and the bill stays small.
   const summarizeBatch = useCallback(async (list) => {
-    // Skip anything the server already summarized (it attaches aiSummary to /inbox)
-    // or that we've already cached — only fill the gaps, so we never double-bill.
-    const todo = list.filter((e) => !e.aiSummary && !summariesRef.current[e.id]).slice(0, SUMMARIZE_CAP);
+    // Only fill gaps: skip already-summarized AND anything already requested this
+    // session, so each message is summarized exactly once (no flickering text).
+    const todo = list.filter((e) => (
+      e.id && !e.aiSummary && !summariesRef.current[e.id] && !requestedRef.current.has(e.id)
+    )).slice(0, SUMMARIZE_CAP);
+    if (!todo.length) return;
+    todo.forEach((e) => requestedRef.current.add(e.id));
     for (let i = 0; i < todo.length; i += 15) {
       const chunk = todo.slice(i, i + 15);
       try {
@@ -320,7 +327,10 @@ export function StoreProvider({ children }) {
           chunk.map((e) => ({ id: e.id, from: e.from, subject: e.subject, preview: e.body })),
         );
         if (got && Object.keys(got).length) setSummaries((s) => ({ ...s, ...got }));
-      } catch (e) { /* summaries are best-effort */ }
+      } catch (e) {
+        // Allow a retry later if the request failed.
+        chunk.forEach((x) => requestedRef.current.delete(x.id));
+      }
     }
   }, [prefs.serverUrl]);
 
@@ -347,9 +357,9 @@ export function StoreProvider({ children }) {
     const rt = acc?.refreshToken || outlookRefresh;
     const provider = acc?.type || (target.account === 'gmail' ? 'google' : 'outlook');
     try {
-      const { body, bodyHtml, meeting, invite } = await fetchMessageBody(prefs.serverUrl, rt, id, provider);
+      const { body, bodyHtml, meeting, invite, attachments } = await fetchMessageBody(prefs.serverUrl, rt, id, provider);
       setRaw((prev) => prev.map((e) => (
-        e.id === id ? { ...e, body: body || e.body, bodyHtml: bodyHtml || '', meeting: meeting || null, invite: invite || null, fullBody: true } : e
+        e.id === id ? { ...e, body: body || e.body, bodyHtml: bodyHtml || '', meeting: meeting || null, invite: invite || null, attachments: attachments || [], fullBody: true } : e
       )));
     } catch (e) { /* keep the preview if the fetch fails */ }
   }, [raw, outlookRefresh, prefs.serverUrl, mailAccounts]);
