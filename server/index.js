@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-37',
+    version: 'debug-38',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-37', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-38', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-37',
+    version: 'debug-38',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -912,16 +912,25 @@ function sanitizeHtml(html = '') {
 
 // Find the first meeting link (Join button) in the message.
 function detectMeeting(s = '') {
-  const text = String(s);
+  // Decode HTML entities and (a copy of) percent-encoding so links that are wrapped
+  // in a redirect (e.g. Google Calendar invites: google.com/url?q=https%3A%2F%2Fzoom…)
+  // or HTML-escaped still resolve to a clean, openable URL.
+  let text = String(s)
+    .replace(/&amp;/gi, '&').replace(/&#0?38;/g, '&').replace(/&#0?61;/g, '=').replace(/&#0?47;/g, '/').replace(/&quot;/gi, '"');
+  try { text += '\n' + decodeURIComponent(text.replace(/%(?![0-9a-fA-F]{2})/g, '%25')); } catch (e) { /* leave as-is */ }
   const patterns = [
-    { provider: 'Zoom', re: /https?:\/\/[\w.-]*zoom\.us\/[^\s"'<>)]+/i },
-    { provider: 'Microsoft Teams', re: /https?:\/\/teams\.(?:microsoft|live)\.com\/[^\s"'<>)]+/i },
-    { provider: 'Google Meet', re: /https?:\/\/meet\.google\.com\/[^\s"'<>)]+/i },
-    { provider: 'Webex', re: /https?:\/\/[\w.-]*webex\.com\/[^\s"'<>)]+/i },
+    { provider: 'Zoom', re: /https?:\/\/[\w.-]*zoom\.us\/[^\s"'<>)\]]+/i },
+    { provider: 'Microsoft Teams', re: /https?:\/\/teams\.(?:microsoft|live)\.com\/[^\s"'<>)\]]+/i },
+    { provider: 'Google Meet', re: /https?:\/\/meet\.google\.com\/[^\s"'<>)\]]+/i },
+    { provider: 'Webex', re: /https?:\/\/[\w.-]*webex\.com\/[^\s"'<>)\]]+/i },
   ];
   for (const p of patterns) {
     const m = text.match(p.re);
-    if (m) return { provider: p.provider, url: m[0].replace(/&amp;/g, '&') };
+    if (m) {
+      // Strip trailing punctuation/HTML the URL may have swallowed.
+      const url = m[0].replace(/&amp;/gi, '&').replace(/(&quot;|&gt;|&lt;).*$/i, '').replace(/[)\].,;:'">]+$/, '');
+      return { provider: p.provider, url };
+    }
   }
   return null;
 }
