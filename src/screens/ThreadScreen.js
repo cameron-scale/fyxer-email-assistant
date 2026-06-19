@@ -16,10 +16,24 @@ import NextStepsCard from '../components/NextStepsCard';
 function fmtBytes(n = 0) { if (!n) return ''; if (n < 1024) return `${n} B`; if (n < 1048576) return `${Math.round(n / 1024)} KB`; return `${(n / 1048576).toFixed(1)} MB`; }
 
 function emailDocument(html) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-  <style>html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d1d1f;word-break:break-word;overflow-wrap:break-word}*{max-width:100%!important;box-sizing:border-box}img{max-width:100%!important;height:auto!important}table{width:100%!important;max-width:100%!important;table-layout:fixed!important}td,th{word-break:break-word}a{color:#0071E3}</style>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d1d1f;word-break:break-word;overflow-wrap:break-word}*{max-width:100%!important;box-sizing:border-box}img{max-width:100%!important;height:auto!important}table{max-width:100%!important}td,th{word-break:break-word}a{color:#0071E3}</style>
   </head><body>${html}</body></html>`;
 }
+
+// Measure height AND shrink any email wider than the screen so banners/images
+// that use fixed pixel widths fit instead of running off the right edge.
+const FIT_JS = `(function(){
+  function fit(){
+    try{
+      var b=document.body, vw=window.innerWidth;
+      var sw=Math.max(b.scrollWidth, document.documentElement.scrollWidth);
+      if(sw>vw+2){ b.style.transformOrigin='0 0'; b.style.zoom=(vw/sw); }
+    }catch(e){}
+    try{ window.ReactNativeWebView.postMessage(String(document.body.scrollHeight)); }catch(e){}
+  }
+  setTimeout(fit,60); setTimeout(fit,400);
+})(); true;`;
 
 function Message({ msg, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -42,7 +56,7 @@ function Message({ msg, defaultOpen }) {
             source={{ html: emailDocument(msg.bodyHtml) }}
             style={{ height: h, backgroundColor: 'transparent' }}
             scrollEnabled={false}
-            injectedJavaScript={'setTimeout(function(){window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));},60);true;'}
+            injectedJavaScript={FIT_JS}
             onMessage={(e) => { const n = Number(e.nativeEvent.data); if (n && n > 40) setH(n + 20); }}
             onShouldStartLoadWithRequest={(r) => { if (r.url === 'about:blank' || r.url.startsWith('data:')) return true; Linking.openURL(r.url).catch(() => {}); return false; }}
           />

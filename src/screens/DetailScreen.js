@@ -38,7 +38,7 @@ import NextStepsCard from '../components/NextStepsCard';
 // Wrap raw email HTML in a responsive page for the WebView.
 function emailDocument(html) {
   return `<!doctype html><html><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<style>` +
     `html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden;` +
     `-webkit-text-size-adjust:100%;font-family:-apple-system,Segoe UI,Arial,sans-serif;` +
@@ -269,7 +269,7 @@ export default function DetailScreen({ params, goBack, navigate }) {
             style={{ height: webHeight, backgroundColor: 'transparent' }}
             scrollEnabled={false}
             showsVerticalScrollIndicator={false}
-            injectedJavaScript={'setTimeout(function(){window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));},60);true;'}
+            injectedJavaScript={'(function(){function fit(){try{var b=document.body,vw=window.innerWidth,sw=Math.max(b.scrollWidth,document.documentElement.scrollWidth);if(sw>vw+2){b.style.transformOrigin="0 0";b.style.zoom=(vw/sw);}}catch(e){}try{window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));}catch(e){}}setTimeout(fit,60);setTimeout(fit,400);})();true;'}
             onMessage={(e) => { const h = Number(e.nativeEvent.data); if (h && h > 40) setWebHeight(h + 24); }}
             onShouldStartLoadWithRequest={(r) => {
               if (r.url === 'about:blank' || r.url.startsWith('data:')) return true;

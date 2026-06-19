@@ -557,6 +557,11 @@ export function StoreProvider({ children }) {
     try { await loadAccountsList([acc]); } finally { setLoading(false); }
   }, [loadAccountsList, persistAccounts]);
 
+  // Rename / tag a linked mailbox (custom display name + accent color).
+  const updateMailAccount = useCallback((id, patch) => {
+    setMailAccounts((prev) => { const next = prev.map((a) => (a.id === id ? { ...a, ...patch } : a)); persistAccounts(next); mailAccountsRef.current = next; return next; });
+  }, [persistAccounts]);
+
   // Remove a linked mailbox.
   const removeMailAccount = useCallback(async (id) => {
     let list;
@@ -759,6 +764,7 @@ export function StoreProvider({ children }) {
     switchMailAccount,
     addMailAccount,
     removeMailAccount,
+    updateMailAccount,
     mailFolders,
     foldersLoading,
     loadMailFolders,

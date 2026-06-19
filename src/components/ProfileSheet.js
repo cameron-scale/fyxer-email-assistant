@@ -116,6 +116,7 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, o
         <Row icon="person" bg="#E3F2FD" color="#1565C0" title="Account & accounts" onPress={() => go(onOpenConnect)} right={chevron} />
         <Row icon="pencil" bg="#F3EEFF" color="#7C3AED" title="Signature & tone" onPress={() => go(onOpenSettings)} right={chevron} />
         <Row icon="star" bg="#FFF8E1" color="#C77D00" title={`VIP senders (${vips.length})`} onPress={() => go(onOpenSettings)} right={chevron} />
+        <Row icon="sparkles" bg="#EAF1FF" color={colors.blue} title="Learn my old emails" onPress={() => go(() => setPrefs({ learnedInbox: false }))} right={chevron} />
       </View>
 
       <Text style={styles.section}>Preferences</Text>
@@ -127,7 +128,7 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, o
         <Row icon="play-circle" bg="#E8F1FE" color={colors.blue} title="Replay tutorial" onPress={() => go(startTour)} right={chevron} />
       </View>
 
-      <View style={{ height: 24 }} />
+      <View style={{ height: 130 }} />
     </ScrollView>
   );
 }
