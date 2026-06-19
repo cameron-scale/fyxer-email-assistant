@@ -113,7 +113,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-22',
+    version: 'debug-23',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-22', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-23', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-22',
+    version: 'debug-23',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -990,8 +990,10 @@ app.post('/thread', async (req, res) => {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error?.message || 'thread fetch failed');
     const messages = (d.value || []).map((m) => {
-      const rawHtml = m.body?.contentType === 'html' ? (m.body?.content || '') : '';
-      const text = stripHtml(m.body?.content || m.bodyPreview || '');
+      const c = m.body?.content || '';
+      const isHtml = String(m.body?.contentType || '').toLowerCase() === 'html' || /<\s*(html|body|div|table|p|a|img|br|span|h[1-6])\b/i.test(c);
+      const rawHtml = isHtml ? c : '';
+      const text = stripHtml(c || m.bodyPreview || '');
       return {
         id: m.id,
         from: m.from?.emailAddress ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>` : '',
@@ -1450,6 +1452,35 @@ app.post('/quick-replies', async (req, res) => {
   } catch (e) {
     record({ stage: 'quickreplies_error', message: e.message });
     res.json({ replies: [] }); // non-blocking
+  }
+});
+
+// AI "what should I do" — a short recommendation + concrete next steps for an
+// open email. Powers the recommendation card under the email body.
+app.post('/next-steps', async (req, res) => {
+  try {
+    const { subject, body, senderName } = req.body || {};
+    if (!ANTHROPIC_API_KEY) return res.json({ recommendation: '', steps: [] });
+    const msg = await anthropic().messages.create({
+      model: AI_MODEL,
+      max_tokens: 400,
+      system:
+        'You are an executive assistant. Given an email, tell the recipient what to do ' +
+        'about it. Be decisive and specific to THIS email (mention amounts, dates, names, ' +
+        'asks). If it is spam/phishing or needs no action, say so. Reply ONLY JSON: ' +
+        '{"recommendation":"one direct sentence on what to do and why","steps":["2-4 short ' +
+        'imperative next steps"]}. No code fences.',
+      messages: [{ role: 'user', content: `From: ${senderName || ''}\nSubject: ${subject || ''}\n\n${String(body || '').slice(0, 2500)}` }],
+    });
+    let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+    text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
+    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    bumpUsage('suggests');
+    record({ stage: 'next_steps_ok' });
+    res.json({ recommendation: String(parsed.recommendation || ''), steps: (parsed.steps || []).slice(0, 4).map((s) => String(s)) });
+  } catch (e) {
+    record({ stage: 'next_steps_error', message: e.message });
+    res.json({ recommendation: '', steps: [] }); // non-blocking
   }
 });
 

@@ -7,9 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { colors } from '../theme';
 import { useStore } from '../store';
-import { fetchThread } from '../lib/backend';
+import { fetchThread, isBackendConfigured } from '../lib/backend';
 import { parseSender } from '../lib/priority';
 import { timeAgo } from '../lib/time';
+import NextStepsCard from '../components/NextStepsCard';
 
 function emailDocument(html) {
   return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -85,6 +86,9 @@ export default function ThreadScreen({ goBack, navigate, params }) {
       {loading ? <ActivityIndicator color={colors.blue} style={{ marginTop: 30 }} /> : (
         <ScrollView contentContainerStyle={styles.body2} showsVerticalScrollIndicator={false}>
           {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === list.length - 1} />)}
+          {isBackendConfigured(prefs?.serverUrl) && latest && (
+            <NextStepsCard dark serverUrl={prefs.serverUrl} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
+          )}
           <View style={{ height: 100 }} />
         </ScrollView>
       )}

@@ -33,6 +33,7 @@ function attachIcon(type = '', name = '') {
 }
 import SnoozeSheet from '../components/SnoozeSheet';
 import RelationshipSheet from '../components/RelationshipSheet';
+import NextStepsCard from '../components/NextStepsCard';
 
 // Wrap raw email HTML in a responsive page for the WebView.
 function emailDocument(html) {
@@ -273,6 +274,11 @@ export default function DetailScreen({ params, goBack, navigate }) {
           (email.body || '').split('\n\n').map((para, i) => (
             <Text key={i} style={[styles.para, i === 0 && styles.salutation]}>{para}</Text>
           ))
+        )}
+
+        {/* AI recommendation: what to do about this email */}
+        {isBackendConfigured(prefs?.serverUrl) && email.account !== undefined && (
+          <NextStepsCard serverUrl={prefs.serverUrl} subject={email.subject} body={email.body} senderName={p.senderName} />
         )}
 
         {/* Attachments */}

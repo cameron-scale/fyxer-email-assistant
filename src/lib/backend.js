@@ -123,6 +123,11 @@ export function quickReplies(serverUrl, payload) {
   return post(serverUrl, '/quick-replies', payload);
 }
 
+// AI recommendation + next steps for an open email. Returns { recommendation, steps }.
+export function nextSteps(serverUrl, payload) {
+  return post(serverUrl, '/next-steps', payload);
+}
+
 // AI snooze-time suggestion. Returns { suggestion: { label, iso } | null }.
 export function snoozeSuggest(serverUrl, payload) {
   return post(serverUrl, '/snooze-suggest', payload);
