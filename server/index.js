@@ -572,7 +572,7 @@ async function graphGet(url, accessToken, timeoutMs = 15000) {
   } finally { clearTimeout(timer); }
 }
 
-const WELL_KNOWN_FOLDER = { inbox: 'inbox', sent: 'sentitems', drafts: 'drafts', archive: 'archive' };
+const WELL_KNOWN_FOLDER = { inbox: 'inbox', sent: 'sentitems', drafts: 'drafts', archive: 'archive', junk: 'junkemail' };
 
 // ── AI summary cache (id -> TL;DR), disk-backed ──────────────────────────────
 // Summaries are attached to the inbox response so the cards show them

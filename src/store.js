@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { prioritize } from './lib/priority';
 import { DEMO_EMAILS } from './lib/demo';
+import { DEFAULT_TABS } from './lib/tabs';
 import { fetchGmail } from './api/gmail';
 import {
   fetchInbox, fetchMessageBody, summarizeEmails, searchMail, askMail, setMyPhoto,
@@ -26,7 +27,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 60;
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS };
 
 const StoreContext = createContext(null);
 
@@ -308,6 +309,18 @@ export function StoreProvider({ children }) {
     }
   }, [prefs.serverUrl]);
 
+  // Safety net: whenever inbox mail changes, make sure the visible messages have AI
+  // TL;DRs. This runs no matter which load path produced the mail, so summaries
+  // always appear (the per-id dedup + server cache keep it from re-billing).
+  useEffect(() => {
+    const need = raw.filter((e) => (
+      (e.account === 'outlook' || e.account === 'gmail') &&
+      (!e.folder || e.folder === 'inbox') &&
+      !e.aiSummary && !summariesRef.current[e.id]
+    )).slice(0, 40);
+    if (need.length) summarizeBatch(need);
+  }, [raw, summarizeBatch]);
+
   // Load the full body of one email on demand (the list only carries a preview).
   // Keeps the stripped text for priority/summary, plus sanitized HTML + any
   // detected meeting link for rich display.
@@ -421,6 +434,24 @@ export function StoreProvider({ children }) {
         const others = prev.filter((e) => e.folder !== folder.id);
         return [...others, ...tagged];
       });
+      summarizeBatch(tagged);
+    } catch (e) { /* leave previous */ } finally { setFolderLoading(false); }
+  }, [mailAccounts, activeAccountId, outlookRefresh, prefs.serverUrl, summarizeBatch]);
+
+  // Open a well-known folder (Archive / Junk) from a tab-bar tab. Mirrors the
+  // server's well-known → real-folder mapping so folderEmails matches.
+  const openWellKnownFolder = useCallback(async (wellKey, name) => {
+    const WK_RESULT = { archive: 'archive', junk: 'junkemail' };
+    const folderId = WK_RESULT[wellKey] || wellKey;
+    setCurrentFolder({ id: folderId, name });
+    const acc = mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0];
+    const rt = acc?.refreshToken || outlookRefresh;
+    if (!rt) return;
+    setFolderLoading(true);
+    try {
+      const { emails: fetched } = await fetchInbox(prefs.serverUrl, rt, 50, wellKey, 0, null, acc?.type || 'outlook');
+      const tagged = fetched.map((e) => ({ ...e, folder: folderId, accountId: acc?.id, accountEmail: acc?.email }));
+      setRaw((prev) => [...prev.filter((e) => e.folder !== folderId), ...tagged]);
       summarizeBatch(tagged);
     } catch (e) { /* leave previous */ } finally { setFolderLoading(false); }
   }, [mailAccounts, activeAccountId, outlookRefresh, prefs.serverUrl, summarizeBatch]);
@@ -685,6 +716,7 @@ export function StoreProvider({ children }) {
     loadMailFolders,
     folderMeta,
     openFolder,
+    openWellKnownFolder,
     currentFolder,
     folderEmails,
     loadFullBody,

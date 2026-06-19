@@ -27,6 +27,7 @@ import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
 import OnboardingTour from './src/components/OnboardingTour';
 import { DEMO_URGENT_ID } from './src/lib/demo';
+import { TAB_DEFS } from './src/lib/tabs';
 import BottomSheet from './src/components/BottomSheet';
 import ComposeSheet from './src/components/ComposeSheet';
 import ProfileSheet from './src/components/ProfileSheet';
@@ -63,7 +64,7 @@ const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDr
 const SCREEN_PALETTE = { Starred: 'starred', Sent: 'sent', Drafts: 'drafts' };
 
 function AppShell() {
-  const { emails, setPalette, tourActive, mailboxUnread } = useStore();
+  const { emails, setPalette, tourActive, mailboxUnread, openWellKnownFolder } = useStore();
   const [stack, setStack] = useState([{ name: 'Inbox', params: {} }]);
   const [sheet, setSheet] = useState(null); // 'compose' | 'profile' | null
 
@@ -86,10 +87,14 @@ function AppShell() {
   const openSheet = useCallback((name) => setSheet(name), []);
   const closeSheet = useCallback(() => setSheet(null), []);
 
-  const onTabNavigate = useCallback((name) => {
-    if (TAB_SCREENS.includes(name)) switchTab(name);
-    else navigate(name); // Triage pushes as a full screen
-  }, [switchTab, navigate]);
+  const onTabNavigate = useCallback((key) => {
+    const nav = TAB_DEFS[key]?.nav || (TAB_SCREENS.includes(key) ? { tab: key } : { push: key });
+    if (nav.tab) switchTab(nav.tab);
+    else if (nav.filter) setStack([{ name: 'Inbox', params: { filter: nav.filter } }]); // smart-folder tab
+    else if (nav.folder) { openWellKnownFolder(nav.folder, nav.name); navigate('Folder'); }
+    else if (nav.push) navigate(nav.push); // Triage / Digest push as full screens
+    else switchTab(key);
+  }, [switchTab, navigate, openWellKnownFolder]);
 
   const top = stack[stack.length - 1];
   const Screen = SCREENS[top.name] || InboxScreen;

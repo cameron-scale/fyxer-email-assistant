@@ -32,14 +32,16 @@ const CATEGORY_FILTERS = ['Action Needed', 'Meeting', 'Client', 'Newsletter', 'F
 
 const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
 
-export default function InboxScreen({ navigate, starred, openSheet }) {
+export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const {
     emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
     searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
     mailboxUnread, syncingAll, prefs,
   } = useStore();
   const connected = accounts.outlook || accounts.gmail;
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState(params?.filter || 'all');
+  // A smart-folder tab opens the inbox pre-filtered; the plain Inbox tab clears it.
+  useEffect(() => { setFilter(params?.filter || 'all'); }, [params?.filter]);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
