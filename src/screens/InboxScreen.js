@@ -36,7 +36,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
   const {
     emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
     searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
-    mailboxUnread, syncingAll,
+    mailboxUnread, syncingAll, prefs,
   } = useStore();
   const connected = accounts.outlook || accounts.gmail;
   const [filter, setFilter] = useState('all');
@@ -80,9 +80,27 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
     return true; // server already matched the query text when searching
   });
 
+  // Collapse same-conversation emails into one card (keeping the first, which is
+  // the highest-priority/newest in the sorted list) with a message count. Off in
+  // search/starred views where grouping would hide matches.
+  const threaded = (prefs?.groupThreads && !usingSearch && !starred)
+    ? (() => {
+      const seen = new Map();
+      const out = [];
+      for (const e of shown) {
+        const key = e.threadKey;
+        if (key && seen.has(key)) { seen.get(key).count += 1; continue; }
+        const rep = { ...e };
+        if (key) { rep._g = { count: 1 }; seen.set(key, rep._g); }
+        out.push(rep);
+      }
+      return out.map((e) => (e._g && e._g.count > 1 ? { ...e, threadCount: e._g.count } : e));
+    })()
+    : shown;
+
   // Group into Today / Yesterday / Earlier sections.
   const grouped = {};
-  shown.forEach((e) => {
+  threaded.forEach((e) => {
     const key = dayBucket(e.date);
     (grouped[key] = grouped[key] || []).push(e);
   });
@@ -255,7 +273,7 @@ export default function InboxScreen({ navigate, starred, openSheet }) {
                 onSwipeRight={() => snooze(item.id)}
                 onSwipeLeft={() => archive(item.id)}
               >
-                <EmailCard email={item} tagRef={isFirst ? firstTagRef : undefined} onPress={() => navigate('Detail', { id: item.id })} />
+                <EmailCard email={item} tagRef={isFirst ? firstTagRef : undefined} onPress={() => navigate(item.threadCount > 1 ? 'Thread' : 'Detail', { id: item.id })} />
               </SwipeableRow>
             </View>
           );

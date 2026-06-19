@@ -113,7 +113,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-16',
+    version: 'debug-17',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-16', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-17', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-16',
+    version: 'debug-17',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -522,6 +522,7 @@ async function gmailInbox(accessToken, labelId, pageSize) {
         read: !labels.includes('UNREAD'),
         flagged: labels.includes('STARRED'),
         inferred: labels.includes('CATEGORY_PROMOTIONS') || labels.includes('CATEGORY_SOCIAL') ? 'other' : null,
+        threadKey: m.threadId || null,
       };
     } catch (e) { return null; }
   }));
@@ -670,7 +671,7 @@ app.post('/inbox', async (req, res) => {
     const pageSize = Math.min(want, 50); // Graph caps $top at 50 for messages
     let url =
       `${GRAPH}/me/${folderSeg}/messages?$top=${pageSize}&$skip=${skipN}` +
-      `&$select=subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification` +
+      `&$select=subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification,conversationId` +
       `&$orderby=receivedDateTime desc`;
     const raw = [];
     while (url && raw.length < want) {
@@ -702,6 +703,7 @@ app.post('/inbox', async (req, res) => {
         read: !!m.isRead,
         flagged: m.flag?.flagStatus === 'flagged',
         inferred: m.inferenceClassification || null, // 'focused' | 'other'
+        threadKey: m.conversationId || null,
       };
     });
 
@@ -896,6 +898,60 @@ app.post('/message', async (req, res) => {
       invite,
     });
   } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// All messages in a conversation/thread (for the thread view). Returns
+// { messages: [{ id, from, date, read, bodyHtml, body }] } oldest → newest.
+app.post('/thread', async (req, res) => {
+  try {
+    const { refreshToken, threadKey, provider } = req.body || {};
+    if (!threadKey) throw new Error('missing threadKey');
+
+    if (provider === 'google') {
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      const r = await gmailGet(`/threads/${encodeURIComponent(threadKey)}?format=full`, accessToken);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error?.message || 'thread fetch failed');
+      const messages = (d.messages || []).map((m) => {
+        const { html, text } = gmailExtractBody(m.payload);
+        const labels = m.labelIds || [];
+        return {
+          id: m.id,
+          from: gmailHeader(m.payload, 'From'),
+          subject: gmailHeader(m.payload, 'Subject'),
+          date: m.internalDate ? new Date(parseInt(m.internalDate, 10)).toISOString() : null,
+          read: !labels.includes('UNREAD'),
+          bodyHtml: html ? sanitizeHtml(html) : '',
+          body: text || stripHtml(html) || m.snippet || '',
+        };
+      });
+      return res.json({ messages });
+    }
+
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const url = `${GRAPH}/me/messages?$filter=${encodeURIComponent(`conversationId eq '${threadKey}'`)}` +
+      `&$select=subject,from,body,bodyPreview,receivedDateTime,isRead&$orderby=receivedDateTime&$top=30`;
+    const r = await graphGet(url, accessToken);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'thread fetch failed');
+    const messages = (d.value || []).map((m) => {
+      const rawHtml = m.body?.contentType === 'html' ? (m.body?.content || '') : '';
+      const text = stripHtml(m.body?.content || m.bodyPreview || '');
+      return {
+        id: m.id,
+        from: m.from?.emailAddress ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>` : '',
+        subject: m.subject || '',
+        date: m.receivedDateTime || null,
+        read: !!m.isRead,
+        bodyHtml: rawHtml ? sanitizeHtml(rawHtml) : '',
+        body: text,
+      };
+    });
+    res.json({ messages });
+  } catch (e) {
+    record({ stage: 'thread_error', message: e.message });
     res.status(400).json({ error: e.message });
   }
 });
@@ -1465,23 +1521,31 @@ app.post('/send', async (req, res) => {
     // ── Gmail path ──────────────────────────────────────────────────────────
     if (provider === 'google') {
       const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      // For a reply, look up the original's thread + Message-ID so Gmail keeps the
+      // conversation together (threadId in the request + In-Reply-To/References).
+      let threadId = null; let inReplyHeader = '';
+      if (inReplyToId) {
+        try {
+          const or = await gmailGet(`/messages/${inReplyToId}?format=metadata&metadataHeaders=Message-ID&metadataHeaders=Subject`, accessToken);
+          const od = await or.json();
+          if (or.ok) { threadId = od.threadId || null; const mid = gmailHeader(od.payload, 'Message-ID'); if (mid) inReplyHeader = `In-Reply-To: ${mid}\r\nReferences: ${mid}\r\n`; }
+        } catch (e) { /* fall back to a plain send */ }
+      }
       const ctype = html ? 'text/html; charset=UTF-8' : 'text/plain; charset=UTF-8';
       const mime = [
         `To: ${toEmail}`,
         `Subject: ${subject || '(no subject)'}`,
         'MIME-Version: 1.0',
         `Content-Type: ${ctype}`,
-        '',
-        html || body || '',
-      ].join('\r\n');
+      ].join('\r\n') + '\r\n' + inReplyHeader + '\r\n' + (html || body || '');
       const raw = Buffer.from(mime).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       const r = await fetch(`${GMAIL}/messages/send`, {
         method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw }),
+        body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error?.message || 'Gmail send failed');
-      record({ stage: 'gmail_send_ok' });
+      record({ stage: 'gmail_send_ok', reply: Boolean(inReplyToId) });
       return res.json({ ok: true });
     }
 

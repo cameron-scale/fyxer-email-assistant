@@ -16,6 +16,7 @@ import MailboxScreen from './src/screens/MailboxScreen';
 import MailboxDrawerScreen from './src/screens/MailboxDrawerScreen';
 import FolderScreen from './src/screens/FolderScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
+import ThreadScreen from './src/screens/ThreadScreen';
 import ReplyScreen from './src/screens/ReplyScreen';
 import SignatureScreen from './src/screens/SignatureScreen';
 import SignatureEditorScreen from './src/screens/SignatureEditorScreen';
@@ -44,6 +45,7 @@ const SCREENS = {
   MailboxDrawer: MailboxDrawerScreen,
   Folder: FolderScreen,
   Calendar: CalendarScreen,
+  Thread: ThreadScreen,
   Reply: ReplyScreen,
   Signature: SignatureScreen,
   SignatureEditor: SignatureEditorScreen,
@@ -55,7 +57,7 @@ const SCREENS = {
 // Screens that show the bottom tab bar and can be switched between as tabs.
 // Settings now lives behind the profile avatar, not the tab bar.
 const TAB_SCREENS = ['Inbox', 'Starred', 'Sent', 'Drafts'];
-const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDrawer', 'Folder', 'Calendar'];
+const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDrawer', 'Folder', 'Calendar', 'Thread'];
 
 // Which aurora palette a top-level screen uses (Detail sets its own per-email).
 const SCREEN_PALETTE = { Starred: 'starred', Sent: 'sent', Drafts: 'drafts' };

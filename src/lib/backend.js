@@ -82,6 +82,11 @@ export function fetchMessageBody(serverUrl, refreshToken, id, provider = 'outloo
   return post(serverUrl, '/message', { refreshToken, id, provider });
 }
 
+// Fetch every message in a conversation/thread. Returns { messages: [...] }.
+export function fetchThread(serverUrl, refreshToken, threadKey, provider = 'outlook') {
+  return post(serverUrl, '/thread', { refreshToken, threadKey, provider });
+}
+
 // Summarize a batch of emails (only send ones not already cached). Returns
 // { summaries: { id: tldr } }.
 export function summarizeEmails(serverUrl, items) {

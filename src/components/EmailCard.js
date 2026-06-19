@@ -15,6 +15,7 @@ function EmailCard({ email, onPress, tagRef }) {
   const p = email.priority;
   const band = email.band || bandFor(email); // demo emails carry an explicit band
   const unread = email.read === false;
+  const threadCount = email.threadCount || 1;
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
@@ -27,6 +28,12 @@ function EmailCard({ email, onPress, tagRef }) {
       >
         <SenderAvatar name={p.senderName} email={p.senderEmail} size={32} textStyle={styles.initial} />
         <Text style={styles.bandName} numberOfLines={1}>{p.senderName}</Text>
+        {threadCount > 1 && (
+          <View style={styles.threadPill}>
+            <Ionicons name="chatbubbles" size={10} color="#fff" />
+            <Text style={styles.threadText}>{threadCount}</Text>
+          </View>
+        )}
         {p.rank != null && (
           <View style={styles.rankPill}><Text style={styles.rankText}>{Number(p.rank).toFixed(1)}</Text></View>
         )}
@@ -81,6 +88,8 @@ const styles = StyleSheet.create({
   },
   initial: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: -0.5 },
   bandName: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '700' },
+  threadPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 8, paddingHorizontal: 6, height: 18 },
+  threadText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   rankPill: { backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, minWidth: 30, alignItems: 'center' },
   rankText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   bandTime: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '500', textAlign: 'right' },
