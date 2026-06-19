@@ -113,7 +113,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-17',
+    version: 'debug-18',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-17', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-18', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-17',
+    version: 'debug-18',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -646,7 +646,7 @@ app.post('/inbox', async (req, res) => {
         if (lr.ok) { unreadCount = ld.messagesUnread ?? null; totalCount = ld.messagesTotal ?? null; }
       } catch (e) { /* counts are best-effort */ }
       const outgoingG = fkey === 'sentitems' || fkey === 'drafts';
-      if (!outgoingG) for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
+      if (!outgoingG) await attachSummaries(emails, { summarizeNew: skipN === 0 });
       record({ stage: 'gmail_inbox_ok', count: emails.length, label: labelId });
       return res.json({ emails, unreadCount, totalCount, skip: 0, hasMore: false });
     }
@@ -707,10 +707,10 @@ app.post('/inbox', async (req, res) => {
       };
     });
 
-    // Attach any AI TL;DRs we ALREADY have cached (instant — no AI call here, so
-    // the inbox returns fast). Missing summaries are generated separately by the
-    // client's /summarize call, which then fills the cache for next time.
-    if (!outgoing) for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
+    // Attach AI TL;DRs. We GENERATE missing ones for the first page (cached by id,
+    // so this only costs on brand-new mail and later loads are instant) — this
+    // guarantees the cards show real summaries without depending on client timing.
+    if (!outgoing) await attachSummaries(emails, { summarizeNew: skipN === 0 });
 
     const { unreadCount = null, totalCount = null } = await countsPromise;
 
@@ -952,6 +952,52 @@ app.post('/thread', async (req, res) => {
     res.json({ messages });
   } catch (e) {
     record({ stage: 'thread_error', message: e.message });
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Persist a mailbox action from a swipe/button: read | unread | archive | trash.
+// Best-effort — the app already updates its own view optimistically.
+app.post('/action', async (req, res) => {
+  try {
+    const { refreshToken, id, action, provider } = req.body || {};
+    if (!id || !action) throw new Error('missing id or action');
+
+    if (provider === 'google') {
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      const auth = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+      if (action === 'trash') {
+        const r = await fetch(`${GMAIL}/messages/${id}/trash`, { method: 'POST', headers: auth });
+        if (!r.ok) throw new Error('Gmail trash failed');
+      } else {
+        const body = {
+          read: { removeLabelIds: ['UNREAD'] },
+          unread: { addLabelIds: ['UNREAD'] },
+          archive: { removeLabelIds: ['INBOX'] },
+        }[action];
+        if (!body) throw new Error(`unknown action ${action}`);
+        const r = await fetch(`${GMAIL}/messages/${id}/modify`, { method: 'POST', headers: auth, body: JSON.stringify(body) });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error?.message || 'Gmail modify failed'); }
+      }
+      return res.json({ ok: true });
+    }
+
+    // Outlook (Graph)
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const auth = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+    let r;
+    if (action === 'read' || action === 'unread') {
+      r = await fetch(`${GRAPH}/me/messages/${id}`, { method: 'PATCH', headers: auth, body: JSON.stringify({ isRead: action === 'read' }) });
+    } else if (action === 'archive' || action === 'trash') {
+      const destinationId = action === 'trash' ? 'deleteditems' : 'archive';
+      r = await fetch(`${GRAPH}/me/messages/${id}/move`, { method: 'POST', headers: auth, body: JSON.stringify({ destinationId }) });
+    } else {
+      throw new Error(`unknown action ${action}`);
+    }
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error?.message || 'action failed'); }
+    res.json({ ok: true });
+  } catch (e) {
+    record({ stage: 'action_error', message: e.message });
     res.status(400).json({ error: e.message });
   }
 });

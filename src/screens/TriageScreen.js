@@ -21,8 +21,12 @@ export default function TriageScreen({ navigate, goBack }) {
   const { emails, archive, markRead, snooze } = useStore();
   const triageActionsRef = useTourTarget('triage.actions');
   const triageCardRef = useTourTarget('triage.card');
-  // Freeze the deck order when we enter so cards don't reshuffle as we act.
-  const deck = useMemo(() => emails, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Freeze the deck when we enter so cards don't reshuffle as we act — and always
+  // order it by importance (highest priority first), regardless of the inbox sort.
+  const deck = useMemo(
+    () => [...emails].sort((a, b) => (b.priority?.score ?? 0) - (a.priority?.score ?? 0)),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const [index, setIndex] = useState(0);
 
   const pan = useRef(new Animated.ValueXY()).current;

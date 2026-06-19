@@ -12,7 +12,7 @@ import { DEFAULT_TABS } from './lib/tabs';
 import { fetchGmail } from './api/gmail';
 import {
   fetchInbox, fetchMessageBody, summarizeEmails, searchMail, askMail, setMyPhoto,
-  listFolders, DEFAULT_SERVER_URL,
+  listFolders, mailAction, DEFAULT_SERVER_URL,
 } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 
@@ -34,6 +34,8 @@ const StoreContext = createContext(null);
 export function StoreProvider({ children }) {
   // Raw emails — empty until a real account is connected.
   const [raw, setRaw] = useState([]);
+  const rawRef = useRef([]);
+  useEffect(() => { rawRef.current = raw; }, [raw]);
   const [accounts, setAccounts] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -224,18 +226,31 @@ export function StoreProvider({ children }) {
     setOverrides((o) => ({ ...o, [id]: { ...(o[id] || {}), ...patch } }));
   }, []);
 
+  // Persist a swipe/button action to the real mailbox (Outlook or Gmail), using
+  // the token + provider of the account the email belongs to. Best-effort.
+  const persistAction = useCallback((id, action) => {
+    const e = (rawRef.current || []).find((x) => x.id === id);
+    if (!e || (e.account !== 'outlook' && e.account !== 'gmail')) return;
+    const acc = (mailAccountsRef.current || []).find((a) => a.id === e.accountId);
+    const rt = acc?.refreshToken || outlookRefresh;
+    const provider = acc?.type || (e.account === 'gmail' ? 'google' : 'outlook');
+    if (rt) mailAction(prefs.serverUrl, rt, id, action, provider).catch(() => {});
+  }, [outlookRefresh, prefs.serverUrl]);
+
   // --- Actions used by swipes / buttons (each records an undoable "recent action") ---
   const archive = useCallback((id) => {
     setOverride(id, { status: 'archived' });
     setRecentAction({ id, label: 'Archived' });
-  }, [setOverride]);
+    persistAction(id, 'archive');
+  }, [setOverride, persistAction]);
 
   const markDone = useCallback((id) => {
     setOverride(id, { status: 'done' });
     setRecentAction({ id, label: 'Marked done' });
-  }, [setOverride]);
+    persistAction(id, 'read'); // "done" also marks it read in the mailbox
+  }, [setOverride, persistAction]);
 
-  const markRead = useCallback((id) => setOverride(id, { read: true }), [setOverride]);
+  const markRead = useCallback((id) => { setOverride(id, { read: true }); persistAction(id, 'read'); }, [setOverride, persistAction]);
 
   const snooze = useCallback((id, hours = 4) => {
     setOverride(id, { snoozedUntil: Date.now() + hours * 3600000 });

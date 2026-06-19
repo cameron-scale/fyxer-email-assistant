@@ -87,6 +87,11 @@ export function fetchThread(serverUrl, refreshToken, threadKey, provider = 'outl
   return post(serverUrl, '/thread', { refreshToken, threadKey, provider });
 }
 
+// Persist a mailbox action (read | unread | archive | trash) for Outlook/Gmail.
+export function mailAction(serverUrl, refreshToken, id, action, provider = 'outlook') {
+  return post(serverUrl, '/action', { refreshToken, id, action, provider });
+}
+
 // Summarize a batch of emails (only send ones not already cached). Returns
 // { summaries: { id: tldr } }.
 export function summarizeEmails(serverUrl, items) {
