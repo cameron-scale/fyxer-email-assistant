@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-34',
+    version: 'debug-35',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-34', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-35', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-34',
+    version: 'debug-35',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1850,6 +1850,9 @@ const SIG_SYSTEM =
   '- Output ONLY raw HTML (no markdown, no code fences, no commentary).\n' +
   '- Email-safe HTML ONLY: a single root <table> with inline styles, web-safe fonts ' +
   '(Arial/Helvetica/Georgia), no <style> blocks, no <script>, no external CSS, no JS.\n' +
+  '- MUST render in Outlook (Word engine): every <img> needs explicit width and height ' +
+  'HTML attributes in px (e.g. <img width="96" height="96" ...>); do NOT rely on object-fit, ' +
+  'flexbox, or background-image (all unsupported in Outlook). Use tables for all layout.\n' +
   '\n' +
   'STRICT DATA RULES (most important):\n' +
   '- Use ONLY the literal values present in the JSON. Render EVERY field that is present, ' +
@@ -1863,8 +1866,11 @@ const SIG_SYSTEM =
   'may style case via CSS text-transform, but never change the words).\n' +
   '\n' +
   'PHOTO RULES:\n' +
-  '- If a photoUrl is provided, place it in a plain <img> framed as the reference does ' +
-  '(rounded/circular via border-radius is fine). Show the photo at its NATURAL full color.\n' +
+  '- If a photoUrl is provided, you MUST include exactly one <img> whose src is the EXACT ' +
+  'photoUrl string (never omit it, never alter the URL). Give it explicit width AND height ' +
+  'attributes (a square, e.g. 96x96) plus matching CSS width/height so it sizes correctly in ' +
+  'Outlook. border-radius for a circle is fine (clients that support it round it; Outlook ' +
+  'shows a square — that is acceptable). Show the photo at its NATURAL full color.\n' +
   '- NEVER alter the photo: no CSS filter, -webkit-filter, mix-blend-mode, opacity below 1, ' +
   'duotone, color overlay, tint, gradient over the image, or background-blend. The person\'s ' +
   'face must look exactly like the original photo.\n' +
