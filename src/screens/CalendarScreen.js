@@ -63,7 +63,19 @@ function joinLabel(url) {
 const DOW = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 export default function CalendarScreen({ goBack, navigate }) {
-  const { prefs, outlookRefresh, accounts, mailAccounts, activeAccountId } = useStore();
+  const { prefs, outlookRefresh, accounts, mailAccounts, activeAccountId, emails, searchEmails } = useStore();
+
+  // Many events are created from an email invite — tapping the event finds that
+  // email (by matching subject) and opens it.
+  const openEventEmail = (item) => {
+    const norm = (s) => String(s || '').toLowerCase().replace(/^\s*(re|fwd|fw|invitation:|accepted:|declined:|tentative:|canceled:|updated invitation:)\s*:?\s*/i, '').trim();
+    const target = norm(item.subject);
+    if (!target) return;
+    const pool = [...(emails || []), ...(searchEmails || [])];
+    const hit = pool.find((e) => { const s = norm(e.subject); return s && (s === target || s.includes(target) || target.includes(s)); });
+    if (hit) navigate('Thread', { id: hit.id });
+    else if (item.joinUrl) Linking.openURL(item.joinUrl).catch(() => {});
+  };
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [needsReconnect, setNeedsReconnect] = useState(false);
@@ -190,7 +202,7 @@ export default function CalendarScreen({ goBack, navigate }) {
     else if (item.response === 'tentativelyAccepted') pill = { label: 'Maybe', bg: 'rgba(255,255,255,0.12)', fg: 'rgba(255,255,255,0.8)' };
 
     return (
-      <View style={styles.card}>
+      <Pressable style={styles.card} onPress={() => openEventEmail(item)}>
         <View style={[styles.bar, { backgroundColor: barColor }]} />
         <View style={styles.body}>
           {pill && (
@@ -236,7 +248,7 @@ export default function CalendarScreen({ goBack, navigate }) {
             </View>
           )}
         </View>
-      </View>
+      </Pressable>
     );
   };
 

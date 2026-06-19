@@ -65,28 +65,34 @@ export default function DigestScreen({ goBack, navigate, params }) {
   // ── Derive real numbers / examples from the store, with graceful fallbacks ──
   const inB = (e, b) => e && e.priority && e.priority.bucket === b;
   const inC = (e, c) => e && e.priority && e.priority.category === c;
+  // The digest is about TODAY (plus anything you might have missed yesterday) —
+  // not your whole backlog.
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startYesterday = startToday - 86400000;
+  const isRecent = (e) => { const t = new Date(e?.date || 0).getTime(); return t >= startYesterday; };
+  const recent = useMemo(() => emails.filter(isRecent), [emails]); // eslint-disable-line
 
+  // Action items = genuinely actionable mail only (never newsletters/promos).
   const actionEmails = useMemo(
-    () => emails.filter((e) => inC(e, 'Action Needed') || inB(e, 'urgent') || inB(e, 'important')),
-    [emails],
+    () => recent.filter((e) => (inC(e, 'Action Needed') || inC(e, 'Client') || inB(e, 'urgent')) && !inC(e, 'Newsletter') && !inC(e, 'FYI')),
+    [recent],
   );
-  const meetingEmails = useMemo(() => emails.filter((e) => inC(e, 'Meeting')), [emails]);
-  const newsletterEmails = useMemo(() => emails.filter((e) => inC(e, 'Newsletter')), [emails]);
+  const meetingEmails = useMemo(() => recent.filter((e) => inC(e, 'Meeting')), [recent]);
+  const newsletterEmails = useMemo(() => recent.filter((e) => inC(e, 'Newsletter')), [recent]);
 
-  // A security alert = an urgent email whose text mentions a sign-in / verification.
+  // A security alert = a recent email whose text mentions a sign-in / verification.
   const securityEmail = useMemo(() => {
     const re = /(security|sign[- ]?in|password|verify|verification|suspicious|unusual|2fa|breach|alert|locked)/i;
-    return emails.find((e) => {
+    return recent.find((e) => {
       const hay = `${(e.priority && e.priority.tldr) || ''} ${(e.priority && e.priority.senderName) || ''} ${e.subject || ''}`;
       return re.test(hay) && (inB(e, 'urgent') || inB(e, 'important'));
     }) || null;
-  }, [emails]);
+  }, [recent]);
 
-  // Rows for "Needs Your Attention" — top urgent/important, else representative mock.
+  // Rows for "Needs Your Attention" — top actionable recent mail.
   const attentionRows = useMemo(() => {
-    const real = emails
-      .filter((e) => inB(e, 'urgent') || inB(e, 'important'))
-      .slice(0, 4)
+    const real = actionEmails
+      .slice(0, 5)
       .map((e) => ({
         id: e.id,
         category: (e.priority && e.priority.category) || 'Action Needed',
@@ -96,18 +102,16 @@ export default function DigestScreen({ goBack, navigate, params }) {
       }));
     if (real.length) return real;
     return [
-      { id: null, category: 'Action Needed', text: 'Approve the Q3 budget before EOD', sender: 'Dana Whitfield', time: '9:12 AM' },
-      { id: null, category: 'Urgent', text: 'Contract signature needed to close', sender: 'Legal Team', time: '8:40 AM' },
-      { id: null, category: 'Meeting', text: 'Confirm 2pm partner sync', sender: 'Priya Anand', time: 'Yesterday' },
+      { id: null, category: 'Action Needed', text: 'Nothing needs a reply right now — you\'re clear.', sender: 'ScaleMail', time: '' },
     ];
-  }, [emails]);
+  }, [actionEmails]);
 
-  // Numbers for the stat grid + paragraph indicators.
-  const total = (counts && counts.total) || emails.length || 0;
+  // Numbers for the stat grid + paragraph indicators (all scoped to today/yesterday).
+  const total = recent.length;
   const unread = (mailboxUnread != null ? mailboxUnread : null);
-  const actionCount = actionEmails.length || (counts ? counts.urgent + counts.important : 0);
+  const actionCount = actionEmails.length;
   const meetingCount = meetingEmails.length;
-  const newsletterCount = newsletterEmails.length || (counts ? counts.noise : 0);
+  const newsletterCount = newsletterEmails.length;
 
   // The first action / meeting email we'd open from a paragraph tap.
   const firstAction = actionEmails[0];

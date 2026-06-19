@@ -34,7 +34,7 @@ function Row({ icon, bg, color, title, onPress, right }) {
   );
 }
 
-export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, onOpenDigest, onOpenHealth }) {
+export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, onOpenDigest, onOpenHealth, onOpenCalendar }) {
   const { vips, prefs, setPrefs, updateAvatar, accounts, startTour, openLearn } = useStore();
   const [focused, setFocused] = useState(true);
   const [notifs, setNotifs] = useState(true);
