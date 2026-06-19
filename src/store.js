@@ -221,7 +221,11 @@ export function StoreProvider({ children }) {
         if (e.snoozedUntil && e.snoozedUntil > now) return false;
         return true;
       });
-    return applySort(prioritize(visible, vips, prefs.categories, knownImportantList));
+    // De-dupe by id — overlapping background-sync pages can append the same email
+    // twice, which showed up as a repeated card (notably in Triage).
+    const seen = new Set();
+    const deduped = visible.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
+    return applySort(prioritize(deduped, vips, prefs.categories, knownImportantList));
   }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, demoMode, activeAccountId, applySort]); // eslint-disable-line
 
   const emails = useMemo(() => {
