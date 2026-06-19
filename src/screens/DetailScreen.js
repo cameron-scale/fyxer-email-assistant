@@ -64,11 +64,9 @@ const BAND_PALETTE = {
 };
 
 export default function DetailScreen({ params, goBack, navigate }) {
-  const { emails, searchEmails, folderEmails, archive, snooze, snoozeUntil, markRead, toggleVip, loadFullBody, setPalette, prefs, outlookRefresh, mailAccounts } = useStore();
+  const { emails, searchEmails, folderEmails, findEmail, archive, snooze, snoozeUntil, markRead, toggleVip, loadFullBody, setPalette, prefs, outlookRefresh, mailAccounts } = useStore();
   // The opened email may live in the inbox, a search result, or a browsed folder.
-  const email = emails.find((e) => e.id === params.id)
-    || (searchEmails || []).find((e) => e.id === params.id)
-    || (folderEmails || []).find((e) => e.id === params.id);
+  const email = findEmail(params.id);
   const [rsvpBusy, setRsvpBusy] = React.useState(false);
   const [rsvpDone, setRsvpDone] = React.useState(null);
   const [attBusy, setAttBusy] = React.useState(null);

@@ -253,6 +253,19 @@ export function StoreProvider({ children }) {
     return prioritize(merged, vips, prefs.categories, knownImportantList);
   }, [searchResults, overrides, summaries, vips, prefs.categories, prefs.knownImportant]);
 
+  // Prioritized Sent / Drafts lists (loaded on demand for those tabs).
+  const sentRanked = useMemo(() => prioritize((folders.sent || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories), [folders.sent, overrides, vips, prefs.categories]);
+  const draftRanked = useMemo(() => prioritize((folders.drafts || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories), [folders.drafts, overrides, vips, prefs.categories]);
+
+  // Find a prioritized email by id across EVERY loaded list (inbox, folders,
+  // Sent, Drafts, search) so the reader works no matter which box it was opened from.
+  const findEmail = useCallback((id) => {
+    if (!id) return null;
+    const lists = [emails, searchEmails, folderEmails, sentRanked, draftRanked];
+    for (const l of lists) { const hit = (l || []).find((e) => e.id === id); if (hit) return hit; }
+    return null;
+  }, [emails, searchEmails, folderEmails, sentRanked, draftRanked]);
+
   const counts = useMemo(() => {
     const c = { urgent: 0, important: 0, fyi: 0, noise: 0, total: emails.length };
     emails.forEach((e) => {
@@ -898,6 +911,9 @@ export function StoreProvider({ children }) {
     openWellKnownFolder,
     currentFolder,
     folderEmails,
+    sentRanked,
+    draftRanked,
+    findEmail,
     loadFullBody,
     folders,
     folderLoading,

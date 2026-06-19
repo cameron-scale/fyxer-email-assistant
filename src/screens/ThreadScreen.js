@@ -77,9 +77,8 @@ function Message({ msg, defaultOpen }) {
 }
 
 export default function ThreadScreen({ goBack, navigate, params }) {
-  const { emails, searchEmails, folderEmails, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk } = useStore();
-  const lookup = (id) => emails.find((e) => e.id === id) || (searchEmails || []).find((e) => e.id === id) || (folderEmails || []).find((e) => e.id === id);
-  const seed = lookup(params.id);
+  const { emails, searchEmails, folderEmails, findEmail, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk } = useStore();
+  const seed = findEmail(params.id);
   const [messages, setMessages] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rsvpDone, setRsvpDone] = useState(null);
