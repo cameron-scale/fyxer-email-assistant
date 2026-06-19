@@ -212,7 +212,7 @@ export default function LearnInboxOverlay() {
 
   return (
     <Modal visible={!!learnOpen} transparent animationType="fade" onRequestClose={cancel}>
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, phase !== 'done' && styles.overlayScan]}>
         {phase === 'done' ? (
           <View style={styles.card}>
             <Animated.View style={[styles.checkCircle, { transform: [{ scale: checkScale }] }]}>
@@ -283,10 +283,13 @@ export default function LearnInboxOverlay() {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  overlayScan: {
+    backgroundColor: 'rgba(8,10,18,0.22)', // lighter dim while the ring is scanning
   },
 
   // Scanning

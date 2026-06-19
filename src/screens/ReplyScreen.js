@@ -49,7 +49,13 @@ export default function ReplyScreen({ params, goBack }) {
   const [aiBusy, setAiBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  // To + Subject are editable (you can change the recipient or rewrite the subject).
+  const [toEmail, setToEmail] = useState(email ? p.senderEmail : '');
+  const [subject, setSubject] = useState(
+    email ? (/^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`) : ''
+  );
   const [bodyHeight, setBodyHeight] = useState(240); // grows with content so the page (not the field) scrolls
+  const [quoteExpanded, setQuoteExpanded] = useState(false);
 
   const writeWithAi = async () => {
     setAiBusy(true);
@@ -75,8 +81,6 @@ export default function ReplyScreen({ params, goBack }) {
     );
   }
 
-  const subject = /^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`;
-
   const saveToDrafts = async () => {
     if (!canSend) {
       Alert.alert('Connect Outlook first', 'Saving to Drafts needs your Outlook account connected.');
@@ -86,7 +90,7 @@ export default function ReplyScreen({ params, goBack }) {
     try {
       await saveDraft(prefs.serverUrl, {
         refreshToken: outlookRefresh,
-        toEmail: p.senderEmail,
+        toEmail,
         subject,
         html: composeHtml(body, prefs.sig),
       });
@@ -113,7 +117,7 @@ export default function ReplyScreen({ params, goBack }) {
       await sendReply(prefs.serverUrl, {
         refreshToken: acct?.refreshToken || outlookRefresh,
         provider: acct?.type || (email.account === 'gmail' ? 'google' : 'outlook'),
-        toEmail: p.senderEmail,
+        toEmail,
         subject,
         body: composeText(body, prefs.sig),
         html: composeHtml(body, prefs.sig),
@@ -152,16 +156,21 @@ export default function ReplyScreen({ params, goBack }) {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
-          {/* Recipient + subject */}
+          {/* Recipient + subject — both editable */}
           <View style={styles.field}>
             <Text style={styles.label}>To</Text>
-            <Text style={styles.value} numberOfLines={1}>
-              {p.senderName} <Text style={styles.muted}>&lt;{p.senderEmail}&gt;</Text>
-            </Text>
+            <TextInput
+              style={styles.fieldInput} value={toEmail} onChangeText={setToEmail}
+              placeholder="name@email.com" placeholderTextColor={colors.ink4}
+              autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
+            />
           </View>
           <View style={styles.field}>
             <Text style={styles.label}>Subject</Text>
-            <Text style={styles.value} numberOfLines={1}>{subject}</Text>
+            <TextInput
+              style={styles.fieldInput} value={subject} onChangeText={setSubject}
+              placeholder="Subject" placeholderTextColor={colors.ink4}
+            />
           </View>
 
           {/* Tone + one-tap drafts */}
@@ -236,7 +245,14 @@ export default function ReplyScreen({ params, goBack }) {
             <Text style={styles.quoteHead}>
               On {timeAgo(email.date)}, {p.senderName} wrote:
             </Text>
-            <Text style={styles.quoteBody}>{email.body}</Text>
+            <Text style={styles.quoteBody} numberOfLines={quoteExpanded ? undefined : 10}>
+              {String(email.body || '').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim()}
+            </Text>
+            {String(email.body || '').length > 400 && (
+              <Pressable onPress={() => setQuoteExpanded((v) => !v)} hitSlop={6}>
+                <Text style={styles.quoteToggle}>{quoteExpanded ? 'Show less' : 'Show full message'}</Text>
+              </Pressable>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -265,6 +281,7 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 13, fontWeight: '600', color: colors.ink4, minWidth: 56 },
   value: { flex: 1, fontSize: 15, color: colors.ink, fontWeight: '500' },
+  fieldInput: { flex: 1, fontSize: 15, color: colors.ink, fontWeight: '500', padding: 0 },
   muted: { color: colors.ink3, fontWeight: '400' },
   helper: {
     fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase',
@@ -301,6 +318,7 @@ const styles = StyleSheet.create({
   },
   quoteHead: { fontSize: 12, color: colors.ink4, marginBottom: 8 },
   quoteBody: { fontFamily: 'Georgia', fontSize: 14, lineHeight: 22, color: colors.ink3 },
+  quoteToggle: { color: colors.blue, fontSize: 13, fontWeight: '700', marginTop: 8 },
   gone: { color: colors.ink3, textAlign: 'center', marginTop: 80, fontSize: 15 },
   send: { backgroundColor: colors.blue, borderRadius: radius.md, paddingVertical: 14, margin: 20, alignItems: 'center' },
   sendText: { color: '#fff', fontWeight: '800', fontSize: font.title },

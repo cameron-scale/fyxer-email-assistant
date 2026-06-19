@@ -141,6 +141,10 @@ export default function ThreadScreen({ goBack, navigate, params }) {
 
       {loading ? <ActivityIndicator color={colors.blue} style={{ marginTop: 30 }} /> : (
         <ScrollView contentContainerStyle={styles.body2} showsVerticalScrollIndicator={false}>
+          {/* AI summary / recommended next steps — above the body for a quick gist */}
+          {isBackendConfigured(prefs?.serverUrl) && latest && (
+            <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
+          )}
           {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === 0} />)}
 
           {/* Join meeting */}
@@ -184,9 +188,6 @@ export default function ThreadScreen({ goBack, navigate, params }) {
             </View>
           )}
 
-          {isBackendConfigured(prefs?.serverUrl) && latest && (
-            <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
-          )}
           <View style={{ height: 100 }} />
         </ScrollView>
       )}

@@ -103,7 +103,14 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const threaded = (prefs?.groupThreads && !usingSearch && !starred)
     ? (() => {
       const groups = new Map(); // threadKey -> [emails]
-      shown.forEach((e) => { if (e.threadKey) { if (!groups.has(e.threadKey)) groups.set(e.threadKey, []); groups.get(e.threadKey).push(e); } });
+      const seenIds = new Set(); // de-dupe so a thread can't over-count the same message
+      shown.forEach((e) => {
+        if (e.threadKey && !seenIds.has(e.id)) {
+          seenIds.add(e.id);
+          if (!groups.has(e.threadKey)) groups.set(e.threadKey, []);
+          groups.get(e.threadKey).push(e);
+        }
+      });
       const emitted = new Set();
       const out = [];
       for (const e of shown) {
@@ -511,7 +518,7 @@ const styles = StyleSheet.create({
     fontSize: 11, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.25)', paddingHorizontal: 6, paddingTop: 10, paddingBottom: 10,
   },
-  cardWrap: { marginBottom: 10 },
+  cardWrap: { marginBottom: 0 },
   empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyIcon: {
     width: 64, height: 64, borderRadius: 20, backgroundColor: colors.onDarkFill,
