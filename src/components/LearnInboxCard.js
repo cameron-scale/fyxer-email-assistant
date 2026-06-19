@@ -53,6 +53,16 @@ export default function LearnInboxCard() {
       const p = await learnProfile(prefs.serverUrl, top, subjects);
       const have = new Set((vips || []).map((v) => String(v).toLowerCase()));
       const suggestedVips = (p.suggestedVips || []).filter((v) => !have.has(v.email));
+      // Auto-feed the learned profile into prioritization right away — these senders
+      // get boosted even before the user explicitly marks them as VIPs.
+      const learned = (p.suggestedVips || [])
+        .map((v) => String(v.email || '').toLowerCase().trim())
+        .filter((e) => e.includes('@'));
+      if (learned.length) {
+        const existing = (prefs.knownImportant || []).map((e) => String(e).toLowerCase());
+        const merged = Array.from(new Set([...existing, ...learned]));
+        setPrefs({ knownImportant: merged });
+      }
       setResult({ processed: count, profile: p.profile, suggestedVips });
       setState('done');
     } catch (e) {

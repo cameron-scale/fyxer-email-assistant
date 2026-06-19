@@ -27,7 +27,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [] };
 
 const StoreContext = createContext(null);
 
@@ -193,9 +193,9 @@ export function StoreProvider({ children }) {
         if (e.snoozedUntil && e.snoozedUntil > now) return false;
         return true;
       });
-    const ranked = prioritize(visible, vips, prefs.categories);
+    const ranked = prioritize(visible, vips, prefs.categories, prefs.knownImportant);
     return applySort(ranked);
-  }, [raw, overrides, vips, summaries, sortBy, prefs.categories, demoMode, activeAccountId, applySort]);
+  }, [raw, overrides, vips, summaries, sortBy, prefs.categories, prefs.knownImportant, demoMode, activeAccountId, applySort]);
 
   // The list for the currently-open folder (Junk, Archive, custom folders…).
   const folderEmails = useMemo(() => {
@@ -205,8 +205,8 @@ export function StoreProvider({ children }) {
       .filter((e) => e.folder === currentFolder.id)
       .map((e) => ({ ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id] }))
       .filter((e) => e.status !== 'archived' && e.status !== 'done' && !(e.snoozedUntil && e.snoozedUntil > now));
-    return applySort(prioritize(visible, vips, prefs.categories));
-  }, [raw, overrides, vips, summaries, prefs.categories, currentFolder, applySort]);
+    return applySort(prioritize(visible, vips, prefs.categories, prefs.knownImportant));
+  }, [raw, overrides, vips, summaries, prefs.categories, prefs.knownImportant, currentFolder, applySort]);
 
   // Prioritized view of whole-mailbox search results (null when not searching).
   const searchEmails = useMemo(() => {
@@ -214,8 +214,8 @@ export function StoreProvider({ children }) {
     const merged = searchResults.map((e) => ({
       ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id],
     }));
-    return prioritize(merged, vips, prefs.categories);
-  }, [searchResults, overrides, summaries, vips, prefs.categories]);
+    return prioritize(merged, vips, prefs.categories, prefs.knownImportant);
+  }, [searchResults, overrides, summaries, vips, prefs.categories, prefs.knownImportant]);
 
   const counts = useMemo(() => {
     const c = { urgent: 0, important: 0, fyi: 0, noise: 0, total: emails.length };

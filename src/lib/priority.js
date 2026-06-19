@@ -142,8 +142,12 @@ export function scoreEmail(email, options = {}) {
   const haystack = `${email.subject || ''} ${text}`.toLowerCase();
   const senderStr = `${sender.name} ${sender.email}`.toLowerCase();
   const isVip = vips.includes(sender.email);
+  // Senders the AI learned are important to you (from "Learn my inbox"). They get a
+  // strong boost — but a notch below an explicit VIP you chose yourself.
+  const knownImportant = options.knownImportant || [];
+  const isKnown = !isVip && knownImportant.includes(sender.email);
   // Outlook's own Focused/Other verdict: 'other' is a strong newsletter/noise hint.
-  const inferredOther = email.inferred === 'other' && !isVip;
+  const inferredOther = email.inferred === 'other' && !isVip && !isKnown;
 
   let score = 0;
   const reasons = [];
@@ -172,6 +176,10 @@ export function scoreEmail(email, options = {}) {
   if (isVip) {
     score += 60;
     reasons.unshift('⭐ VIP sender');
+  } else if (isKnown) {
+    // Learned-important contacts get a strong nudge, just below a hand-picked VIP.
+    score += 35;
+    reasons.unshift('Important contact (learned from your inbox)');
   }
 
   // Addressed to you personally (a greeting near the top) — lightweight check.
@@ -190,8 +198,8 @@ export function scoreEmail(email, options = {}) {
 
   // --- Signals that push importance DOWN (noise) ---
   const noiseHits = countMatches(haystack, NOISE_WORDS);
-  const brandSender = isBrandSender(sender) && !isVip;
-  const noisySender = (NOISE_SENDER_HINTS.some((h) => senderStr.includes(h)) || brandSender) && !isVip;
+  const brandSender = isBrandSender(sender) && !isVip && !isKnown;
+  const noisySender = (NOISE_SENDER_HINTS.some((h) => senderStr.includes(h)) || brandSender) && !isVip && !isKnown;
   if (noiseHits) {
     score -= 20 + noiseHits * 8;
   }
@@ -235,12 +243,14 @@ export function scoreEmail(email, options = {}) {
     brandSender,
   });
 
-  // Newsletter/promotional mail is never urgent or important. VIPs are exempt.
-  if (category === 'Newsletter' && !isVip) {
+  // Newsletter/promotional mail is never urgent or important. VIPs (and learned
+  // important contacts) are exempt.
+  if (category === 'Newsletter' && !isVip && !isKnown) {
     bucket = 'noise';
   }
-  // VIP senders are your clients / important people — tag them Client...
-  if (isVip) category = 'Client';
+  // VIP senders are your clients / important people — tag them Client. Learned
+  // important contacts also read as Client (unless they're genuinely urgent below).
+  if (isVip || isKnown) category = 'Client';
   // ...but a genuinely urgent message always shows as Urgent (highest priority).
   if (bucket === 'urgent') category = 'Urgent';
 
@@ -269,10 +279,11 @@ export function scoreEmail(email, options = {}) {
   extraTags.forEach((c) => pushCat(c.name, c.color));
 
   // Extra guard: a noisy/automated sender shouldn't be urgent either.
-  if ((noisySender || noiseHits >= 2) && bucket === 'urgent' && !isVip) bucket = 'noise';
+  if ((noisySender || noiseHits >= 2) && bucket === 'urgent' && !isVip && !isKnown) bucket = 'noise';
 
-  // VIPs never get buried in Noise/FYI — bump them to at least Important.
-  if (isVip && (bucket === 'noise' || bucket === 'fyi')) bucket = 'important';
+  // VIPs (and learned important contacts) never get buried in Noise/FYI — bump
+  // them to at least Important.
+  if ((isVip || isKnown) && (bucket === 'noise' || bucket === 'fyi')) bucket = 'important';
 
   return {
     score,
@@ -282,6 +293,7 @@ export function scoreEmail(email, options = {}) {
     categoryColor,                       // custom category color (null for the built-in 6)
     categories: categories.slice(0, 3),  // up to 3 tags (primary first)
     isVip,
+    isKnown,                             // learned-important sender (not a hand-picked VIP)
     reason: reasons[0] || 'General message',
     reasons,
     senderName: sender.name,
@@ -305,9 +317,10 @@ export const BUCKETS = {
 // Take raw emails -> attach priority -> sort best-first.
 // vips = array of lowercased sender emails the user marked important.
 // categories = optional user-defined custom categories.
-export function prioritize(rawEmails, vips = [], categories = []) {
+// knownImportant = lowercased sender emails the AI learned are important to you.
+export function prioritize(rawEmails, vips = [], categories = [], knownImportant = []) {
   return rawEmails
-    .map((e) => ({ ...e, priority: scoreEmail(e, { vips, categories }) }))
+    .map((e) => ({ ...e, priority: scoreEmail(e, { vips, categories, knownImportant }) }))
     .sort((a, b) => {
       const ord =
         BUCKETS[a.priority.bucket].order - BUCKETS[b.priority.bucket].order;
