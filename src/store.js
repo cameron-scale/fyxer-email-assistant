@@ -122,6 +122,9 @@ export function StoreProvider({ children }) {
   const [searching, setSearching] = useState(false);
   const [chatAnswer, setChatAnswer] = useState(null); // AI answer banner text
 
+  // True once saved prefs/tokens have loaded — so first-launch gating doesn't flash.
+  const [bootstrapped, setBootstrapped] = useState(false);
+
   // The full-screen "learn my inbox" overlay (ring → frosted "Inbox ready" popup).
   const [learnOpen, setLearnOpen] = useState(false);
   const openLearn = useCallback(() => setLearnOpen(true), []);
@@ -159,10 +162,13 @@ export function StoreProvider({ children }) {
           setOutlookRefresh(rt);
           setAccounts((a) => ({ ...a, outlook: true }));
         }
-        // First-ever launch → run the tutorial with demo data.
+        // First-ever launch → run the tutorial with demo data (only once the new
+        // onboarding flow has been completed, so they don't overlap on a fresh install).
         const seen = await getToken('hasSeenTutorial');
-        if (!seen) { setDemoMode(true); setTourActive(true); }
+        const onboarded = (() => { try { return !!JSON.parse(p || '{}').hasSeenOnboarding; } catch (e) { return false; } })();
+        if (!seen && onboarded) { setDemoMode(true); setTourActive(true); }
       } catch (e) {}
+      finally { setBootstrapped(true); }
     })();
   }, []);
 
@@ -816,6 +822,7 @@ export function StoreProvider({ children }) {
     addMailAccount,
     removeMailAccount,
     updateMailAccount,
+    bootstrapped,
     learnOpen,
     openLearn,
     closeLearn,

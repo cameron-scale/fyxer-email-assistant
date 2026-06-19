@@ -30,9 +30,16 @@ const FIT_JS = `(function(){
       var sw=Math.max(b.scrollWidth, document.documentElement.scrollWidth);
       if(sw>vw+2){ b.style.transformOrigin='0 0'; b.style.zoom=(vw/sw); }
     }catch(e){}
-    try{ window.ReactNativeWebView.postMessage(String(document.body.scrollHeight)); }catch(e){}
+    try{
+      // Measure the RENDERED (post-zoom) height via bounding rects — using the raw
+      // scrollHeight after a CSS zoom reports the un-scaled height and leaves a big
+      // empty gap below the body.
+      var rect = document.body.getBoundingClientRect();
+      var h = Math.ceil(Math.max(rect.bottom, document.documentElement.getBoundingClientRect().height));
+      window.ReactNativeWebView.postMessage(String(h));
+    }catch(e){}
   }
-  setTimeout(fit,60); setTimeout(fit,400);
+  setTimeout(fit,60); setTimeout(fit,450);
 })(); true;`;
 
 function Message({ msg, defaultOpen }) {
@@ -45,6 +52,7 @@ function Message({ msg, defaultOpen }) {
         <View style={styles.avatar}><Text style={styles.avatarText}>{(sender.name || '?').slice(0, 1).toUpperCase()}</Text></View>
         <View style={{ flex: 1 }}>
           <Text style={styles.from} numberOfLines={1}>{sender.name || sender.email}</Text>
+          {!!sender.email && !!sender.name && <Text style={styles.fromEmail} numberOfLines={1}>{sender.email}</Text>}
           {!open && <Text style={styles.snip} numberOfLines={1}>{msg.body}</Text>}
         </View>
         <Text style={styles.time}>{msg.date ? timeAgo(msg.date) : ''}</Text>
@@ -57,7 +65,7 @@ function Message({ msg, defaultOpen }) {
             style={{ height: h, backgroundColor: 'transparent' }}
             scrollEnabled={false}
             injectedJavaScript={FIT_JS}
-            onMessage={(e) => { const n = Number(e.nativeEvent.data); if (n && n > 40) setH(n + 20); }}
+            onMessage={(e) => { const n = Number(e.nativeEvent.data); if (n && n > 40) setH(n + 4); }}
             onShouldStartLoadWithRequest={(r) => { if (r.url === 'about:blank' || r.url.startsWith('data:')) return true; Linking.openURL(r.url).catch(() => {}); return false; }}
           />
         ) : (
@@ -69,7 +77,7 @@ function Message({ msg, defaultOpen }) {
 }
 
 export default function ThreadScreen({ goBack, navigate, params }) {
-  const { emails, searchEmails, folderEmails, prefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk } = useStore();
+  const { emails, searchEmails, folderEmails, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk } = useStore();
   const lookup = (id) => emails.find((e) => e.id === id) || (searchEmails || []).find((e) => e.id === id) || (folderEmails || []).find((e) => e.id === id);
   const seed = lookup(params.id);
   const [messages, setMessages] = useState(null);
@@ -121,6 +129,31 @@ export default function ThreadScreen({ goBack, navigate, params }) {
   const list = [...rawList].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
   const latest = list[0];
 
+  const senderEmail = (seed?.priority?.senderEmail || parseSender(seed?.from || '').email || '').toLowerCase();
+  const senderNote = (prefs?.senderNotes || {})[senderEmail] || '';
+
+  // Teach the AI something about this sender that it remembers going forward
+  // ("this is my client", "favorite brand"). Stored per-sender + fed to the AI.
+  const teachAI = () => {
+    if (typeof Alert.prompt !== 'function') {
+      Alert.alert('Tip', 'Add a note about this sender on iOS to teach ScaleMail (e.g. "this is my client").');
+      return;
+    }
+    Alert.prompt(
+      'Teach ScaleMail',
+      `A note about ${seed?.priority?.senderName || senderEmail || 'this sender'} that the AI will remember (e.g. "this is my client", "favorite brand").`,
+      (text) => {
+        const note = String(text || '').trim();
+        if (!note || !senderEmail) return;
+        const notes = { ...(prefs?.senderNotes || {}), [senderEmail]: note };
+        setPrefs({ senderNotes: notes });
+        Alert.alert('Got it ✓', 'ScaleMail will remember that for this sender.');
+      },
+      'plain-text',
+      senderNote,
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.nav}>
@@ -134,6 +167,7 @@ export default function ThreadScreen({ goBack, navigate, params }) {
         <View style={styles.quickBar}>
           <QuickAction icon="archive-outline" label="Archive" onPress={() => { archive(seed.id); goBack(); }} />
           <QuickAction icon="trash-outline" label="Trash" onPress={() => { trashEmail(seed.id); goBack(); }} />
+          <QuickAction icon="bulb-outline" label="Teach AI" onPress={teachAI} />
           <QuickAction icon="alert-circle-outline" label="Report" onPress={() => { reportJunk(seed.id); goBack(); }} />
           <QuickAction icon="mail-unread-outline" label="Unread" onPress={() => { markUnread(seed.id); goBack(); }} />
         </View>
@@ -144,7 +178,7 @@ export default function ThreadScreen({ goBack, navigate, params }) {
           {/* AI summary / recommended next steps — above the body for a quick gist */}
           {isBackendConfigured(prefs?.serverUrl) && latest && (
             <View style={{ marginBottom: 16 }}>
-              <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
+              <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} note={senderNote} />
             </View>
           )}
           {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === 0} />)}
@@ -229,6 +263,7 @@ const styles = StyleSheet.create({
   avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   from: { fontSize: 14, fontWeight: '700', color: colors.ink },
+  fromEmail: { fontSize: 12, color: colors.ink3, marginTop: 1 },
   snip: { fontSize: 12.5, color: colors.ink3, marginTop: 1 },
   time: { fontSize: 12, color: colors.ink4 },
   body: { fontSize: 15, lineHeight: 23, color: colors.ink2, marginTop: 12 },

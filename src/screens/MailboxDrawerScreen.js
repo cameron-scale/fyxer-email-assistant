@@ -229,6 +229,30 @@ export default function MailboxDrawerScreen({ goBack, navigate }) {
           <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" style={{ marginLeft: 8 }} />
         </Pressable>
 
+        <Pressable style={[styles.calRow, { marginTop: 10 }]} onPress={() => navigate('Digest')}>
+          <View style={[styles.calIcon, { backgroundColor: 'rgba(245,158,11,0.18)' }]}>
+            <Ionicons name="sunny" size={18} color="#F59E0B" />
+          </View>
+          <View style={{ flex: 1 }}><Text style={styles.calTitle}>Daily digest</Text><Text style={styles.calSub} numberOfLines={1}>Your AI inbox briefing</Text></View>
+          <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" style={{ marginLeft: 8 }} />
+        </Pressable>
+
+        <Pressable style={[styles.calRow, { marginTop: 10 }]} onPress={() => navigate('BulkTriage')}>
+          <View style={[styles.calIcon, { backgroundColor: 'rgba(96,165,250,0.18)' }]}>
+            <Ionicons name="flash" size={18} color={colors.blue} />
+          </View>
+          <View style={{ flex: 1 }}><Text style={styles.calTitle}>Bulk triage</Text><Text style={styles.calSub} numberOfLines={1}>Clear thousands at once, safely</Text></View>
+          <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" style={{ marginLeft: 8 }} />
+        </Pressable>
+
+        <Pressable style={[styles.calRow, { marginTop: 10 }]} onPress={() => navigate('Onboarding')}>
+          <View style={[styles.calIcon, { backgroundColor: 'rgba(129,140,248,0.18)' }]}>
+            <Ionicons name="sparkles" size={18} color="#818CF8" />
+          </View>
+          <View style={{ flex: 1 }}><Text style={styles.calTitle}>Set up ScaleMail</Text><Text style={styles.calSub} numberOfLines={1}>Teach the AI about you</Text></View>
+          <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" style={{ marginLeft: 8 }} />
+        </Pressable>
+
         {/* Folder groups */}
         {loadingFolders ? (
           <ActivityIndicator color={colors.blue} style={{ marginTop: 28 }} />

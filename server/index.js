@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-31',
+    version: 'debug-32',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-31', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-32', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-31',
+    version: 'debug-32',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1725,10 +1725,11 @@ app.post('/quick-replies', async (req, res) => {
 // open email. Powers the recommendation card under the email body.
 app.post('/next-steps', async (req, res) => {
   try {
-    const { subject, body, senderName, id } = req.body || {};
+    const { subject, body, senderName, id, note } = req.body || {};
     if (!ANTHROPIC_API_KEY) return res.json({ recommendation: '', steps: [] });
-    // Cache per email so re-opening it is free; skip when over the daily budget.
-    const cacheKey = id ? `next:${id}` : '';
+    const noteStr = String(note || '').trim().slice(0, 240);
+    // Cache per email (+ note) so re-opening is free; skip when over the daily budget.
+    const cacheKey = id ? `next:${id}${noteStr ? ':n' + noteStr.length : ''}` : '';
     const cached = auxGet(cacheKey);
     if (cached) return res.json(cached);
     if (!underDailyBudget()) return res.json({ recommendation: '', steps: [] });
@@ -1737,8 +1738,15 @@ app.post('/next-steps', async (req, res) => {
       max_tokens: 400,
       system:
         'You are an executive assistant. Given an email, tell the recipient what to do ' +
-        'about it. Be decisive and specific to THIS email (mention amounts, dates, names, ' +
-        'asks). If it is spam/phishing or needs no action, say so. Reply ONLY JSON: ' +
+        'about it. Be decisive and specific to THIS email (mention amounts, dates, names, asks). ' +
+        'CRITICAL: Do NOT call an email phishing, a scam, or fake unless there are STRONG signals ' +
+        '(a lookalike or mismatched sender domain, a request to enter a password/credentials or ' +
+        'move money urgently, or other clear red flags). Legitimate companies, banks, lenders, ' +
+        'schools, and brands routinely send promotions, statements, receipts, and notifications — ' +
+        'treat those as genuine, not threats. When unsure, assume the email is legitimate and just ' +
+        'recommend the practical action (read, reply, pay, archive, etc.). ' +
+        (noteStr ? `The user has TOLD YOU about this sender: "${noteStr}". Respect that and weight the email accordingly. ` : '') +
+        'If it needs no action, say so briefly. Reply ONLY JSON: ' +
         '{"recommendation":"one direct sentence on what to do and why","steps":["2-4 short ' +
         'imperative next steps"]}. No code fences.',
       messages: [{ role: 'user', content: `From: ${senderName || ''}\nSubject: ${subject || ''}\n\n${String(body || '').slice(0, 2500)}` }],

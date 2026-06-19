@@ -99,7 +99,7 @@ export default function ConnectScreen({ goBack, navigate }) {
       if (!refresh) return;
       await connectGoogle(refresh);
       Alert.alert('Connected 🎉', 'Your Gmail is loading, sorted by priority with AI summaries.');
-      goBack();
+      navigate('Profiling');
     } catch (e) {
       Alert.alert('Gmail sign-in failed', e.message || 'Please try again.');
     } finally {
@@ -123,7 +123,7 @@ export default function ConnectScreen({ goBack, navigate }) {
       if (!refresh) return; // user cancelled
       await connectOutlook(refresh);
       Alert.alert('Connected 🎉', 'Your Outlook is loading, sorted by priority with AI summaries.');
-      goBack();
+      navigate('Profiling');
     } catch (e) {
       Alert.alert('Outlook sign-in failed', e.message || 'Please try again.');
     } finally {
@@ -139,7 +139,7 @@ export default function ConnectScreen({ goBack, navigate }) {
       await connectIcloud(icloudEmail.trim(), icloudPass.trim());
       setIcloudOpen(false); setIcloudEmail(''); setIcloudPass('');
       Alert.alert('Connected 🎉', 'Your iCloud mail is loading, sorted by priority.');
-      goBack();
+      navigate('Profiling');
     } catch (e) {
       Alert.alert('iCloud sign-in failed', e.message || 'Check your email and app-specific password.');
     } finally { setBusy(null); }

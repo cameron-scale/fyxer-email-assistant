@@ -7,19 +7,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { nextSteps } from '../lib/backend';
 
-export default function NextStepsCard({ serverUrl, id, subject, body, senderName, dark }) {
+export default function NextStepsCard({ serverUrl, id, subject, body, senderName, note, dark }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    nextSteps(serverUrl, { id, subject, body, senderName })
+    nextSteps(serverUrl, { id, subject, body, senderName, note })
       .then((r) => { if (alive) setData(r); })
       .catch(() => {})
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [id, subject]); // eslint-disable-line
+  }, [id, subject, note]); // eslint-disable-line
 
   if (!loading && !(data && (data.recommendation || (data.steps || []).length))) return null;
 

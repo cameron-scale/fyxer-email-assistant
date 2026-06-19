@@ -1,7 +1,7 @@
 // App.js — entry point. Sets up the shared store, a tiny screen navigator, the
 // ScaleMail bottom tab bar, and the slide-up Compose / Profile sheets.
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { colors } from './src/theme';
@@ -23,6 +23,9 @@ import SignatureEditorScreen from './src/screens/SignatureEditorScreen';
 import CategoriesScreen from './src/screens/CategoriesScreen';
 import DigestScreen from './src/screens/DigestScreen';
 import HealthScreen from './src/screens/HealthScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
+import ProfilingScreen from './src/screens/ProfilingScreen';
+import BulkTriageScreen from './src/screens/BulkTriageScreen';
 import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
 import OnboardingTour from './src/components/OnboardingTour';
@@ -54,20 +57,32 @@ const SCREENS = {
   Categories: CategoriesScreen,
   Digest: DigestScreen,
   Health: HealthScreen,
+  Onboarding: OnboardingScreen,
+  Profiling: ProfilingScreen,
+  BulkTriage: BulkTriageScreen,
 };
 
 // Screens that show the bottom tab bar and can be switched between as tabs.
 // Settings now lives behind the profile avatar, not the tab bar.
 const TAB_SCREENS = ['Inbox', 'Starred', 'Sent', 'Drafts'];
-const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDrawer', 'Folder', 'Calendar', 'Thread'];
+const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDrawer', 'Folder', 'Calendar', 'Thread', 'Onboarding', 'Profiling', 'BulkTriage', 'Digest'];
 
 // Which aurora palette a top-level screen uses (Detail sets its own per-email).
 const SCREEN_PALETTE = { Starred: 'starred', Sent: 'sent', Drafts: 'drafts' };
 
 function AppShell() {
-  const { emails, setPalette, tourActive, mailboxUnread, openWellKnownFolder } = useStore();
+  const { emails, setPalette, tourActive, mailboxUnread, openWellKnownFolder, prefs, accounts, mailAccounts, bootstrapped } = useStore();
   const [stack, setStack] = useState([{ name: 'Inbox', params: {} }]);
   const [sheet, setSheet] = useState(null); // 'compose' | 'profile' | null
+
+  // Genuine first install (no accounts, never onboarded) → start in onboarding.
+  const onboardGate = useRef(false);
+  useEffect(() => {
+    if (onboardGate.current || !bootstrapped) return;
+    onboardGate.current = true;
+    const hasAccounts = (mailAccounts && mailAccounts.length) || accounts?.outlook || accounts?.gmail || accounts?.icloud;
+    if (!prefs?.hasSeenOnboarding && !hasAccounts) setStack([{ name: 'Onboarding', params: {} }]);
+  }, [bootstrapped]); // eslint-disable-line
 
   // Drive the app through screens during the onboarding tour.
   const handleTourAction = useCallback((action) => {
@@ -82,7 +97,11 @@ function AppShell() {
   // When the tutorial starts, make sure we're on the Inbox behind the overlay.
   useEffect(() => { if (tourActive) setStack([{ name: 'Inbox', params: {} }]); }, [tourActive]);
 
-  const navigate = useCallback((name, params = {}) => setStack((s) => [...s, { name, params }]), []);
+  const navigate = useCallback((name, params = {}) => {
+    // "Go to Inbox" from onboarding/profiling/etc. resets to the inbox root.
+    if (name === 'Inbox') { setStack([{ name: 'Inbox', params }]); return; }
+    setStack((s) => [...s, { name, params }]);
+  }, []);
   const goBack = useCallback(() => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)), []);
   const switchTab = useCallback((name) => setStack([{ name, params: {} }]), []);
   const openSheet = useCallback((name) => setSheet(name), []);
