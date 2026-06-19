@@ -132,6 +132,18 @@ export default function ThreadScreen({ goBack, navigate, params }) {
   const senderEmail = (seed?.priority?.senderEmail || parseSender(seed?.from || '').email || '').toLowerCase();
   const senderNote = (prefs?.senderNotes || {})[senderEmail] || '';
 
+  // Run a triage action, then jump straight to the next email's thread (instead of
+  // bouncing back to the inbox). Compute the next id BEFORE acting.
+  const advance = (fn) => {
+    const ctx = (emails || []).some((e) => e.id === seed?.id) ? emails
+      : (searchEmails || []).some((e) => e.id === seed?.id) ? searchEmails
+      : (folderEmails || []);
+    const idx = (ctx || []).findIndex((e) => e.id === seed?.id);
+    const nextId = idx >= 0 && idx + 1 < ctx.length ? ctx[idx + 1].id : null;
+    fn(seed.id);
+    if (nextId) { goBack(); navigate('Thread', { id: nextId }); } else { goBack(); }
+  };
+
   // Teach the AI something about this sender that it remembers going forward
   // ("this is my client", "favorite brand"). Stored per-sender + fed to the AI.
   const teachAI = () => {
@@ -165,11 +177,11 @@ export default function ThreadScreen({ goBack, navigate, params }) {
       {/* Quick actions */}
       {seed && (
         <View style={styles.quickBar}>
-          <QuickAction icon="archive-outline" label="Archive" onPress={() => { archive(seed.id); goBack(); }} />
-          <QuickAction icon="trash-outline" label="Trash" onPress={() => { trashEmail(seed.id); goBack(); }} />
+          <QuickAction icon="archive-outline" label="Archive" onPress={() => advance(archive)} />
+          <QuickAction icon="trash-outline" label="Trash" onPress={() => advance(trashEmail)} />
           <QuickAction icon="bulb-outline" label="Teach AI" onPress={teachAI} />
-          <QuickAction icon="alert-circle-outline" label="Report" onPress={() => { reportJunk(seed.id); goBack(); }} />
-          <QuickAction icon="mail-unread-outline" label="Unread" onPress={() => { markUnread(seed.id); goBack(); }} />
+          <QuickAction icon="alert-circle-outline" label="Report" onPress={() => advance(reportJunk)} />
+          <QuickAction icon="mail-unread-outline" label="Unread" onPress={() => advance(markUnread)} />
         </View>
       )}
 

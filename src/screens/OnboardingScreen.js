@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
+import ChipInput from '../components/ChipInput';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -166,10 +167,10 @@ export default function OnboardingScreen({ goBack, navigate, params }) {
   // Questionnaire answers (persisted under prefs.onboarding on completion).
   const [role, setRole] = useState(null);
   const [reach, setReach] = useState(['Clients', 'My team']);
-  const [reachText, setReachText] = useState('');
+  const [reachText, setReachText] = useState([]); // chips
   const [sensitivity, setSensitivity] = useState('balanced');
   const [dealFreq, setDealFreq] = useState(null);
-  const [brandsText, setBrandsText] = useState('');
+  const [brandsText, setBrandsText] = useState([]); // chips
   const [interests, setInterests] = useState(ROLE_INTERESTS.founder);
   const [notes, setNotes] = useState('');
 
@@ -182,10 +183,10 @@ export default function OnboardingScreen({ goBack, navigate, params }) {
       onboarding: {
         role,
         reach,
-        reachText: reachText.trim(),
+        reachText: reachText.join(', '),
         sensitivity,
         dealFrequency: dealFreq,
-        brands: brandsText.trim(),
+        brands: brandsText.join(', '),
         interests,
         notes: notes.trim(),
         completedAt: Date.now(),
@@ -234,7 +235,7 @@ export default function OnboardingScreen({ goBack, navigate, params }) {
         />
       )}
       {stage === 'connect' && (
-        <ConnectStage onDone={() => setStage('risk')} />
+        <ConnectStage onDone={() => setStage('ready')} />
       )}
       {stage === 'risk' && (
         <RiskStage
@@ -365,14 +366,12 @@ function QuestionsStage(props) {
               })}
             </View>
             <Text style={styles.fieldLabel}>Specific emails or domains</Text>
-            <TextInput
-              style={styles.input}
+            <ChipInput
               value={reachText}
-              onChangeText={setReachText}
+              onChange={setReachText}
               placeholder="jane@client.com, @ourlawfirm.com"
-              placeholderTextColor={colors.textFaint}
               autoCapitalize="none"
-              autoCorrect={false}
+              keyboardType="email-address"
             />
             <Text style={styles.note}>
               ScaleMail also learns from who you reply to over time — so this list keeps getting smarter on its own.
@@ -434,14 +433,11 @@ function QuestionsStage(props) {
             </View>
 
             <Text style={styles.fieldLabel}>Brands you actually buy from</Text>
-            <TextInput
-              style={styles.input}
+            <ChipInput
               value={brandsText}
-              onChangeText={setBrandsText}
-              placeholder="Apple, Nike, Notion…"
-              placeholderTextColor={colors.textFaint}
+              onChange={setBrandsText}
+              placeholder="Apple, Saks Fifth Avenue…"
               autoCapitalize="words"
-              autoCorrect={false}
             />
 
             <Text style={styles.fieldLabel}>Topics you care about</Text>
