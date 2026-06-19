@@ -8,30 +8,55 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { useStore } from '../store';
-import { learnInbox } from '../lib/backend';
+import { learnScan, learnProfile } from '../lib/backend';
+
+const SAFETY_CAP = 50000; // don't loop forever on a giant mailbox
 
 export default function LearnInboxCard() {
-  const { prefs, setPrefs, vips, toggleVip, mailAccounts, activeAccountId, outlookRefresh } = useStore();
+  const { prefs, setPrefs, vips, toggleVip, mailAccounts, activeAccountId, outlookRefresh, mailboxTotal } = useStore();
   const [state, setState] = useState('idle'); // idle | loading | done
   const [result, setResult] = useState(null);
   const [added, setAdded] = useState(false);
+  const [processed, setProcessed] = useState(0);
+  const abortRef = React.useRef(false);
 
-  const dismiss = () => setPrefs({ learnedInbox: true });
+  const total = mailboxTotal && mailboxTotal > 0 ? Math.min(mailboxTotal, SAFETY_CAP) : null;
+
+  const dismiss = () => { abortRef.current = true; setPrefs({ learnedInbox: true }); };
 
   const run = async () => {
     setState('loading');
+    setProcessed(0);
+    abortRef.current = false;
+    const acc = (mailAccounts || []).find((a) => a.id === activeAccountId) || (mailAccounts || [])[0];
+    const rt = acc?.refreshToken || outlookRefresh;
+    const provider = acc?.type || 'outlook';
+    const senders = {}; const subjects = []; let count = 0; let cursor = null;
     try {
-      const acc = (mailAccounts || []).find((a) => a.id === activeAccountId) || (mailAccounts || [])[0];
-      const rt = acc?.refreshToken || outlookRefresh;
-      const provider = acc?.type || 'outlook';
-      const r = await learnInbox(prefs.serverUrl, rt, provider, 3000);
-      // Don't re-suggest people who are already VIPs.
+      // Page through the whole mailbox (free metadata) with a live progress count.
+      for (let i = 0; i < 1000 && !abortRef.current; i++) {
+        const r = await learnScan(prefs.serverUrl, rt, provider, cursor);
+        for (const [k, v] of Object.entries(r.senders || {})) { senders[k] = senders[k] || { name: v.name, count: 0 }; senders[k].count += v.count; }
+        (r.subjects || []).forEach((s) => { if (subjects.length < 40) subjects.push(s); });
+        count += r.processed || 0;
+        setProcessed(count);
+        cursor = r.cursor;
+        if (r.done || !cursor || count >= SAFETY_CAP) break;
+      }
+      if (abortRef.current) return;
+      // One cheap AI call to profile + suggest VIPs.
+      const top = Object.entries(senders)
+        .map(([email, v]) => ({ email, name: v.name, count: v.count }))
+        .filter((s) => s.email.includes('@'))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 100);
+      const p = await learnProfile(prefs.serverUrl, top, subjects);
       const have = new Set((vips || []).map((v) => String(v).toLowerCase()));
-      r.suggestedVips = (r.suggestedVips || []).filter((v) => !have.has(v.email));
-      setResult(r);
+      const suggestedVips = (p.suggestedVips || []).filter((v) => !have.has(v.email));
+      setResult({ processed: count, profile: p.profile, suggestedVips });
       setState('done');
     } catch (e) {
-      setResult({ error: e.message || 'Could not learn your inbox' });
+      setResult({ error: e.message || 'Could not learn your inbox', processed: count });
       setState('done');
     }
   };
@@ -56,10 +81,18 @@ export default function LearnInboxCard() {
   }
 
   if (state === 'loading') {
+    const pct = total ? Math.min(100, Math.round((processed / total) * 100)) : null;
     return (
       <View style={styles.card}>
         <View style={styles.headRow}><ActivityIndicator color="#fff" /><Text style={[styles.title, { marginLeft: 10 }]}>Studying your inbox…</Text></View>
-        <Text style={styles.body}>Scanning your past emails to find your key contacts. This takes a few seconds.</Text>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: pct != null ? `${pct}%` : '100%' }]} />
+        </View>
+        <Text style={styles.progressText}>
+          {total ? `${processed.toLocaleString()} / ${total.toLocaleString()} emails profiled${pct != null ? ` · ${pct}%` : ''}`
+            : `${processed.toLocaleString()} emails profiled…`}
+        </Text>
+        <Pressable style={styles.doneBtn} onPress={dismiss}><Text style={styles.doneText}>Stop</Text></Pressable>
       </View>
     );
   }
@@ -113,6 +146,9 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 16, fontWeight: '800' },
   body: { color: 'rgba(255,255,255,0.8)', fontSize: 13.5, lineHeight: 20 },
   meta: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 6 },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden', marginTop: 10 },
+  progressFill: { height: '100%', borderRadius: 4, backgroundColor: colors.blue },
+  progressText: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', marginTop: 8 },
   profile: { color: '#fff', fontSize: 14, lineHeight: 21, marginBottom: 10, fontStyle: 'italic' },
   subhead: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 8 },
   vipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 },

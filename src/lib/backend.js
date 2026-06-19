@@ -128,10 +128,14 @@ export function nextSteps(serverUrl, payload) {
   return post(serverUrl, '/next-steps', payload);
 }
 
-// One-time "learn my inbox": scan old mail metadata → suggested VIPs + profile.
-// Returns { processed, suggestedVips:[{email,name,reason}], profile, capped }.
-export function learnInbox(serverUrl, refreshToken, provider = 'outlook', max = 3000) {
-  return post(serverUrl, '/learn', { refreshToken, provider, max });
+// "Learn my inbox" — paginated metadata scan (free, drives the progress bar).
+// Returns { senders:{email:{name,count}}, subjects, processed, cursor, done }.
+export function learnScan(serverUrl, refreshToken, provider = 'outlook', cursor = null) {
+  return post(serverUrl, '/learn/scan', { refreshToken, provider, cursor });
+}
+// One cheap AI call over the aggregated senders → { suggestedVips, profile }.
+export function learnProfile(serverUrl, topSenders, sampleSubjects) {
+  return post(serverUrl, '/learn/profile', { topSenders, sampleSubjects });
 }
 
 // AI snooze-time suggestion. Returns { suggestion: { label, iso } | null }.
