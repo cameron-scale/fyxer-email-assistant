@@ -143,7 +143,9 @@ export default function ThreadScreen({ goBack, navigate, params }) {
         <ScrollView contentContainerStyle={styles.body2} showsVerticalScrollIndicator={false}>
           {/* AI summary / recommended next steps — above the body for a quick gist */}
           {isBackendConfigured(prefs?.serverUrl) && latest && (
-            <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
+            <View style={{ marginBottom: 16 }}>
+              <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
+            </View>
           )}
           {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === 0} />)}
 

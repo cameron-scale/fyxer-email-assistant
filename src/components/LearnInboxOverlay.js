@@ -237,7 +237,7 @@ export default function LearnInboxOverlay() {
             </Animated.View>
           </View>
         ) : (
-          <View style={styles.scanWrap}>
+          <View style={styles.scanCard}>
             <Animated.View
               style={[
                 styles.ringWrap,
@@ -289,7 +289,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   overlayScan: {
-    backgroundColor: 'rgba(8,10,18,0.22)', // lighter dim while the ring is scanning
+    backgroundColor: 'rgba(6,8,15,0.55)', // dim the inbox so the scan card reads clearly
+  },
+  scanCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(13,17,23,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderTopColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 24,
+    paddingVertical: 30,
+    paddingHorizontal: 32,
+    maxWidth: 300,
+    width: '100%',
   },
 
   // Scanning
