@@ -2,7 +2,7 @@
 // newest, each with its sender, time, and body. Reply acts on the latest message.
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, ActivityIndicator, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, ActivityIndicator, Linking, Alert, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import * as WebBrowser from 'expo-web-browser';
@@ -84,6 +84,7 @@ export default function ThreadScreen({ goBack, navigate, params }) {
   const [loading, setLoading] = useState(true);
   const [rsvpDone, setRsvpDone] = useState(null);
   const [attBusy, setAttBusy] = useState(null);
+  const [attView, setAttView] = useState(null); // { uri, name, type }
 
   const { token, provider } = useMemo(() => {
     const acc = (mailAccounts || []).find((a) => a.id === seed?.accountId);
@@ -118,8 +119,11 @@ export default function ThreadScreen({ goBack, navigate, params }) {
     try {
       const { base64, contentType } = await fetchAttachment(prefs.serverUrl, token, seed.id, a.id, provider);
       if (!base64) throw new Error('Empty attachment');
-      const uri = `data:${a.contentType || contentType || 'application/octet-stream'};base64,${base64}`;
-      try { await WebBrowser.openBrowserAsync(uri); } catch (e) { await Linking.openURL(uri); }
+      const type = a.contentType || contentType || 'application/octet-stream';
+      const uri = `data:${type};base64,${base64}`;
+      // iOS can't open a data: URL via Linking/Browser — render it in a WebView
+      // (WKWebView shows PDFs and images inline).
+      setAttView({ uri, name: a.name, type });
     } catch (e) { Alert.alert('Could not open', e.message || 'Try again.'); }
     finally { setAttBusy(null); }
   };
@@ -246,6 +250,25 @@ export default function ThreadScreen({ goBack, navigate, params }) {
           <Text style={styles.replyText}>Reply</Text>
         </Pressable>
       )}
+
+      {/* Attachment viewer — renders PDFs/images inline (iOS can't open data: URLs) */}
+      <Modal visible={!!attView} animationType="slide" onRequestClose={() => setAttView(null)}>
+        <SafeAreaView style={styles.attViewer}>
+          <View style={styles.attViewerBar}>
+            <Text style={styles.attViewerName} numberOfLines={1}>{attView?.name || 'Attachment'}</Text>
+            <Pressable hitSlop={10} onPress={() => setAttView(null)}><Ionicons name="close" size={24} color="#fff" /></Pressable>
+          </View>
+          {!!attView && (
+            <WebView
+              originWhitelist={['*']}
+              source={{ uri: attView.uri }}
+              style={{ flex: 1, backgroundColor: '#fff' }}
+              startInLoadingState
+              renderLoading={() => <ActivityIndicator color={colors.blue} style={{ marginTop: 40 }} />}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -261,6 +284,9 @@ function QuickAction({ icon, label, onPress }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' },
+  attViewer: { flex: 1, backgroundColor: '#0B0E14' },
+  attViewerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  attViewerName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '700' },
   quickBar: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginHorizontal: 14, marginBottom: 12, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   qaBtn: { alignItems: 'center', gap: 4, flex: 1 },
   qaLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' },
