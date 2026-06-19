@@ -113,7 +113,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-18',
+    version: 'debug-19',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-18', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-19', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-18',
+    version: 'debug-19',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -646,7 +646,10 @@ app.post('/inbox', async (req, res) => {
         if (lr.ok) { unreadCount = ld.messagesUnread ?? null; totalCount = ld.messagesTotal ?? null; }
       } catch (e) { /* counts are best-effort */ }
       const outgoingG = fkey === 'sentitems' || fkey === 'drafts';
-      if (!outgoingG) await attachSummaries(emails, { summarizeNew: skipN === 0 });
+      if (!outgoingG) {
+        for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
+        if (skipN === 0) attachSummaries(emails.slice(), { summarizeNew: true }).catch(() => {});
+      }
       record({ stage: 'gmail_inbox_ok', count: emails.length, label: labelId });
       return res.json({ emails, unreadCount, totalCount, skip: 0, hasMore: false });
     }
@@ -707,10 +710,14 @@ app.post('/inbox', async (req, res) => {
       };
     });
 
-    // Attach AI TL;DRs. We GENERATE missing ones for the first page (cached by id,
-    // so this only costs on brand-new mail and later loads are instant) — this
-    // guarantees the cards show real summaries without depending on client timing.
-    if (!outgoing) await attachSummaries(emails, { summarizeNew: skipN === 0 });
+    // Attach any cached AI TL;DRs INSTANTLY (no AI call here, so the inbox returns
+    // fast). For the first page, warm the cache in the BACKGROUND (not awaited) so
+    // the next load is instant; the client also requests summaries for anything
+    // still missing, so the cards fill in within a couple seconds either way.
+    if (!outgoing) {
+      for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
+      if (skipN === 0) attachSummaries(emails.slice(), { summarizeNew: true }).catch(() => {});
+    }
 
     const { unreadCount = null, totalCount = null } = await countsPromise;
 
