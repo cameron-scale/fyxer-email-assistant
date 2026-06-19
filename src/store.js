@@ -25,7 +25,7 @@ export const SORTS = {
   importance: 'Importance',
 };
 // How many fresh emails to auto-summarize per load (bounds AI cost).
-const SUMMARIZE_CAP = 60;
+const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
 const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false };
 
@@ -350,18 +350,6 @@ export function StoreProvider({ children }) {
       }
     }
   }, [prefs.serverUrl]);
-
-  // Safety net: whenever inbox mail changes, make sure the visible messages have AI
-  // TL;DRs. This runs no matter which load path produced the mail, so summaries
-  // always appear (the per-id dedup + server cache keep it from re-billing).
-  useEffect(() => {
-    const need = raw.filter((e) => (
-      (e.account === 'outlook' || e.account === 'gmail') &&
-      (!e.folder || e.folder === 'inbox') &&
-      !e.aiSummary && !summariesRef.current[e.id]
-    )).slice(0, 40);
-    if (need.length) summarizeBatch(need);
-  }, [raw, summarizeBatch]);
 
   // Load the full body of one email on demand (the list only carries a preview).
   // Keeps the stripped text for priority/summary, plus sanitized HTML + any
@@ -745,6 +733,7 @@ export function StoreProvider({ children }) {
     sortBy,
     setSortBy,
     summaries,
+    summarizeBatch,
     mailboxUnread,
     mailboxTotal,
     syncingAll,

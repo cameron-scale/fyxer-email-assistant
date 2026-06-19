@@ -48,7 +48,12 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const [aiMode, setAiMode] = useState(false); // search bar becomes an AI chat
 
   // Multi-select for bulk actions (archive / delete / mark read).
-  const { trashEmail, bulkAction } = useStore();
+  const { trashEmail, bulkAction, summarizeBatch } = useStore();
+
+  // Lazy summaries: show 50 per box; reveal + summarize 50 more when you scroll past.
+  const PAGE = 50;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  useEffect(() => { setVisibleCount(PAGE); }, [filter, starred]);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const toggleSelect = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -108,8 +113,18 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
     })()
     : shown;
 
+  // Only render (and summarize) the first `visibleCount` of this box; the rest
+  // load when you scroll to the bottom.
+  const visible = threaded.slice(0, visibleCount);
+  const hasMore = threaded.length > visibleCount;
+  // Summarize just the emails currently in view for this box (50 at a time).
+  useEffect(() => {
+    if (visible.length) summarizeBatch(visible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCount, filter, starred, threaded.length]);
+
   // Select-all over the currently-visible list.
-  const allVisibleIds = threaded.map((e) => e.id);
+  const allVisibleIds = visible.map((e) => e.id);
   const allSelected = selectMode && allVisibleIds.length > 0 && allVisibleIds.every((id) => selected.has(id));
   const selectAll = () => setSelected(allSelected ? new Set() : new Set(allVisibleIds));
   const applyBulk = (action) => {
@@ -121,9 +136,9 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
     exitSelect();
   };
 
-  // Group into Today / Yesterday / Earlier sections.
+  // Group into Today / Yesterday / Earlier sections (only the visible slice).
   const grouped = {};
-  threaded.forEach((e) => {
+  visible.forEach((e) => {
     const key = dayBucket(e.date);
     (grouped[key] = grouped[key] || []).push(e);
   });
@@ -147,6 +162,14 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
         contentContainerStyle={styles.list}
         stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
+        onEndReachedThreshold={0.4}
+        onEndReached={() => { if (hasMore) setVisibleCount((c) => c + PAGE); }}
+        ListFooterComponent={hasMore ? (
+          <View style={styles.loadMore}>
+            <ActivityIndicator color="#fff" />
+            <Text style={styles.loadMoreText}>Loading & summarizing more…</Text>
+          </View>
+        ) : null}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={refresh} tintColor="#fff" />
         }
@@ -383,6 +406,8 @@ function SelAction({ icon, label, onPress, disabled, color }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' }, // aurora shows through
   glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 230 },
+  loadMore: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 22 },
+  loadMoreText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '600' },
   selTopWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
   selTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(10,12,24,0.96)', paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
   selCancel: { color: colors.blue, fontSize: 16, fontWeight: '600' },
