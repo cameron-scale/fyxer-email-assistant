@@ -95,21 +95,27 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
     return true; // server already matched the query text when searching
   });
 
-  // Collapse same-conversation emails into one card (keeping the first, which is
-  // the highest-priority/newest in the sorted list) with a message count. Off in
-  // search/starred views where grouping would hide matches.
+  // Collapse same-conversation emails into one card. The card REPRESENTS the
+  // highest-priority message in the thread (so an urgent email is never hidden
+  // under a newer, less-important reply), shown at the thread's newest position.
+  // Off in search/starred views where grouping would hide matches.
   const threaded = (prefs?.groupThreads && !usingSearch && !starred)
     ? (() => {
-      const seen = new Map();
+      const groups = new Map(); // threadKey -> [emails]
+      shown.forEach((e) => { if (e.threadKey) { if (!groups.has(e.threadKey)) groups.set(e.threadKey, []); groups.get(e.threadKey).push(e); } });
+      const emitted = new Set();
       const out = [];
       for (const e of shown) {
         const key = e.threadKey;
-        if (key && seen.has(key)) { seen.get(key).count += 1; continue; }
-        const rep = { ...e };
-        if (key) { rep._g = { count: 1 }; seen.set(key, rep._g); }
-        out.push(rep);
+        if (!key) { out.push(e); continue; }
+        if (emitted.has(key)) continue;
+        emitted.add(key);
+        const group = groups.get(key);
+        if (group.length === 1) { out.push(group[0]); continue; }
+        const rep = group.reduce((best, x) => ((x.priority?.score ?? 0) > (best.priority?.score ?? 0) ? x : best), group[0]);
+        out.push({ ...rep, threadCount: group.length });
       }
-      return out.map((e) => (e._g && e._g.count > 1 ? { ...e, threadCount: e._g.count } : e));
+      return out;
     })()
     : shown;
 

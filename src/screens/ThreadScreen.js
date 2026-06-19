@@ -13,8 +13,8 @@ import { timeAgo } from '../lib/time';
 import NextStepsCard from '../components/NextStepsCard';
 
 function emailDocument(html) {
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-  <style>body{font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d1d1f;margin:0;padding:0;word-break:break-word}img{max-width:100%;height:auto}a{color:#0071E3}</style>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <style>html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d1d1f;word-break:break-word;overflow-wrap:break-word}*{max-width:100%!important;box-sizing:border-box}img{max-width:100%!important;height:auto!important}table{width:100%!important;max-width:100%!important;table-layout:fixed!important}td,th{word-break:break-word}a{color:#0071E3}</style>
   </head><body>${html}</body></html>`;
 }
 
@@ -86,8 +86,8 @@ export default function ThreadScreen({ goBack, navigate, params }) {
       {loading ? <ActivityIndicator color={colors.blue} style={{ marginTop: 30 }} /> : (
         <ScrollView contentContainerStyle={styles.body2} showsVerticalScrollIndicator={false}>
           {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === list.length - 1} />)}
-          {isBackendConfigured(prefs?.serverUrl) && latest && (
-            <NextStepsCard dark serverUrl={prefs.serverUrl} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
+          {isBackendConfigured(prefs?.serverUrl) && latest && ['Urgent', 'Action Needed', 'Client', 'Meeting'].includes(seed?.priority?.category) && (
+            <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
           )}
           <View style={{ height: 100 }} />
         </ScrollView>

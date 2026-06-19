@@ -38,11 +38,16 @@ import NextStepsCard from '../components/NextStepsCard';
 // Wrap raw email HTML in a responsive page for the WebView.
 function emailDocument(html) {
   return `<!doctype html><html><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-    `<style>body{margin:0;padding:0;font-family:-apple-system,Segoe UI,Arial,sans-serif;` +
-    `font-size:15px;line-height:1.55;color:#1d1d1f;word-wrap:break-word;overflow-wrap:break-word}` +
-    `img{max-width:100%;height:auto}a{color:#0071E3}table{max-width:100%!important}` +
-    `*{max-width:100%;box-sizing:border-box}</style></head><body>${html}</body></html>`;
+    `<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">` +
+    `<style>` +
+    `html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden;` +
+    `-webkit-text-size-adjust:100%;font-family:-apple-system,Segoe UI,Arial,sans-serif;` +
+    `font-size:15px;line-height:1.5;color:#1d1d1f;word-break:break-word;overflow-wrap:break-word}` +
+    `*{max-width:100%!important;box-sizing:border-box}` +
+    `img{max-width:100%!important;height:auto!important}` +
+    `table{width:100%!important;max-width:100%!important;table-layout:fixed!important}` +
+    `td,th{word-break:break-word}a{color:#0071E3}` +
+    `</style></head><body>${html}</body></html>`;
 }
 
 function initials(name = '') {
@@ -92,12 +97,14 @@ export default function DetailScreen({ params, goBack, navigate }) {
   const replyRef = useTourTarget('detail.reply');
 
   // One-tap smart replies (demo emails get static ones so the tour shows them).
+  // Only fetch for mail that plausibly needs a reply — saves AI cost on bulk mail.
   React.useEffect(() => {
     if (!email) return;
     if (email.demo) { setReplies(['Sounds good, I’ll review it today.', 'Can we push to next week?']); return; }
-    if (!isBackendConfigured(prefs?.serverUrl) || email.account !== 'outlook') { setReplies([]); return; }
+    const actionable = ['Urgent', 'Action Needed', 'Client', 'Meeting'].includes(email.priority?.category);
+    if (!isBackendConfigured(prefs?.serverUrl) || (email.account !== 'outlook' && email.account !== 'gmail') || !actionable) { setReplies([]); return; }
     let alive = true;
-    quickReplies(prefs.serverUrl, { subject: email.subject, body: email.body, senderName: email.priority?.senderName })
+    quickReplies(prefs.serverUrl, { id: email.id, subject: email.subject, body: email.body, senderName: email.priority?.senderName })
       .then((r) => { if (alive) setReplies(r.replies || []); })
       .catch(() => {});
     return () => { alive = false; };
@@ -276,9 +283,10 @@ export default function DetailScreen({ params, goBack, navigate }) {
           ))
         )}
 
-        {/* AI recommendation: what to do about this email */}
-        {isBackendConfigured(prefs?.serverUrl) && email.account !== undefined && (
-          <NextStepsCard serverUrl={prefs.serverUrl} subject={email.subject} body={email.body} senderName={p.senderName} />
+        {/* AI recommendation: only for mail that plausibly needs action (saves cost
+            — newsletters / FYI don't get a recommendation). */}
+        {isBackendConfigured(prefs?.serverUrl) && ['Urgent', 'Action Needed', 'Client', 'Meeting'].includes(p.category) && (
+          <NextStepsCard serverUrl={prefs.serverUrl} id={email.id} subject={email.subject} body={email.body} senderName={p.senderName} />
         )}
 
         {/* Attachments */}

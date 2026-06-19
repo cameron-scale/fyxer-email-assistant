@@ -113,7 +113,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-23',
+    version: 'debug-24',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-23', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-24', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-23',
+    version: 'debug-24',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -580,6 +580,34 @@ const WELL_KNOWN_FOLDER = { inbox: 'inbox', sent: 'sentitems', drafts: 'drafts',
 const SUMMARY_CACHE_FILE = path.join(process.cwd(), 'summary-cache.json');
 let summaryCache = {};
 try { summaryCache = JSON.parse(fs.readFileSync(SUMMARY_CACHE_FILE, 'utf8')) || {}; } catch (e) { summaryCache = {}; }
+
+// ── Generic AI cache (key -> value) for per-email AI like next-steps / quick
+// replies, so opening the same email again never re-bills the AI. Disk-backed.
+const AUX_CACHE_FILE = path.join(process.cwd(), 'aux-cache.json');
+let auxCache = {};
+try { auxCache = JSON.parse(fs.readFileSync(AUX_CACHE_FILE, 'utf8')) || {}; } catch (e) { auxCache = {}; }
+function auxGet(key) { return key ? auxCache[key] : undefined; }
+function auxSet(key, value) {
+  if (!key) return;
+  auxCache[key] = value;
+  const keys = Object.keys(auxCache);
+  if (keys.length > 5000) for (const k of keys.slice(0, keys.length - 5000)) delete auxCache[k];
+  try { fs.writeFileSync(AUX_CACHE_FILE, JSON.stringify(auxCache)); } catch (e) {}
+}
+
+// ── Daily AI budget guard ────────────────────────────────────────────────────
+// A hard ceiling on AI *generations* per day so a runaway loop or heavy day can't
+// rack up a big bill. Cached results never count against it.
+const DAILY_AI_CAP = parseInt(process.env.DAILY_AI_CAP || '400', 10);
+let aiDay = new Date().toISOString().slice(0, 10);
+let aiDayCount = 0;
+function underDailyBudget() {
+  const d = new Date().toISOString().slice(0, 10);
+  if (d !== aiDay) { aiDay = d; aiDayCount = 0; }
+  return aiDayCount < DAILY_AI_CAP;
+}
+function countAi(n = 1) { aiDayCount += n; }
+
 let summaryCacheDirty = false;
 function persistSummaryCache() {
   if (!summaryCacheDirty) return;
@@ -1217,9 +1245,10 @@ app.post('/summarize', async (req, res) => {
     // Skip anything we've already cached server-side (the inbox attaches those),
     // so we never re-bill and only summarize genuinely new mail.
     const fresh = items.filter((i) => i.id && !summaryCache[i.id]);
-    const summaries = await aiSummarize(fresh.map((i) => ({
-      id: i.id, from: i.from, subject: i.subject, body: i.preview || i.body || '',
-    })));
+    // Daily budget guard: if we've hit the cap, only return what's cached.
+    const summaries = (fresh.length && underDailyBudget())
+      ? await aiSummarize(fresh.map((i) => ({ id: i.id, from: i.from, subject: i.subject, body: i.preview || i.body || '' })))
+      : {};
     const n = Object.keys(summaries).length;
     if (n) {
       Object.assign(summaryCache, summaries);
@@ -1227,6 +1256,7 @@ app.post('/summarize', async (req, res) => {
       trimSummaryCache();
       persistSummaryCache();
       bumpUsage('summaries', n);
+      countAi(n);
     }
     // Return cached ones too so the client gets summaries for everything it asked.
     const out = {};
@@ -1431,8 +1461,12 @@ app.post('/voice-format', async (req, res) => {
 // ── 4d. One-tap smart reply suggestions ──────────────────────────────────────
 app.post('/quick-replies', async (req, res) => {
   try {
-    const { subject, body, senderName } = req.body || {};
+    const { subject, body, senderName, id } = req.body || {};
     if (!ANTHROPIC_API_KEY) return res.json({ replies: [] });
+    const cacheKey = id ? `qr:${id}` : '';
+    const cached = auxGet(cacheKey);
+    if (cached) return res.json(cached);
+    if (!underDailyBudget()) return res.json({ replies: [] });
     const msg = await anthropic().messages.create({
       model: AI_MODEL,
       max_tokens: 300,
@@ -1446,9 +1480,11 @@ app.post('/quick-replies', async (req, res) => {
     let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
     text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
     const arr = JSON.parse(text.slice(text.indexOf('['), text.lastIndexOf(']') + 1));
-    bumpUsage('drafts');
+    const out = { replies: arr.slice(0, 3).map((s) => String(s)) };
+    bumpUsage('drafts'); countAi();
+    auxSet(cacheKey, out);
     record({ stage: 'quickreplies_ok', n: arr.length });
-    res.json({ replies: arr.slice(0, 3).map((s) => String(s)) });
+    res.json(out);
   } catch (e) {
     record({ stage: 'quickreplies_error', message: e.message });
     res.json({ replies: [] }); // non-blocking
@@ -1459,8 +1495,13 @@ app.post('/quick-replies', async (req, res) => {
 // open email. Powers the recommendation card under the email body.
 app.post('/next-steps', async (req, res) => {
   try {
-    const { subject, body, senderName } = req.body || {};
+    const { subject, body, senderName, id } = req.body || {};
     if (!ANTHROPIC_API_KEY) return res.json({ recommendation: '', steps: [] });
+    // Cache per email so re-opening it is free; skip when over the daily budget.
+    const cacheKey = id ? `next:${id}` : '';
+    const cached = auxGet(cacheKey);
+    if (cached) return res.json(cached);
+    if (!underDailyBudget()) return res.json({ recommendation: '', steps: [] });
     const msg = await anthropic().messages.create({
       model: AI_MODEL,
       max_tokens: 400,
@@ -1475,9 +1516,11 @@ app.post('/next-steps', async (req, res) => {
     let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
     text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
     const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    bumpUsage('suggests');
+    const out = { recommendation: String(parsed.recommendation || ''), steps: (parsed.steps || []).slice(0, 4).map((s) => String(s)) };
+    bumpUsage('suggests'); countAi();
+    auxSet(cacheKey, out);
     record({ stage: 'next_steps_ok' });
-    res.json({ recommendation: String(parsed.recommendation || ''), steps: (parsed.steps || []).slice(0, 4).map((s) => String(s)) });
+    res.json(out);
   } catch (e) {
     record({ stage: 'next_steps_error', message: e.message });
     res.json({ recommendation: '', steps: [] }); // non-blocking
@@ -1777,7 +1820,7 @@ async function aiSummarize(emails) {
     const out = {};
     arr.forEach((x) => {
       const idx = typeof x?.i === 'number' ? x.i : parseInt(x?.i, 10);
-      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim().slice(0, 220);
+      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim().slice(0, 150);
     });
     return out;
   } catch (e) {
