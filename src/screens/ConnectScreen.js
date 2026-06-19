@@ -9,30 +9,56 @@ import * as AuthSession from 'expo-auth-session';
 import * as Crypto from 'expo-crypto';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
-import { useProviders } from '../auth/useProviders';
-import { isConfigured } from '../auth/authConfig';
-import { isBackendConfigured, microsoftLoginUrl, claimSession } from '../lib/backend';
+import { isBackendConfigured, microsoftLoginUrl, googleLoginUrl, claimSession } from '../lib/backend';
 
 export default function ConnectScreen({ goBack, navigate }) {
-  const { accounts, prefs, loadAccount, connectOutlook, disconnect } = useStore();
-  const { connectGoogle } = useProviders();
+  const { accounts, prefs, connectOutlook, connectGoogle, disconnect } = useStore();
   const [busy, setBusy] = useState(null);
   const backendReady = isBackendConfigured(prefs.serverUrl);
 
-  // Gmail stays an on-device flow (when its client ID is set).
+  // Run the server-side OAuth handshake (same reliable flow for Google + Microsoft):
+  // open the provider's login, get a one-time session id back via the deep link,
+  // then claim the real refresh token over HTTPS.
+  const runBackendLogin = async (provider) => {
+    const nonce = Array.from(Crypto.getRandomValues(new Uint8Array(24)))
+      .map((b) => b.toString(16).padStart(2, '0')).join('');
+    const returnUrl = AuthSession.makeRedirectUri({ scheme: 'brisk', path: 'auth' });
+    const loginUrl = provider === 'google'
+      ? googleLoginUrl(prefs.serverUrl, returnUrl, nonce)
+      : microsoftLoginUrl(prefs.serverUrl, returnUrl, nonce);
+    const result = await WebBrowser.openAuthSessionAsync(loginUrl, returnUrl);
+    if (result.type !== 'success' || !result.url) return null; // user cancelled
+    const params = new URLSearchParams(result.url.split('?')[1] || '');
+    const err = params.get('error');
+    if (err) throw new Error(err);
+    let refresh = params.get('refresh');
+    try {
+      const claimed = await claimSession(prefs.serverUrl, nonce);
+      refresh = claimed.refreshToken;
+    } catch (e) {
+      const session = params.get('session');
+      if (session) { const claimed = await claimSession(prefs.serverUrl, session); refresh = claimed.refreshToken; }
+      else if (!refresh) throw e;
+    }
+    if (!refresh) throw new Error('No token returned');
+    return refresh;
+  };
+
+  // Gmail via the backend (reliable refresh tokens + Gmail API), like Outlook.
   const handleGmail = async () => {
+    if (!backendReady) {
+      Alert.alert('Add your server first', 'To connect Gmail, set your backend URL in Settings.', [{ text: 'Open Settings', onPress: () => navigate && navigate('Settings') }, { text: 'OK' }]);
+      return;
+    }
     setBusy('google');
     try {
-      const token = await connectGoogle();
-      await loadAccount('gmail', token);
-      Alert.alert('Connected 🎉', 'Your Gmail is loading, sorted by priority.');
+      const refresh = await runBackendLogin('google');
+      if (!refresh) return;
+      await connectGoogle(refresh);
+      Alert.alert('Connected 🎉', 'Your Gmail is loading, sorted by priority with AI summaries.');
       goBack();
     } catch (e) {
-      if (e.message === 'not-configured') {
-        Alert.alert('One quick setup step', 'Paste a free Google Client ID into src/auth/authConfig.js. See README.');
-      } else if (e.message !== 'cancelled') {
-        Alert.alert('Sign-in failed', e.message || 'Please try again.');
-      }
+      Alert.alert('Gmail sign-in failed', e.message || 'Please try again.');
     } finally {
       setBusy(null);
     }
@@ -50,36 +76,8 @@ export default function ConnectScreen({ goBack, navigate }) {
     }
     setBusy('outlook');
     try {
-      // A secret nonce WE generate and keep. The server stores the token under it,
-      // so we claim with a key we already hold — never read back out of the deep
-      // link (which can truncate/corrupt it). This is what makes sign-in reliable.
-      const nonce = Array.from(Crypto.getRandomValues(new Uint8Array(24)))
-        .map((b) => b.toString(16).padStart(2, '0')).join('');
-      // Where the server should send us back — exp:// in Expo Go, brisk:// in a build.
-      const returnUrl = AuthSession.makeRedirectUri({ scheme: 'brisk', path: 'auth' });
-      const result = await WebBrowser.openAuthSessionAsync(
-        microsoftLoginUrl(prefs.serverUrl, returnUrl, nonce),
-        returnUrl
-      );
-      if (result.type !== 'success' || !result.url) return; // user cancelled
-      const params = new URLSearchParams(result.url.split('?')[1] || '');
-      const err = params.get('error');
-      if (err) throw new Error(err);
-      // Claim with our own nonce first; fall back to the URL's session id if present.
-      let refresh = params.get('refresh');
-      try {
-        const claimed = await claimSession(prefs.serverUrl, nonce);
-        refresh = claimed.refreshToken;
-      } catch (e) {
-        const session = params.get('session');
-        if (session) {
-          const claimed = await claimSession(prefs.serverUrl, session);
-          refresh = claimed.refreshToken;
-        } else if (!refresh) {
-          throw e;
-        }
-      }
-      if (!refresh) throw new Error('No token returned');
+      const refresh = await runBackendLogin('outlook');
+      if (!refresh) return; // user cancelled
       await connectOutlook(refresh);
       Alert.alert('Connected 🎉', 'Your Outlook is loading, sorted by priority with AI summaries.');
       goBack();
@@ -114,7 +112,7 @@ export default function ConnectScreen({ goBack, navigate }) {
           icon="logo-google"
           color="#EA4335"
           title="Gmail"
-          subtitle={accounts.gmail ? 'Connected' : isConfigured.google() ? 'Tap to sign in' : 'Needs 1-time setup'}
+          subtitle={accounts.gmail ? 'Connected · AI summaries on' : backendReady ? 'Tap to sign in' : 'Set server URL in Settings'}
           connected={accounts.gmail}
           busy={busy === 'google'}
           onPress={handleGmail}

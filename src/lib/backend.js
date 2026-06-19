@@ -23,6 +23,15 @@ export function microsoftLoginUrl(serverUrl, appRedirect, claim) {
   return `${base(serverUrl)}/auth/microsoft/start${q ? `?${q}` : ''}`;
 }
 
+// Same handshake for Google (Gmail). The server holds the Google client secret.
+export function googleLoginUrl(serverUrl, appRedirect, claim) {
+  const params = new URLSearchParams();
+  if (appRedirect) params.set('app_redirect', appRedirect);
+  if (claim) params.set('claim', claim);
+  const q = params.toString();
+  return `${base(serverUrl)}/auth/google/start${q ? `?${q}` : ''}`;
+}
+
 async function post(serverUrl, path, body) {
   const res = await fetch(`${base(serverUrl)}${path}`, {
     method: 'POST',
@@ -58,19 +67,19 @@ export function claimSession(serverUrl, session) {
 // { emails, refreshToken, unreadCount, totalCount, skip, hasMore }.
 // `skip` pages further back through the mailbox (50 at a time); `folderId`
 // targets a specific Graph folder (from listFolders).
-export function fetchInbox(serverUrl, refreshToken, limit = 50, folder = 'inbox', skip = 0, folderId = null) {
-  return post(serverUrl, '/inbox', { refreshToken, limit, folder, skip, folderId });
+export function fetchInbox(serverUrl, refreshToken, limit = 50, folder = 'inbox', skip = 0, folderId = null, provider = 'outlook') {
+  return post(serverUrl, '/inbox', { refreshToken, limit, folder, skip, folderId, provider });
 }
 
 // List the mailbox's folders + counts for the drawer. Returns
 // { email, displayName, folders, refreshToken }.
-export function listFolders(serverUrl, refreshToken) {
-  return post(serverUrl, '/folders', { refreshToken });
+export function listFolders(serverUrl, refreshToken, provider = 'outlook') {
+  return post(serverUrl, '/folders', { refreshToken, provider });
 }
 
 // Fetch one message's full body on demand. Returns { body }.
-export function fetchMessageBody(serverUrl, refreshToken, id) {
-  return post(serverUrl, '/message', { refreshToken, id });
+export function fetchMessageBody(serverUrl, refreshToken, id, provider = 'outlook') {
+  return post(serverUrl, '/message', { refreshToken, id, provider });
 }
 
 // Summarize a batch of emails (only send ones not already cached). Returns

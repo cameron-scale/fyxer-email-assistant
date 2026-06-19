@@ -135,9 +135,14 @@ export function StoreProvider({ children }) {
           mailAccountsRef.current = list;
           setMailAccounts(list);
           setActiveAccountId(list.length > 1 ? 'all' : list[0].id);
-          const primary = list[0].refreshToken;
-          setOutlookRefresh(primary);
-          setAccounts((a) => ({ ...a, outlook: true }));
+          // outlookRefresh is the Outlook-path fallback token — only an Outlook one.
+          const firstOutlook = list.find((a) => (a.type || 'outlook') === 'outlook');
+          if (firstOutlook) setOutlookRefresh(firstOutlook.refreshToken);
+          setAccounts((a) => ({
+            ...a,
+            outlook: list.some((x) => (x.type || 'outlook') === 'outlook'),
+            gmail: list.some((x) => x.type === 'google'),
+          }));
           await saveToken('mail_accounts', JSON.stringify(list));
         } else if (rt) {
           setOutlookRefresh(rt);
@@ -167,13 +172,13 @@ export function StoreProvider({ children }) {
     if (demoMode) return DEMO_EMAILS; // fake walkthrough inbox (already prioritized)
     const now = Date.now();
     const visible = raw
-      // Keep the main inbox clean: only Inbox-folder Outlook mail (folder browsing
-      // loads other folders too), plus any non-Outlook accounts. Honor the active
-      // account filter ('all' shows every mailbox).
+      // Keep the main inbox clean: only Inbox-folder mailbox mail (folder browsing
+      // loads other folders too). Honor the active account filter ('all' = every
+      // mailbox). Works the same for Outlook and Gmail accounts.
       .filter((e) => {
-        const isOutlook = e.account === 'outlook';
-        if (isOutlook && e.folder && e.folder !== 'inbox') return false;
-        if (activeAccountId !== 'all' && isOutlook && e.accountId && e.accountId !== activeAccountId) return false;
+        const isMailbox = e.account === 'outlook' || e.account === 'gmail';
+        if (isMailbox && e.folder && e.folder !== 'inbox') return false;
+        if (activeAccountId !== 'all' && isMailbox && e.accountId && e.accountId !== activeAccountId) return false;
         return true;
       })
       .map((e) => ({ ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id] }))
@@ -308,12 +313,13 @@ export function StoreProvider({ children }) {
   // detected meeting link for rich display.
   const loadFullBody = useCallback(async (id) => {
     const target = raw.find((e) => e.id === id);
-    if (!target || target.account !== 'outlook' || target.fullBody) return;
-    // Use the token of the account this email belongs to (multi-account aware).
+    if (!target || (target.account !== 'outlook' && target.account !== 'gmail') || target.fullBody) return;
+    // Use the token + provider of the account this email belongs to.
     const acc = mailAccounts.find((a) => a.id === target.accountId);
     const rt = acc?.refreshToken || outlookRefresh;
+    const provider = acc?.type || (target.account === 'gmail' ? 'google' : 'outlook');
     try {
-      const { body, bodyHtml, meeting, invite } = await fetchMessageBody(prefs.serverUrl, rt, id);
+      const { body, bodyHtml, meeting, invite } = await fetchMessageBody(prefs.serverUrl, rt, id, provider);
       setRaw((prev) => prev.map((e) => (
         e.id === id ? { ...e, body: body || e.body, bodyHtml: bodyHtml || '', meeting: meeting || null, invite: invite || null, fullBody: true } : e
       )));
@@ -339,8 +345,9 @@ export function StoreProvider({ children }) {
     const all = [];
     for (const acc of targets) {
       try {
+        const provider = acc.type || 'outlook';
         const { emails: fetched, refreshToken: newRt, unreadCount, totalCount } =
-          await fetchInbox(prefs.serverUrl, acc.refreshToken, 50, 'inbox', 0);
+          await fetchInbox(prefs.serverUrl, acc.refreshToken, 50, 'inbox', 0, null, provider);
         if (newRt && newRt !== acc.refreshToken) {
           if (acc.id === 'legacy') { await saveToken('outlook_refresh', newRt); setOutlookRefresh(newRt); }
           else setMailAccounts((prev) => { const next = prev.map((a) => (a.id === acc.id ? { ...a, refreshToken: newRt } : a)); persistAccounts(next); return next; });
@@ -353,10 +360,13 @@ export function StoreProvider({ children }) {
     }
     const loaded = new Set(targets.map((a) => a.id));
     setRaw((prev) => {
-      const others = prev.filter((e) => e.account !== 'outlook' || (e.accountId && !loaded.has(e.accountId)));
+      // Drop the previous mail of just the accounts we reloaded (by accountId),
+      // keeping every other account's mail (and folder-opened mail) intact.
+      const others = prev.filter((e) => !(e.accountId && loaded.has(e.accountId)));
       return [...others, ...all];
     });
-    targets.forEach((acc) => syncAllOutlook(acc));
+    // Only Outlook supports deep skip-based background pagination today.
+    targets.filter((a) => (a.type || 'outlook') === 'outlook').forEach((acc) => syncAllOutlook(acc));
   }, [prefs.serverUrl, summarizeBatch, persistAccounts]); // eslint-disable-line
 
   // Pull the latest Outlook inbox(es) for the active scope.
@@ -404,7 +414,7 @@ export function StoreProvider({ children }) {
     if (!rt) return;
     setFolderLoading(true);
     try {
-      const { emails: fetched } = await fetchInbox(prefs.serverUrl, rt, 50, null, 0, folder.id);
+      const { emails: fetched } = await fetchInbox(prefs.serverUrl, rt, 50, null, 0, folder.id, acc?.type || 'outlook');
       // Tag with the owning account so opening a message uses the right token.
       const tagged = fetched.map((e) => ({ ...e, folder: folder.id, accountId: acc?.id, accountEmail: acc?.email }));
       setRaw((prev) => {
@@ -417,11 +427,12 @@ export function StoreProvider({ children }) {
 
   // Load the account's folder list for the drawer.
   const loadMailFolders = useCallback(async () => {
-    const rt = (mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0])?.refreshToken || outlookRefresh;
+    const acc = mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0];
+    const rt = acc?.refreshToken || outlookRefresh;
     if (!rt) return;
     setFoldersLoading(true);
     try {
-      const { email, displayName, folders: fl } = await listFolders(prefs.serverUrl, rt);
+      const { email, displayName, folders: fl } = await listFolders(prefs.serverUrl, rt, acc?.type || 'outlook');
       setMailFolders(fl || []);
       setFolderMeta({ email, displayName });
       // Backfill the active account's email if we didn't have it yet.
@@ -441,17 +452,17 @@ export function StoreProvider({ children }) {
     loadAccountsList(targets).catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [mailAccounts, loadAccountsList]);
 
-  // Add another linked Outlook mailbox (from a fresh sign-in) and load it.
-  const addMailAccount = useCallback(async (refreshToken, emailArg) => {
+  // Add another linked mailbox (Outlook or Gmail) from a fresh sign-in and load it.
+  const addMailAccount = useCallback(async (refreshToken, emailArg, type = 'outlook') => {
     // Resolve which mailbox this is so we can dedupe by email — a reconnect (e.g.
     // to grant the calendar scope) returns a NEW refresh token for the SAME inbox,
     // and we must update it in place rather than show the mailbox twice.
     let email = emailArg || null;
-    if (!email) { try { const r = await listFolders(prefs.serverUrl, refreshToken); email = r.email || null; } catch (e) { /* ignore */ } }
+    if (!email) { try { const r = await listFolders(prefs.serverUrl, refreshToken, type); email = r.email || null; } catch (e) { /* ignore */ } }
     // Compute synchronously from the latest accounts (a ref — NOT inside a setState
     // updater, which doesn't run in time to use `acc` below).
     const prev = mailAccountsRef.current || [];
-    const existing = email && prev.find((a) => a.email && a.email.toLowerCase() === email.toLowerCase());
+    const existing = email && prev.find((a) => a.type === type && a.email && a.email.toLowerCase() === email.toLowerCase());
     let acc; let list;
     if (existing) {
       acc = { ...existing, refreshToken, email };
@@ -460,13 +471,13 @@ export function StoreProvider({ children }) {
       acc = prev.find((a) => a.refreshToken === refreshToken);
       list = prev;
     } else {
-      acc = { id: `outlook-${Date.now()}`, type: 'outlook', email, refreshToken };
+      acc = { id: `${type}-${Date.now()}`, type, email, refreshToken };
       list = [...prev, acc];
     }
     mailAccountsRef.current = list;
     setMailAccounts(list);
     persistAccounts(list);
-    setAccounts((a) => ({ ...a, outlook: true }));
+    setAccounts((a) => ({ ...a, [type === 'google' ? 'gmail' : 'outlook']: true }));
     setActiveAccountId('all');
     setLoading(true);
     try { await loadAccountsList([acc]); } finally { setLoading(false); }
@@ -536,14 +547,15 @@ export function StoreProvider({ children }) {
   // so mail appears without needing a manual pull-to-refresh.
   const didInitialLoad = useRef(false);
   useEffect(() => {
-    if (outlookRefresh && !didInitialLoad.current) {
+    const hasAccounts = (outlookRefresh || (mailAccounts && mailAccounts.length));
+    if (hasAccounts && !didInitialLoad.current) {
       didInitialLoad.current = true;
       setLoading(true);
       loadOutlook()
         .catch((e) => setError(e.message || 'Could not load mail'))
         .finally(() => setLoading(false));
     }
-  }, [outlookRefresh, loadOutlook]);
+  }, [outlookRefresh, mailAccounts, loadOutlook]);
 
   // Called after Microsoft login hands back a refresh token. Adds it as a linked
   // mailbox (the first one, or an additional account) and loads it.
@@ -553,14 +565,29 @@ export function StoreProvider({ children }) {
     try {
       setOutlookRefresh(refreshToken);
       setAccounts((a) => ({ ...a, outlook: true }));
-      await addMailAccount(refreshToken);
+      await addMailAccount(refreshToken, null, 'outlook');
     } catch (e) {
       setError(e.message || 'Could not load Outlook mail');
       throw e;
     } finally {
       setLoading(false);
     }
-  }, [loadOutlook]);
+  }, [addMailAccount]);
+
+  // Called after Google login hands back a refresh token (backend flow). Links
+  // the Gmail mailbox into the same multi-account model as Outlook.
+  const connectGoogle = useCallback(async (refreshToken) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await addMailAccount(refreshToken, null, 'google');
+    } catch (e) {
+      setError(e.message || 'Could not load Gmail');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [addMailAccount]);
 
   // Connect Gmail (on-device, when its client ID is set). Outlook uses the backend.
   const loadAccount = useCallback(async (provider, token) => {
@@ -583,41 +610,32 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
-  // Pull-to-refresh: re-fetch whatever real accounts are connected.
+  // Pull-to-refresh: re-fetch every linked mailbox (Outlook + Gmail) for the
+  // active scope — they all go through the unified backend loader now.
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      if (accounts.outlook && outlookRefresh) await loadOutlook();
-      if (accounts.gmail) {
-        const token = await getToken('token_gmail');
-        if (token) {
-          const fetched = await fetchGmail(token);
-          setRaw((prev) => {
-            const others = prev.filter((e) => e.account !== 'gmail');
-            return [...others, ...fetched];
-          });
-        }
-      }
+      if ((mailAccountsRef.current && mailAccountsRef.current.length) || outlookRefresh) await loadOutlook();
     } catch (e) {
       setError(e.message || 'Refresh failed');
     } finally {
       setLoading(false);
     }
-  }, [accounts, outlookRefresh, loadOutlook]);
+  }, [outlookRefresh, loadOutlook]);
 
   const disconnect = useCallback(async (provider) => {
     await clearToken(provider === 'outlook' ? 'outlook_refresh' : 'token_gmail');
     if (provider === 'outlook') setOutlookRefresh(null);
-    setRaw((prev) => {
-      const kept = prev.filter((e) => e.account !== provider);
-      return kept;
-    });
-    setAccounts((a) => {
-      const next = { ...a, [provider]: false };
-      return next;
-    });
-  }, []);
+    // Remove the matching linked mailboxes from the multi-account list too.
+    const type = provider === 'gmail' ? 'google' : 'outlook';
+    const next = (mailAccountsRef.current || []).filter((a) => (a.type || 'outlook') !== type);
+    mailAccountsRef.current = next;
+    setMailAccounts(next);
+    persistAccounts(next);
+    setRaw((prev) => prev.filter((e) => e.account !== provider));
+    setAccounts((a) => ({ ...a, [provider]: false }));
+  }, [persistAccounts]);
 
   const value = {
     emails,
@@ -639,6 +657,7 @@ export function StoreProvider({ children }) {
     setPrefs,
     loadAccount,
     connectOutlook,
+    connectGoogle,
     outlookRefresh,
     refresh,
     disconnect,

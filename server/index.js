@@ -86,6 +86,21 @@ const MS_AUTH = `https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/auth
 const MS_TOKEN = `https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/token`;
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
+// ── Google / Gmail config (mirrors the Microsoft setup) ──────────────────────
+// Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET (a Google Cloud OAuth "Web" client)
+// on the server to turn Gmail on. Until then the Gmail endpoints report not-set.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
+const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
+// gmail.modify = read + change labels (mark read/archive); send = send mail.
+const GOOGLE_SCOPES = [
+  'openid', 'email', 'profile',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.send',
+];
+
 function serverUrl(req) {
   if (process.env.SERVER_URL) return process.env.SERVER_URL.replace(/\/$/, '');
   const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
@@ -98,8 +113,9 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-15',
+    version: 'debug-16',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
+    google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
     model: AI_MODEL,
     tenant: MS_TENANT,
@@ -301,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-15', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-16', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -315,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-15',
+    version: 'debug-16',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -395,6 +411,122 @@ app.post('/auth/claim', (req, res) => {
   record({ stage: 'claim_success', refreshLen: String(entry.refreshToken || '').length, sid, sidLen: sid.length, storedOn: entry.instance, instance: INSTANCE_ID });
   res.json({ refreshToken: entry.refreshToken });
 });
+
+// ── Google login (mirrors the Microsoft flow: handoff + claim) ───────────────
+const googleRedirectUri = (req) => `${serverUrl(req)}/auth/google/callback`;
+
+async function googleToken(extra) {
+  const r = await fetch(GOOGLE_TOKEN, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, ...extra }),
+  });
+  const data = await r.json();
+  if (!r.ok) { const err = new Error(data.error_description || data.error || 'google token failed'); err.detail = data; throw err; }
+  return data;
+}
+async function googleAccessFromRefresh(refreshToken) {
+  if (!refreshToken) throw new Error('not connected');
+  const data = await googleToken({ grant_type: 'refresh_token', refresh_token: refreshToken });
+  return { accessToken: data.access_token };
+}
+
+app.get('/auth/google/start', (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.status(500).send('Server missing GOOGLE_CLIENT_ID');
+  const appRedirect = String(req.query.app_redirect || APP_REDIRECT);
+  const claim = String(req.query.claim || '');
+  const state = Buffer.from(JSON.stringify({ r: appRedirect, c: claim })).toString('base64url');
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    response_type: 'code',
+    redirect_uri: googleRedirectUri(req),
+    scope: GOOGLE_SCOPES.join(' '),
+    access_type: 'offline',      // ask for a refresh token
+    prompt: 'consent',           // force a refresh token every time
+    include_granted_scopes: 'true',
+    state,
+  });
+  res.redirect(`${GOOGLE_AUTH}?${params.toString()}`);
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const { appRedirect, claim } = decodeState(req);
+  const sep = appRedirect.includes('?') ? '&' : '?';
+  const { code, error } = req.query;
+  if (error) { record({ stage: 'google_authorize_error', error: String(error) }); return res.redirect(`${appRedirect}${sep}error=${encodeURIComponent(String(error))}`); }
+  if (!code) return res.redirect(`${appRedirect}${sep}error=missing_code`);
+  try {
+    const tokens = await googleToken({ grant_type: 'authorization_code', code: String(code), redirect_uri: googleRedirectUri(req) });
+    if (!tokens.refresh_token) throw new Error('Google returned no refresh token. Remove the app at myaccount.google.com/permissions, then sign in again.');
+    const session = makeHandoff(tokens.refresh_token, claim);
+    record({ stage: 'google_token_success', sid: session, sidLen: session.length });
+    return res.redirect(`${appRedirect}${sep}session=${encodeURIComponent(session)}&provider=google`);
+  } catch (e) {
+    record({ stage: 'google_token_error', message: e.message, detail: e.detail || null });
+    return res.redirect(`${appRedirect}${sep}error=${encodeURIComponent(e.message)}`);
+  }
+});
+
+// ── Gmail helpers ────────────────────────────────────────────────────────────
+async function gmailGet(pathAndQuery, accessToken) {
+  return fetch(`${GMAIL}${pathAndQuery}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+}
+function gmailHeader(payload, name) {
+  const h = (payload?.headers || []).find((x) => String(x.name).toLowerCase() === name.toLowerCase());
+  return h ? h.value : '';
+}
+function decodeB64Url(data = '') {
+  return Buffer.from(String(data).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+}
+// Walk a Gmail payload tree, collecting the best html + text body.
+function gmailExtractBody(payload) {
+  let html = ''; let text = '';
+  const walk = (part) => {
+    if (!part) return;
+    const mime = part.mimeType || '';
+    if (mime === 'text/html' && part.body?.data) html += decodeB64Url(part.body.data);
+    else if (mime === 'text/plain' && part.body?.data) text += decodeB64Url(part.body.data);
+    (part.parts || []).forEach(walk);
+  };
+  walk(payload);
+  return { html, text };
+}
+// Map our folder keys to a Gmail label id.
+const GMAIL_LABEL = { inbox: 'INBOX', sentitems: 'SENT', drafts: 'DRAFT', archive: 'INBOX', junkemail: 'SPAM' };
+function gmailLabelFor(fkey, folderId) {
+  if (folderId) return folderId; // a real Gmail label id from /folders
+  return GMAIL_LABEL[fkey] || 'INBOX';
+}
+// Fetch one Gmail page: list ids for a label, then load each message's metadata.
+async function gmailInbox(accessToken, labelId, pageSize) {
+  const listRes = await gmailGet(`/messages?maxResults=${pageSize}&labelIds=${encodeURIComponent(labelId)}`, accessToken);
+  const list = await listRes.json();
+  if (!listRes.ok) throw new Error(list.error?.message || 'Gmail list failed');
+  const ids = (list.messages || []).map((m) => m.id);
+  const metas = await Promise.all(ids.map(async (id) => {
+    try {
+      const r = await gmailGet(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, accessToken);
+      const m = await r.json();
+      if (!r.ok) return null;
+      const labels = m.labelIds || [];
+      const outgoing = labels.includes('SENT');
+      const fromH = gmailHeader(m.payload, outgoing ? 'To' : 'From') || gmailHeader(m.payload, 'From');
+      return {
+        id: m.id,
+        account: 'gmail',
+        folder: labelId === 'INBOX' ? 'inbox' : labelId,
+        from: fromH,
+        subject: gmailHeader(m.payload, 'Subject') || '(no subject)',
+        body: m.snippet || '',
+        preview: m.snippet || '',
+        date: m.internalDate ? new Date(parseInt(m.internalDate, 10)).toISOString() : new Date().toISOString(),
+        read: !labels.includes('UNREAD'),
+        flagged: labels.includes('STARRED'),
+        inferred: labels.includes('CATEGORY_PROMOTIONS') || labels.includes('CATEGORY_SOCIAL') ? 'other' : null,
+      };
+    } catch (e) { return null; }
+  }));
+  return metas.filter(Boolean);
+}
 
 // Exchange a code or refresh token for Microsoft access tokens.
 async function msToken(extra) {
@@ -492,7 +624,32 @@ async function attachSummaries(emails, { summarizeNew = true } = {}) {
 // fetching is FREE; summaries are a separate cached step (/summarize).
 app.post('/inbox', async (req, res) => {
   try {
-    const { refreshToken, limit, folder, skip, folderId } = req.body || {};
+    const { refreshToken, limit, folder, skip, folderId, provider } = req.body || {};
+
+    // ── Gmail path ──────────────────────────────────────────────────────────
+    if (provider === 'google') {
+      const want = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
+      const skipN = Math.max(parseInt(skip, 10) || 0, 0);
+      const fkey = WELL_KNOWN_FOLDER[String(folder || 'inbox').toLowerCase()] || 'inbox';
+      // Gmail uses page tokens, not numeric skips — for now we serve the first
+      // page only (deep background sync is Outlook-only), so a skip>0 is empty.
+      if (skipN > 0) return res.json({ emails: [], skip: skipN, hasMore: false });
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      const labelId = gmailLabelFor(fkey, String(folderId || '').trim());
+      const emails = await gmailInbox(accessToken, labelId, Math.min(want, 50));
+      // Folder counts from the label.
+      let unreadCount = null; let totalCount = null;
+      try {
+        const lr = await gmailGet(`/labels/${encodeURIComponent(labelId)}`, accessToken);
+        const ld = await lr.json();
+        if (lr.ok) { unreadCount = ld.messagesUnread ?? null; totalCount = ld.messagesTotal ?? null; }
+      } catch (e) { /* counts are best-effort */ }
+      const outgoingG = fkey === 'sentitems' || fkey === 'drafts';
+      if (!outgoingG) for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
+      record({ stage: 'gmail_inbox_ok', count: emails.length, label: labelId });
+      return res.json({ emails, unreadCount, totalCount, skip: 0, hasMore: false });
+    }
+
     const want = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 300);
     const skipN = Math.max(parseInt(skip, 10) || 0, 0);
     const fkey = WELL_KNOWN_FOLDER[String(folder || 'inbox').toLowerCase()] || 'inbox';
@@ -573,7 +730,38 @@ const FOLDER_KIND = {
 };
 app.post('/folders', async (req, res) => {
   try {
-    const { refreshToken } = req.body || {};
+    const { refreshToken, provider } = req.body || {};
+
+    // ── Gmail path: labels become folders ────────────────────────────────────
+    if (provider === 'google') {
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      let email = null;
+      try {
+        const pr = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${accessToken}` } });
+        const pd = await pr.json(); if (pr.ok) email = pd.email || null;
+      } catch (e) { /* best-effort */ }
+      const lr = await gmailGet('/labels', accessToken);
+      const ld = await lr.json();
+      if (!lr.ok) throw new Error(ld.error?.message || 'labels fetch failed');
+      const SYS = { INBOX: { name: 'Inbox', kind: 'inbox' }, SENT: { name: 'Sent', kind: 'sent' }, DRAFT: { name: 'Drafts', kind: 'drafts' }, STARRED: { name: 'Starred', kind: null }, SPAM: { name: 'Spam', kind: 'junk' }, TRASH: { name: 'Trash', kind: 'deleted' }, IMPORTANT: { name: 'Important', kind: null } };
+      const order = ['INBOX', 'STARRED', 'SENT', 'DRAFT', 'IMPORTANT', 'SPAM', 'TRASH'];
+      const folders = [];
+      const byId = {};
+      for (const l of (ld.labels || [])) byId[l.id] = l;
+      const pushLabel = async (l, name, kind) => {
+        let unread = 0; let total = 0;
+        try { const r = await gmailGet(`/labels/${encodeURIComponent(l.id)}`, accessToken); const d = await r.json(); if (r.ok) { unread = d.messagesUnread || 0; total = d.messagesTotal || 0; } } catch (e) {}
+        folders.push({ id: l.id, name, kind, unread, total, childCount: 0, children: [] });
+      };
+      for (const sid of order) { if (byId[sid]) await pushLabel(byId[sid], SYS[sid].name, SYS[sid].kind); }
+      // User-created labels (skip Gmail's CATEGORY_*/system noise).
+      for (const l of (ld.labels || [])) {
+        if (l.type === 'user') await pushLabel(l, l.name, null);
+      }
+      record({ stage: 'gmail_folders_ok', count: folders.length });
+      return res.json({ email, displayName: email, folders });
+    }
+
     const { accessToken, refreshToken: newRt } = await accessTokenFromRefresh(refreshToken);
 
     // Who is this? (shown in the drawer header)
@@ -651,8 +839,25 @@ function detectMeeting(s = '') {
 // Fetch the full body of one message (on demand, when an email is opened).
 app.post('/message', async (req, res) => {
   try {
-    const { refreshToken, id } = req.body || {};
+    const { refreshToken, id, provider } = req.body || {};
     if (!id) throw new Error('missing id');
+
+    // ── Gmail path ──────────────────────────────────────────────────────────
+    if (provider === 'google') {
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      const r = await gmailGet(`/messages/${id}?format=full`, accessToken);
+      const m = await r.json();
+      if (!r.ok) throw new Error(m.error?.message || 'fetch failed');
+      const { html, text } = gmailExtractBody(m.payload);
+      const plain = text || stripHtml(html) || m.snippet || '';
+      return res.json({
+        body: plain,
+        bodyHtml: html ? sanitizeHtml(html) : '',
+        meeting: detectMeeting(`${html} ${plain}`),
+        invite: null,
+      });
+    }
+
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
     const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime,meetingMessageType`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -1255,7 +1460,31 @@ app.post('/signature/generate', async (req, res) => {
 // ── 5. Send a reply ──────────────────────────────────────────────────────────
 app.post('/send', async (req, res) => {
   try {
-    const { refreshToken, toEmail, subject, body, html, inReplyToId, sendAt } = req.body || {};
+    const { refreshToken, toEmail, subject, body, html, inReplyToId, sendAt, provider } = req.body || {};
+
+    // ── Gmail path ──────────────────────────────────────────────────────────
+    if (provider === 'google') {
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      const ctype = html ? 'text/html; charset=UTF-8' : 'text/plain; charset=UTF-8';
+      const mime = [
+        `To: ${toEmail}`,
+        `Subject: ${subject || '(no subject)'}`,
+        'MIME-Version: 1.0',
+        `Content-Type: ${ctype}`,
+        '',
+        html || body || '',
+      ].join('\r\n');
+      const raw = Buffer.from(mime).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const r = await fetch(`${GMAIL}/messages/send`, {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error?.message || 'Gmail send failed');
+      record({ stage: 'gmail_send_ok' });
+      return res.json({ ok: true });
+    }
+
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
     const auth = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
     const content = html

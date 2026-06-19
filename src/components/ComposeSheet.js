@@ -29,7 +29,11 @@ function schedulePresets() {
 const fmt = (ts) => new Date(ts).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 
 export default function ComposeSheet({ onClose }) {
-  const { prefs, accounts, outlookRefresh } = useStore();
+  const { prefs, accounts, outlookRefresh, mailAccounts, activeAccountId } = useStore();
+  // Send from the account you're currently viewing (or the first linked one).
+  const sendAcct = (mailAccounts || []).find((a) => a.id === activeAccountId) || (mailAccounts || [])[0];
+  const sendToken = sendAcct?.refreshToken || outlookRefresh;
+  const sendProvider = sendAcct?.type || 'outlook';
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -38,16 +42,16 @@ export default function ComposeSheet({ onClose }) {
   const [bodyHeight, setBodyHeight] = useState(180);
   const [polishing, setPolishing] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const canSend = isBackendConfigured(prefs.serverUrl) && accounts.outlook;
+  const canSend = isBackendConfigured(prefs.serverUrl) && (accounts.outlook || accounts.gmail);
   const toEmailOf = () => (to.match(/[^\s<>]+@[^\s<>]+/) || [to])[0];
 
   const doSend = async (sendAt) => {
     if (!to.trim()) { Alert.alert('Add a recipient', 'Enter who this message is going to first.'); return; }
-    if (!canSend) { Alert.alert('Connect Outlook to send', 'Connect your Outlook account first.'); return; }
+    if (!canSend) { Alert.alert('Connect an account to send', 'Connect Outlook or Gmail first.'); return; }
     setSending(true);
     try {
       await sendReply(prefs.serverUrl, {
-        refreshToken: outlookRefresh, toEmail: toEmailOf(), subject,
+        refreshToken: sendToken, provider: sendProvider, toEmail: toEmailOf(), subject,
         body: composeText(body, prefs.sig), html: composeHtml(body, prefs.sig), sendAt,
       });
       Alert.alert(sendAt ? 'Scheduled ✓' : 'Sent ✓', sendAt ? `It'll send ${fmt(sendAt)}.` : 'Your message is on its way.');
@@ -72,13 +76,17 @@ export default function ComposeSheet({ onClose }) {
 
   const saveToDrafts = async () => {
     if (!canSend) {
-      Alert.alert('Connect Outlook first', 'Saving to Drafts needs your Outlook account connected.');
+      Alert.alert('Connect an account first', 'Saving to Drafts needs an account connected.');
+      return;
+    }
+    if (sendProvider === 'google') {
+      Alert.alert('Send instead', 'Saving to Gmail Drafts is coming soon — for now, send it or schedule it.');
       return;
     }
     setSavingDraft(true);
     try {
       await saveDraft(prefs.serverUrl, {
-        refreshToken: outlookRefresh,
+        refreshToken: sendToken,
         toEmail: to.trim() ? toEmailOf() : '',
         subject,
         html: composeHtml(body, prefs.sig),

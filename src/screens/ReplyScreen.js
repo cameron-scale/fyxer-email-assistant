@@ -29,7 +29,7 @@ function firstName(name = '') {
 
 export default function ReplyScreen({ params, goBack }) {
   const prefill = params?.prefill;
-  const { emails, searchEmails, folderEmails, prefs, setPrefs, accounts, outlookRefresh } = useStore();
+  const { emails, searchEmails, folderEmails, prefs, setPrefs, accounts, outlookRefresh, mailAccounts } = useStore();
   const email = emails.find((e) => e.id === params.id)
     || (searchEmails || []).find((e) => e.id === params.id)
     || (folderEmails || []).find((e) => e.id === params.id);
@@ -109,8 +109,10 @@ export default function ReplyScreen({ params, goBack }) {
     }
     setSending(true);
     try {
+      const acct = (mailAccounts || []).find((a) => a.id === email.accountId);
       await sendReply(prefs.serverUrl, {
-        refreshToken: outlookRefresh,
+        refreshToken: acct?.refreshToken || outlookRefresh,
+        provider: acct?.type || (email.account === 'gmail' ? 'google' : 'outlook'),
         toEmail: p.senderEmail,
         subject,
         body: composeText(body, prefs.sig),
