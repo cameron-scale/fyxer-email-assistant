@@ -45,7 +45,7 @@ function Toggle({ value, onChange }) {
 export default function ConnectScreen({ goBack, navigate }) {
   const {
     accounts, prefs, setPrefs, vips, toggleVip, connectOutlook, connectGoogle, disconnect,
-    mailAccounts, removeMailAccount, startTour,
+    mailAccounts, removeMailAccount, updateMailAccount, startTour, openLearn,
   } = useStore();
   const [busy, setBusy] = useState(null);
   const [usage, setUsage] = useState(null);
@@ -164,22 +164,19 @@ export default function ConnectScreen({ goBack, navigate }) {
           connected={false} busy={false} onPress={iCloudInfo}
         />
 
-        {/* Linked mailboxes (multi-account) */}
+        {/* Linked mailboxes (multi-account) — name + color-tag each one */}
         {(mailAccounts || []).length > 0 && (
           <>
             <Section title="Linked mailboxes" />
-            <View style={styles.group}>
-              {mailAccounts.map((a, i) => (
-                <Row
-                  key={a.id} icon={a.type === 'google' ? 'logo-google' : 'mail'} color={a.type === 'google' ? '#EA4335' : '#0A84FF'}
-                  title={a.email || (a.type === 'google' ? 'Gmail account' : 'Outlook account')}
-                  value={a.type === 'google' ? 'Gmail' : 'Microsoft 365'}
-                  last={i === mailAccounts.length - 1}
-                  right={<Pressable hitSlop={10} onPress={() => removeMailAccount(a.id)}><Text style={styles.unlink}>Remove</Text></Pressable>}
-                />
-              ))}
-            </View>
-            <Text style={styles.tip}>Tap a provider above and sign in again to add another mailbox.</Text>
+            {mailAccounts.map((a) => (
+              <AccountEditor
+                key={a.id} account={a}
+                onRename={(name) => updateMailAccount(a.id, { name })}
+                onColor={(color) => updateMailAccount(a.id, { color })}
+                onRemove={() => removeMailAccount(a.id)}
+              />
+            ))}
+            <Text style={styles.tip}>Tap a provider above and sign in again to add another mailbox. Name and color-tag each mailbox so it's easy to tell them apart.</Text>
           </>
         )}
 
@@ -190,7 +187,7 @@ export default function ConnectScreen({ goBack, navigate }) {
           <Row icon="pricetags" color="#4338CA" title="Categories & rules" onPress={() => navigate('Categories')} />
           <Row icon="sparkles" color={colors.blue} title="Learn my old emails"
             value="Re-scan your inbox to refine priorities"
-            onPress={() => { setPrefs({ learnedInbox: false }); goBack(); }} last />
+            onPress={() => { goBack(); setTimeout(openLearn, 250); }} last />
         </View>
 
         <Section title="Default reply tone" />
@@ -260,6 +257,40 @@ export default function ConnectScreen({ goBack, navigate }) {
   );
 }
 
+const ACCOUNT_TAGS = ['#0A84FF', '#34C759', '#FF9F0A', '#FF375F', '#BF5AF2', '#5AC8FA', '#8E8E93'];
+
+function AccountEditor({ account, onRename, onColor, onRemove }) {
+  const a = account;
+  const fallback = a.email || (a.type === 'google' ? 'Gmail account' : 'Outlook account');
+  const rename = () => {
+    if (typeof Alert.prompt !== 'function') return; // iOS only
+    Alert.prompt('Name this mailbox', 'A label to tell this account apart (e.g. "Work", "Personal").',
+      (text) => { if (text != null) onRename(String(text).trim()); }, 'plain-text', a.name || '');
+  };
+  return (
+    <View style={styles.acctCard}>
+      <View style={styles.acctHead}>
+        <View style={[styles.acctDot, { backgroundColor: a.color || (a.type === 'google' ? '#EA4335' : '#0A84FF') }]}>
+          <Ionicons name={a.type === 'google' ? 'logo-google' : 'mail'} size={15} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.acctName} numberOfLines={1}>{a.name || fallback}</Text>
+          <Text style={styles.acctEmail} numberOfLines={1}>{a.name ? (a.email || '') : (a.type === 'google' ? 'Gmail' : 'Microsoft 365')}</Text>
+        </View>
+        <Pressable hitSlop={8} onPress={rename} style={styles.acctBtn}><Text style={styles.acctBtnText}>Rename</Text></Pressable>
+        <Pressable hitSlop={8} onPress={onRemove}><Text style={styles.unlink}>Remove</Text></Pressable>
+      </View>
+      <View style={styles.swatchRow}>
+        {ACCOUNT_TAGS.map((c) => (
+          <Pressable key={c} onPress={() => onColor(c)} style={[styles.swatch, { backgroundColor: c }, a.color === c && styles.swatchOn]}>
+            {a.color === c && <Ionicons name="checkmark" size={12} color="#fff" />}
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function ProviderCard({ icon, color, title, subtitle, connected, busy, onPress, onDisconnect }) {
   return (
     <Pressable
@@ -315,6 +346,16 @@ const styles = StyleSheet.create({
   srowTitle: { color: colors.text, fontSize: 15, fontWeight: '500' },
   srowValue: { color: colors.textDim, fontSize: 12.5, marginTop: 1 },
   unlink: { color: colors.urgent, fontWeight: '700', fontSize: font.small },
+  acctCard: { backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 10 },
+  acctHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  acctDot: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  acctName: { color: colors.text, fontSize: 14.5, fontWeight: '700' },
+  acctEmail: { color: colors.textDim, fontSize: 12, marginTop: 1 },
+  acctBtn: { backgroundColor: colors.bgElevated, borderRadius: radius.pill, paddingVertical: 5, paddingHorizontal: 11 },
+  acctBtnText: { color: colors.text, fontSize: 12.5, fontWeight: '700' },
+  swatchRow: { flexDirection: 'row', gap: 9, marginTop: 12, paddingLeft: 2 },
+  swatch: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  swatchOn: { borderColor: '#fff' },
   tip: { color: colors.textFaint, fontSize: 12.5, marginTop: 8, lineHeight: 18 },
   chips: { flexDirection: 'row', gap: 8 },
   chip: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingVertical: 9, paddingHorizontal: 16 },

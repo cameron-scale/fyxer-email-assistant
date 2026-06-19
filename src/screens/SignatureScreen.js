@@ -331,7 +331,9 @@ export default function SignatureScreen({ goBack, navigate }) {
       try {
         const { url } = await uploadSignatureImage(serverUrl, sig.photoUri);
         if (url) {
-          next = { ...sig, photoUrl: url, photoUri: '' };
+          // Keep photoUri (local copy) so the in-app preview always renders even
+          // if the hosted URL ever hiccups; the email embeds the hosted photoUrl.
+          next = { ...sig, photoUrl: url };
           const gallery = Array.from(new Set([url, ...(prefs.photoGallery || [])])).slice(0, 24);
           setPrefs({ photoGallery: gallery });
         }

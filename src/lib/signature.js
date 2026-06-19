@@ -235,8 +235,11 @@ export function signatureDetails(sig) {
     if (sig[k]) out[k] = sig[k];
   });
   if (sig.phone) out.phone = formatPhone(sig.phone);
-  const photo = photoSource(sig);
-  if (photo && /^https?:\/\//i.test(photo)) out.photoUrl = photo; // only hosted URLs embed reliably
+  // For the EMAIL we must embed a hosted https URL (data: URIs are stripped by
+  // Gmail etc.). Prefer the hosted photoUrl; the local photoUri is only for the
+  // in-app preview.
+  const hosted = sig?.photoUrl ? cleanUrl(sig.photoUrl) : '';
+  if (hosted && /^https?:\/\//i.test(hosted)) out.photoUrl = hosted;
   return out;
 }
 

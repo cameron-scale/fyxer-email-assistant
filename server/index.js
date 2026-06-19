@@ -116,7 +116,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-28',
+    version: 'debug-29',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -157,7 +157,7 @@ const EXT_BY_TYPE = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png
 const TYPE_BY_EXT = { jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
 const MAX_IMG_BYTES = 500 * 1024;
 
-app.post('/upload', (req, res) => {
+app.post('/upload', async (req, res) => {
   try {
     const { dataUri } = req.body || {};
     const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(String(dataUri || ''));
@@ -167,8 +167,25 @@ app.post('/upload', (req, res) => {
     if (!ext) return res.status(415).json({ error: 'Unsupported image type.' });
     const buf = Buffer.from(m[2], 'base64');
     if (buf.length > MAX_IMG_BYTES) return res.status(413).json({ error: 'Image too large.' });
+
+    // Host durably on catbox.moe (free, anonymous, permanent) so the URL survives
+    // Render redeploys — the local disk is wiped on every deploy. Fall back to the
+    // local /img store if catbox is unreachable.
+    try {
+      const form = new FormData();
+      form.append('reqtype', 'fileupload');
+      form.append('fileToUpload', new Blob([buf], { type }), `photo.${ext}`);
+      const cr = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form });
+      const url = (await cr.text()).trim();
+      if (cr.ok && /^https?:\/\/\S+$/.test(url)) {
+        record({ stage: 'upload_ok', host: 'catbox' });
+        return res.json({ url });
+      }
+    } catch (e) { record({ stage: 'upload_catbox_failed', message: e.message }); }
+
     const id = newId();
     fs.writeFileSync(path.join(UPLOAD_DIR, `${id}.${ext}`), buf);
+    record({ stage: 'upload_ok', host: 'local' });
     res.json({ url: `${serverUrl(req)}/img/${id}.${ext}` });
   } catch (e) {
     res.status(500).json({ error: e.message || 'upload failed' });
@@ -320,7 +337,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-28', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-29', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -334,7 +351,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-28',
+    version: 'debug-29',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,

@@ -35,7 +35,7 @@ function Row({ icon, bg, color, title, onPress, right }) {
 }
 
 export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, onOpenDigest, onOpenHealth }) {
-  const { vips, prefs, setPrefs, updateAvatar, accounts, startTour } = useStore();
+  const { vips, prefs, setPrefs, updateAvatar, accounts, startTour, openLearn } = useStore();
   const [focused, setFocused] = useState(true);
   const [notifs, setNotifs] = useState(true);
   const [junk, setJunk] = useState(true);
@@ -116,7 +116,7 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, o
         <Row icon="person" bg="#E3F2FD" color="#1565C0" title="Account & accounts" onPress={() => go(onOpenConnect)} right={chevron} />
         <Row icon="pencil" bg="#F3EEFF" color="#7C3AED" title="Signature & tone" onPress={() => go(onOpenSettings)} right={chevron} />
         <Row icon="star" bg="#FFF8E1" color="#C77D00" title={`VIP senders (${vips.length})`} onPress={() => go(onOpenSettings)} right={chevron} />
-        <Row icon="sparkles" bg="#EAF1FF" color={colors.blue} title="Learn my old emails" onPress={() => go(() => setPrefs({ learnedInbox: false }))} right={chevron} />
+        <Row icon="sparkles" bg="#EAF1FF" color={colors.blue} title="Learn my old emails" onPress={() => go(openLearn)} right={chevron} />
       </View>
 
       <Text style={styles.section}>Preferences</Text>

@@ -26,6 +26,7 @@ import HealthScreen from './src/screens/HealthScreen';
 import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
 import OnboardingTour from './src/components/OnboardingTour';
+import LearnInboxOverlay from './src/components/LearnInboxOverlay';
 import { DEMO_URGENT_ID } from './src/lib/demo';
 import { TAB_DEFS } from './src/lib/tabs';
 import BottomSheet from './src/components/BottomSheet';
@@ -146,6 +147,9 @@ function AppShell() {
 
       {/* First-launch guided tour (sits above everything) */}
       <OnboardingTour onAction={handleTourAction} />
+
+      {/* Full-screen "learn my inbox" overlay (ring → frosted "Inbox ready") */}
+      <LearnInboxOverlay />
     </View>
   );
 }

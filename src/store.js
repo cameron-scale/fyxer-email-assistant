@@ -122,6 +122,11 @@ export function StoreProvider({ children }) {
   const [searching, setSearching] = useState(false);
   const [chatAnswer, setChatAnswer] = useState(null); // AI answer banner text
 
+  // The full-screen "learn my inbox" overlay (ring → frosted "Inbox ready" popup).
+  const [learnOpen, setLearnOpen] = useState(false);
+  const openLearn = useCallback(() => setLearnOpen(true), []);
+  const closeLearn = useCallback(() => setLearnOpen(false), []);
+
   // Load saved VIPs + prefs + tokens once when the app starts.
   useEffect(() => {
     (async () => {
@@ -173,6 +178,17 @@ export function StoreProvider({ children }) {
     return sorted; // 'importance' keeps the prioritize() order
   }, [sortBy]);
 
+  // Learned-important senders, scoped to the current account view. Stored as a map
+  // { accountId: [emails] } so learning one mailbox never bleeds into another. An
+  // older array value is treated as a legacy global list (applies everywhere).
+  const knownImportantList = useMemo(() => {
+    const ki = prefs.knownImportant;
+    if (Array.isArray(ki)) return ki;
+    if (!ki || typeof ki !== 'object') return [];
+    if (activeAccountId === 'all') return Array.from(new Set(Object.values(ki).flat()));
+    return ki[activeAccountId] || [];
+  }, [prefs.knownImportant, activeAccountId]);
+
   // Build the prioritized, filtered, sorted list the UI shows.
   const emails = useMemo(() => {
     if (demoMode) return DEMO_EMAILS; // fake walkthrough inbox (already prioritized)
@@ -193,7 +209,7 @@ export function StoreProvider({ children }) {
         if (e.snoozedUntil && e.snoozedUntil > now) return false;
         return true;
       });
-    const ranked = prioritize(visible, vips, prefs.categories, prefs.knownImportant);
+    const ranked = prioritize(visible, vips, prefs.categories, knownImportantList);
     return applySort(ranked);
   }, [raw, overrides, vips, summaries, sortBy, prefs.categories, prefs.knownImportant, demoMode, activeAccountId, applySort]);
 
@@ -205,7 +221,7 @@ export function StoreProvider({ children }) {
       .filter((e) => e.folder === currentFolder.id)
       .map((e) => ({ ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id] }))
       .filter((e) => e.status !== 'archived' && e.status !== 'done' && !(e.snoozedUntil && e.snoozedUntil > now));
-    return applySort(prioritize(visible, vips, prefs.categories, prefs.knownImportant));
+    return applySort(prioritize(visible, vips, prefs.categories, knownImportantList));
   }, [raw, overrides, vips, summaries, prefs.categories, prefs.knownImportant, currentFolder, applySort]);
 
   // Prioritized view of whole-mailbox search results (null when not searching).
@@ -214,7 +230,7 @@ export function StoreProvider({ children }) {
     const merged = searchResults.map((e) => ({
       ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id],
     }));
-    return prioritize(merged, vips, prefs.categories, prefs.knownImportant);
+    return prioritize(merged, vips, prefs.categories, knownImportantList);
   }, [searchResults, overrides, summaries, vips, prefs.categories, prefs.knownImportant]);
 
   const counts = useMemo(() => {
@@ -557,6 +573,23 @@ export function StoreProvider({ children }) {
     try { await loadAccountsList([acc]); } finally { setLoading(false); }
   }, [loadAccountsList, persistAccounts]);
 
+  // Merge learned-important senders into a specific account's bucket (per-account,
+  // so learning one mailbox never affects another). Uses functional setPrefs.
+  const addKnownImportant = useCallback((accountId, emails) => {
+    const clean = (emails || []).map((e) => String(e || '').toLowerCase().trim()).filter((e) => e.includes('@'));
+    if (!clean.length) return;
+    const key = accountId || 'legacy';
+    setPrefsState((prev) => {
+      const cur = prev.knownImportant;
+      const map = (cur && !Array.isArray(cur) && typeof cur === 'object') ? { ...cur }
+        : (Array.isArray(cur) && cur.length ? { all: cur } : {}); // migrate legacy array
+      map[key] = Array.from(new Set([...(map[key] || []), ...clean]));
+      const next = { ...prev, knownImportant: map };
+      saveToken('prefs', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
   // Rename / tag a linked mailbox (custom display name + accent color).
   const updateMailAccount = useCallback((id, patch) => {
     setMailAccounts((prev) => { const next = prev.map((a) => (a.id === id ? { ...a, ...patch } : a)); persistAccounts(next); mailAccountsRef.current = next; return next; });
@@ -765,6 +798,10 @@ export function StoreProvider({ children }) {
     addMailAccount,
     removeMailAccount,
     updateMailAccount,
+    learnOpen,
+    openLearn,
+    closeLearn,
+    addKnownImportant,
     mailFolders,
     foldersLoading,
     loadMailFolders,
