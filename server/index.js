@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-33',
+    version: 'debug-34',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-33', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-34', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-33',
+    version: 'debug-34',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1249,12 +1249,8 @@ app.post('/ask', async (req, res) => {
     if (!query) return res.json({ answer: '', emails: [] });
     if (!ANTHROPIC_API_KEY) return res.status(400).json({ error: 'AI not configured (set ANTHROPIC_API_KEY).' });
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
-    const url = `${GRAPH}/me/messages?$search=${encodeURIComponent(`"${query}"`)}&$top=40` +
-      `&$select=subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification`;
-    const r = await graphGet(url, accessToken);
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error?.message || 'Graph search failed');
-    const all = (data.value || []).map((m) => ({
+    const SELECT = 'subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification';
+    const mapMsg = (m) => ({
       id: m.id,
       account: 'outlook',
       from: m.from?.emailAddress ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>` : '',
@@ -1265,7 +1261,26 @@ app.post('/ask', async (req, res) => {
       read: !!m.isRead,
       flagged: m.flag?.flagStatus === 'flagged',
       inferred: m.inferenceClassification || null,
-    }));
+    });
+    // Strip filler words so a natural-language request becomes useful search terms.
+    const STOP = new Set(['all', 'emails', 'email', 'mail', 'in', 'from', 'the', 'show', 'find', 'pull', 'get', 'me', 'my', 'about', 'any', 'please', 'that', 'are', 'is', 'for', 'of', 'to', 'a', 'an', 'with', 'this', 'give', 'list', 'everything', 'every']);
+    const terms = query.split(/\s+/).filter((w) => w.length > 1 && !STOP.has(w.toLowerCase())).join(' ').trim();
+
+    let all = [];
+    if (terms) {
+      const url = `${GRAPH}/me/messages?$search=${encodeURIComponent(`"${terms}"`)}&$top=40&$select=${SELECT}`;
+      const r = await graphGet(url, accessToken);
+      const data = await r.json();
+      if (r.ok) all = (data.value || []).map(mapMsg);
+    }
+    // Nothing matched (or a broad request like "all emails in 2024") → use recent mail
+    // so the assistant can still answer/filter instead of dead-ending.
+    if (!all.length) {
+      const ru = `${GRAPH}/me/messages?$top=50&$orderby=receivedDateTime desc&$select=${SELECT}`;
+      const rr = await graphGet(ru, accessToken);
+      const rd = await rr.json();
+      if (rr.ok) all = (rd.value || []).map(mapMsg);
+    }
     if (!all.length) return res.json({ answer: `I couldn't find any emails matching "${query}".`, emails: [] });
 
     const items = all.map((e) => ({ id: e.id, from: e.from, subject: e.subject, date: e.date, preview: e.body.slice(0, 200) }));
@@ -1638,7 +1653,11 @@ app.post('/health-stats', async (req, res) => {
     const recv = await countOf(`${GRAPH}/me/mailFolders/inbox/messages?$filter=receivedDateTime ge ${weekAgo}&$count=true&$top=1`);
     const sent = await countOf(`${GRAPH}/me/mailFolders/sentitems/messages?$filter=sentDateTime ge ${weekAgo}&$count=true&$top=1`);
     const unread = await countOf(`${GRAPH}/me/mailFolders/inbox/messages?$filter=isRead eq false&$count=true&$top=1`);
-    res.json({ received7d: recv, sent7d: sent, unread, replyRate: recv ? Math.round((sent / recv) * 100) : 0 });
+    // Reply rate should reflect DIRECT communications only — exclude newsletters /
+    // marketing by counting just Focused-inbox mail (Outlook files bulk as 'other').
+    const recvFocused = await countOf(`${GRAPH}/me/mailFolders/inbox/messages?$filter=receivedDateTime ge ${weekAgo} and inferenceClassification eq 'focused'&$count=true&$top=1`);
+    const base = recvFocused || recv;
+    res.json({ received7d: recv, sent7d: sent, unread, replyRate: base ? Math.min(100, Math.round((sent / base) * 100)) : 0 });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

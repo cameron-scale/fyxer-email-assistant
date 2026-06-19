@@ -1,7 +1,7 @@
 // HealthScreen.js — a weekly inbox "report card": volume, reply rate, what's
 // piling up, and which categories dominate. Useful enough to change behavior.
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
@@ -20,12 +20,20 @@ export default function HealthScreen({ goBack }) {
     healthStats(prefs.serverUrl, outlookRefresh).then(setStats).catch(() => {}).finally(() => setLoading(false));
   }, []); // eslint-disable-line
 
+  // Freeze the breakdown shortly after opening so the numbers don't keep ticking
+  // up while the inbox is still background-syncing.
+  const emailsRef = useRef(emails);
+  useEffect(() => { emailsRef.current = emails; });
+  const [frozen, setFrozen] = useState(null);
+  useEffect(() => { const t = setTimeout(() => setFrozen(emailsRef.current), 1100); return () => clearTimeout(t); }, []);
+  const sample = frozen || emails;
+
   const cats = useMemo(() => {
     const c = {};
-    emails.forEach((e) => { const k = e.priority?.category || 'FYI'; c[k] = (c[k] || 0) + 1; });
-    const total = emails.length || 1;
+    sample.forEach((e) => { const k = e.priority?.category || 'FYI'; c[k] = (c[k] || 0) + 1; });
+    const total = sample.length || 1;
     return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ name: k, n: v, pct: Math.round((v / total) * 100) }));
-  }, [emails]);
+  }, [sample]);
 
   const grade = stats ? (stats.replyRate >= 70 ? 'A' : stats.replyRate >= 50 ? 'B' : stats.replyRate >= 30 ? 'C' : 'D') : '—';
 
