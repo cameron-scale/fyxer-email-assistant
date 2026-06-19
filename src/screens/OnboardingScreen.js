@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
   wordBlue: { color: colors.blue },
   tagline: { color: colors.blue, fontSize: font.title, fontWeight: '700', marginTop: 4 },
   welcomeDesc: { color: colors.textDim, fontSize: font.body, lineHeight: 23, textAlign: 'center', marginTop: 18 },
-  pillWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 9, marginTop: 28 },
+  pillWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 9, marginTop: 28, marginBottom: 32 },
   featPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: card, borderWidth: 1, borderColor: border,
