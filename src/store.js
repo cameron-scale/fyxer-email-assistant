@@ -255,10 +255,23 @@ export function StoreProvider({ children }) {
 
   const markRead = useCallback((id) => { setOverride(id, { read: true }); persistAction(id, 'read'); }, [setOverride, persistAction]);
 
+  const markUnread = useCallback((id) => {
+    setOverride(id, { read: false });
+    setRecentAction({ id, label: 'Marked unread' });
+    persistAction(id, 'unread');
+  }, [setOverride, persistAction]);
+
   const trashEmail = useCallback((id) => {
     setOverride(id, { status: 'archived' }); // hide from the list
     setRecentAction({ id, label: 'Deleted' });
     persistAction(id, 'trash');
+  }, [setOverride, persistAction]);
+
+  // Report as junk / spam: move it to the Junk folder and hide it.
+  const reportJunk = useCallback((id) => {
+    setOverride(id, { status: 'archived' });
+    setRecentAction({ id, label: 'Reported as junk' });
+    persistAction(id, 'junk');
   }, [setOverride, persistAction]);
 
   // Apply an action to many emails at once (multi-select bulk actions).
@@ -712,6 +725,8 @@ export function StoreProvider({ children }) {
     bulkAction,
     markDone,
     markRead,
+    markUnread,
+    reportJunk,
     snooze,
     snoozeUntil,
     undoLast,

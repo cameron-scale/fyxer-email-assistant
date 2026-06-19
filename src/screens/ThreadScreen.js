@@ -55,7 +55,7 @@ function Message({ msg, defaultOpen }) {
 }
 
 export default function ThreadScreen({ goBack, navigate, params }) {
-  const { emails, searchEmails, folderEmails, prefs, mailAccounts, outlookRefresh, loadFullBody, markRead } = useStore();
+  const { emails, searchEmails, folderEmails, prefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk } = useStore();
   const lookup = (id) => emails.find((e) => e.id === id) || (searchEmails || []).find((e) => e.id === id) || (folderEmails || []).find((e) => e.id === id);
   const seed = lookup(params.id);
   const [messages, setMessages] = useState(null);
@@ -102,8 +102,10 @@ export default function ThreadScreen({ goBack, navigate, params }) {
     finally { setAttBusy(null); }
   };
 
-  const list = messages && messages.length ? messages : (seed ? [{ id: seed.id, from: seed.from, date: seed.date, body: seed.body, bodyHtml: seed.bodyHtml || '' }] : []);
-  const latest = list[list.length - 1];
+  const rawList = messages && messages.length ? messages : (seed ? [{ id: seed.id, from: seed.from, date: seed.date, body: seed.body, bodyHtml: seed.bodyHtml || '' }] : []);
+  // Show the newest message in the thread first (most recent at the top).
+  const list = [...rawList].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  const latest = list[0];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -113,9 +115,19 @@ export default function ThreadScreen({ goBack, navigate, params }) {
       </View>
       <Text style={styles.subject} numberOfLines={2}>{seed?.subject || 'Conversation'}</Text>
 
+      {/* Quick actions */}
+      {seed && (
+        <View style={styles.quickBar}>
+          <QuickAction icon="archive-outline" label="Archive" onPress={() => { archive(seed.id); goBack(); }} />
+          <QuickAction icon="trash-outline" label="Trash" onPress={() => { trashEmail(seed.id); goBack(); }} />
+          <QuickAction icon="alert-circle-outline" label="Report" onPress={() => { reportJunk(seed.id); goBack(); }} />
+          <QuickAction icon="mail-unread-outline" label="Unread" onPress={() => { markUnread(seed.id); goBack(); }} />
+        </View>
+      )}
+
       {loading ? <ActivityIndicator color={colors.blue} style={{ marginTop: 30 }} /> : (
         <ScrollView contentContainerStyle={styles.body2} showsVerticalScrollIndicator={false}>
-          {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === list.length - 1} />)}
+          {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === 0} />)}
 
           {/* Join meeting */}
           {!!seed?.meeting?.url && (
@@ -158,7 +170,7 @@ export default function ThreadScreen({ goBack, navigate, params }) {
             </View>
           )}
 
-          {isBackendConfigured(prefs?.serverUrl) && latest && ['Urgent', 'Action Needed', 'Client', 'Meeting'].includes(seed?.priority?.category) && (
+          {isBackendConfigured(prefs?.serverUrl) && latest && (
             <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} />
           )}
           <View style={{ height: 100 }} />
@@ -175,8 +187,20 @@ export default function ThreadScreen({ goBack, navigate, params }) {
   );
 }
 
+function QuickAction({ icon, label, onPress }) {
+  return (
+    <Pressable style={styles.qaBtn} onPress={onPress} hitSlop={6}>
+      <Ionicons name={icon} size={20} color="#fff" />
+      <Text style={styles.qaLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' },
+  quickBar: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginHorizontal: 14, marginBottom: 12, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  qaBtn: { alignItems: 'center', gap: 4, flex: 1 },
+  qaLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12 },
   back: { flexDirection: 'row', alignItems: 'center' },
   backText: { color: '#fff', fontSize: 16, fontWeight: '500' },
