@@ -388,6 +388,11 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
                 </>
               )}
             </View>
+          ) : (loading && connected) ? (
+            <View style={styles.empty}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.emptySub}>Loading your inbox…</Text>
+            </View>
           ) : (
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>

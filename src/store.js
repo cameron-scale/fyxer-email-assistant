@@ -132,6 +132,9 @@ export function StoreProvider({ children }) {
 
   // Load saved VIPs + prefs + tokens once when the app starts.
   useEffect(() => {
+    // Wake the backend immediately (Render free tier sleeps after inactivity) so
+    // its cold start overlaps with loading tokens instead of blocking the inbox.
+    fetch(`${DEFAULT_SERVER_URL}/health`).catch(() => {});
     (async () => {
       try {
         const v = await getToken('vips');
@@ -481,8 +484,10 @@ export function StoreProvider({ children }) {
   // merge into raw — replacing only the loaded accounts' mail so others survive.
   const loadAccountsList = useCallback(async (targets) => {
     if (!targets || !targets.length) throw new Error('Outlook not connected');
-    const all = [];
-    for (const acc of targets) {
+    // Load every account IN PARALLEL and append each one's mail the moment it
+    // arrives, so the inbox populates progressively instead of waiting for all
+    // accounts (and the slowest cold-start) to finish.
+    await Promise.all(targets.map(async (acc) => {
       try {
         const provider = acc.type || 'outlook';
         const { emails: fetched, refreshToken: newRt, unreadCount, totalCount } =
@@ -493,17 +498,11 @@ export function StoreProvider({ children }) {
         }
         setAccountStats((s) => ({ ...s, [acc.id]: { unread: unreadCount ?? s[acc.id]?.unread ?? null, total: totalCount ?? s[acc.id]?.total ?? null } }));
         const tagged = fetched.map((e) => ({ ...e, accountId: acc.id, accountEmail: acc.email }));
-        all.push(...tagged);
+        // Replace just this account's mail (keeps other accounts/folders intact).
+        setRaw((prev) => [...prev.filter((e) => e.accountId !== acc.id), ...tagged]);
         summarizeBatch(tagged);
       } catch (e) { /* one account failing shouldn't kill the others */ }
-    }
-    const loaded = new Set(targets.map((a) => a.id));
-    setRaw((prev) => {
-      // Drop the previous mail of just the accounts we reloaded (by accountId),
-      // keeping every other account's mail (and folder-opened mail) intact.
-      const others = prev.filter((e) => !(e.accountId && loaded.has(e.accountId)));
-      return [...others, ...all];
-    });
+    }));
     // Only Outlook supports deep skip-based background pagination today.
     targets.filter((a) => (a.type || 'outlook') === 'outlook').forEach((acc) => syncAllOutlook(acc));
   }, [prefs.serverUrl, summarizeBatch, persistAccounts]); // eslint-disable-line
