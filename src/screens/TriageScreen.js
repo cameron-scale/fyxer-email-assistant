@@ -23,8 +23,10 @@ export default function TriageScreen({ navigate, goBack }) {
   const triageCardRef = useTourTarget('triage.card');
   // Freeze the deck when we enter so cards don't reshuffle as we act — and always
   // order it by importance (highest priority first), regardless of the inbox sort.
+  // Only triage UNREAD mail: anything you clear (mark read / archive / snooze) drops
+  // out of `emails`, so it won't show up again the next time you open Triage.
   const deck = useMemo(
-    () => [...emails].sort((a, b) => (b.priority?.score ?? 0) - (a.priority?.score ?? 0)),
+    () => emails.filter((e) => e.read !== true).sort((a, b) => (b.priority?.score ?? 0) - (a.priority?.score ?? 0)),
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const [index, setIndex] = useState(0);
