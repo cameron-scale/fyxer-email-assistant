@@ -153,6 +153,7 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
     if (action === 'trash') bulkAction(ids, 'trash');
     else if (action === 'archive') bulkAction(ids, 'archive');
     else if (action === 'read') bulkAction(ids, 'read');
+    else if (action === 'unread') bulkAction(ids, 'unread');
     exitSelect();
   };
 
@@ -431,6 +432,7 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
           </SafeAreaView>
           <View style={styles.selBar}>
             <SelAction icon="mail-open-outline" label="Read" onPress={() => applyBulk('read')} disabled={!selected.size} />
+            <SelAction icon="mail-unread-outline" label="Unread" onPress={() => applyBulk('unread')} disabled={!selected.size} />
             <SelAction icon="archive-outline" label="Archive" onPress={() => applyBulk('archive')} disabled={!selected.size} />
             <SelAction icon="trash-outline" label="Delete" color="#FF453A" onPress={() => applyBulk('trash')} disabled={!selected.size} />
           </View>

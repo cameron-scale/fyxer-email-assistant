@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-35',
+    version: 'debug-36',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-35', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-36', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-35',
+    version: 'debug-36',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -2078,9 +2078,9 @@ async function aiSummarize(emails) {
       model: AI_MODEL,
       max_tokens: 2500,
       system:
-        'You write ultra-short TL;DR previews of work emails for a busy executive. For ' +
-        'each email, write ONE punchy line, 12 words MAX — just the gist / the ask. No ' +
-        'greetings, no fluff, no restating the sender. ' +
+        'You write ultra-terse email previews for a busy executive. For each email, write ' +
+        'a SHORT phrase of 4-7 words (NOT a sentence) — just the gist or the ask, so it fits ' +
+        'on one line. No greetings, no fluff, no period, no restating the sender. ' +
         'Reply with ONLY a JSON array of {"i": <the item index number>, "summary": "..."} ' +
         'for every item — no prose, no code fences.',
       messages: [{ role: 'user', content: JSON.stringify(items) }],
@@ -2090,7 +2090,7 @@ async function aiSummarize(emails) {
     const out = {};
     arr.forEach((x) => {
       const idx = typeof x?.i === 'number' ? x.i : parseInt(x?.i, 10);
-      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim().slice(0, 110);
+      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim().replace(/[.\s]+$/, '').slice(0, 64);
     });
     return out;
   } catch (e) {
