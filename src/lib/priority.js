@@ -288,6 +288,9 @@ export function scoreEmail(email, options = {}) {
     senderEmail: sender.email,
     // Prefer a real AI summary from the backend when present; otherwise summarize on-device.
     tldr: email.aiSummary || summarize(email.body || email.snippet || ''),
+    // True only when the preview is a real AI TL;DR (so the UI shows the ✨ badge
+    // only then — never on a raw body-preview fallback).
+    aiSummarized: Boolean(email.aiSummary),
   };
 }
 

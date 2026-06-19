@@ -177,8 +177,8 @@ export default function DetailScreen({ params, goBack, navigate }) {
       <ScrollView style={styles.bodyScroll} contentContainerStyle={styles.letter} showsVerticalScrollIndicator={false}>
         <View style={styles.tldrCard}>
           <View style={styles.tldrHead}>
-            <Ionicons name="sparkles" size={13} color={colors.blue} />
-            <Text style={styles.tldrLabel}>Scale Mail summary · {p.reason}</Text>
+            <Ionicons name={p.aiSummarized ? 'sparkles' : 'document-text-outline'} size={13} color={p.aiSummarized ? colors.blue : colors.ink3} />
+            <Text style={[styles.tldrLabel, !p.aiSummarized && { color: colors.ink3 }]}>{p.aiSummarized ? `Scale Mail summary · ${p.reason}` : 'Preview'}</Text>
           </View>
           <Text style={styles.tldrText}>{p.tldr}</Text>
         </View>

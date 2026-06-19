@@ -48,7 +48,7 @@ function EmailCard({ email, onPress, tagRef }) {
           {email.subject}
         </Text>
         <View style={styles.previewRow}>
-          <Ionicons name="sparkles" size={11} color={colors.blue} style={styles.aiIcon} />
+          {p.aiSummarized && <Ionicons name="sparkles" size={11} color={colors.blue} style={styles.aiIcon} />}
           <Text style={styles.preview} numberOfLines={2}>{p.tldr}</Text>
         </View>
         <View style={styles.footer}>
