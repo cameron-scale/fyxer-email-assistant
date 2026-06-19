@@ -132,7 +132,7 @@ export default function TriageScreen({ navigate, goBack }) {
                 <Text style={[styles.stampText, { color: colors.snooze }]}>SNOOZE 4h</Text>
               </Animated.View>
 
-              <Pressable onPress={() => navigate('Detail', { id: current.id })}>
+              <Pressable onPress={() => navigate('Thread', { id: current.id })}>
                 <View style={styles.cardHead}>
                   <Avatar name={current.priority.senderName} size={52} />
                   <View style={{ marginLeft: space.md, flex: 1 }}>
