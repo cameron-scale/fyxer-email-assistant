@@ -81,13 +81,20 @@ function fmtTime(sec) {
 
 export default function ProfilingScreen({ goBack, navigate, params }) {
   const store = useStore();
-  const total = useMemo(() => {
-    const t = params && typeof params.total === 'number' ? params.total : (store.mailboxTotal || 1200);
-    return Math.max(1, Math.round(t));
-  }, [params, store.mailboxTotal]);
+  // Lock the total to the first real value so a late mailboxTotal update can't
+  // reset the animation mid-way (which made it finish early, e.g. "9 / 33,827").
+  const [total, setTotal] = useState(() => {
+    const t = params && typeof params.total === 'number' ? params.total : store.mailboxTotal;
+    return (t && t > 1) ? Math.max(1, Math.round(t)) : 0;
+  });
+  useEffect(() => {
+    if (total) return;
+    if (store.mailboxTotal && store.mailboxTotal > 1) setTotal(Math.round(store.mailboxTotal));
+    else { const to = setTimeout(() => setTotal((cur) => cur || Math.max(1, Math.round(store.mailboxTotal || 1200))), 1400); return () => clearTimeout(to); }
+  }, [store.mailboxTotal, total]);
 
   // Per-category target counts (fixed for the life of this screen).
-  const targets = useMemo(() => distribute(total), [total]);
+  const targets = useMemo(() => (total ? distribute(total) : []), [total]);
 
   // ── Animated values ─────────────────────────────────────────────────────
   const progress = useRef(new Animated.Value(0)).current;   // 0 → 1 ring fill
@@ -150,6 +157,7 @@ export default function ProfilingScreen({ goBack, navigate, params }) {
     startRef.current = Date.now();
     rafActive.current = true;
 
+    if (!total) return undefined; // wait until the real mailbox total is known
     const tick = () => {
       if (!rafActive.current) return;
       const elapsed = Date.now() - startRef.current;
