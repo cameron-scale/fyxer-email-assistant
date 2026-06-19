@@ -600,7 +600,11 @@ export function StoreProvider({ children }) {
 
   // Load the account's folder list for the drawer.
   const loadMailFolders = useCallback(async () => {
-    const acc = mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0];
+    // For the unified "All Inboxes" view, prefer the Outlook account so the user
+    // sees their (richest) Microsoft folder tree; otherwise use the active account.
+    const acc = activeAccountId === 'all'
+      ? (mailAccounts.find((a) => (a.type || 'outlook') === 'outlook') || mailAccounts[0])
+      : (mailAccounts.find((a) => a.id === activeAccountId) || mailAccounts[0]);
     const rt = acc?.refreshToken || outlookRefresh;
     if (!rt) return;
     setFoldersLoading(true);

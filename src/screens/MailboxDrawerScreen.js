@@ -45,7 +45,9 @@ export default function MailboxDrawerScreen({ goBack, navigate }) {
     prefs, outlookRefresh,
   } = useStore();
 
-  useEffect(() => { loadMailFolders(); }, [activeAccountId]); // eslint-disable-line
+  // Re-run when the account list populates too (the drawer can open before the
+  // saved accounts have finished loading, which left the folder list empty).
+  useEffect(() => { loadMailFolders(); }, [activeAccountId, mailAccounts.length]); // eslint-disable-line
 
   // Best-effort calendar counts (today / this week) — from the active account
   // (Outlook or Google), falling back to the legacy Outlook token.

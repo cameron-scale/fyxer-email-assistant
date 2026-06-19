@@ -7,6 +7,7 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import nodemailer from 'nodemailer';
+import { createDAVClient } from 'tsdav';
 
 const IMAP = { host: 'imap.mail.me.com', port: 993, secure: true };
 const SMTP = { host: 'smtp.mail.me.com', port: 587, secure: false };
@@ -150,6 +151,73 @@ export async function icloudFolders(refreshToken) {
     }
     return { email, displayName: email, folders };
   });
+}
+
+// ── iCloud Calendar (CalDAV) ────────────────────────────────────────────────
+function icsDate(params, val) {
+  const m = String(val || '').match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?/);
+  if (!m) return { iso: null, allDay: false };
+  const [, y, mo, d, hh, mm, ss] = m;
+  const allDay = /VALUE=DATE/i.test(params || '') || !hh;
+  if (allDay) return { iso: `${y}-${mo}-${d}T00:00:00Z`, allDay: true };
+  // No tz database here — treat as UTC (Z) or assume UTC for floating/TZID times.
+  return { iso: `${y}-${mo}-${d}T${hh}:${mm}:${ss || '00'}Z`, allDay: false };
+}
+
+function parseVEvents(data) {
+  // Unfold continued lines (RFC5545: a leading space/tab continues the previous line).
+  const text = String(data || '').replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
+  const out = [];
+  const blocks = text.split('BEGIN:VEVENT').slice(1);
+  for (const b of blocks) {
+    const body = b.split('END:VEVENT')[0];
+    const line = (name) => { const m = body.match(new RegExp(`^${name}([^:\\r\\n]*):(.*)$`, 'mi')); return m ? { params: m[1], val: m[2].trim() } : null; };
+    const summary = (line('SUMMARY') || {}).val || '(no title)';
+    const ds = line('DTSTART'); const de = line('DTEND');
+    if (!ds) continue;
+    const start = icsDate(ds.params, ds.val);
+    const end = de ? icsDate(de.params, de.val) : { iso: null };
+    const loc = (line('LOCATION') || {}).val || '';
+    const org = line('ORGANIZER');
+    const orgName = org ? ((org.params.match(/CN=([^;:]+)/i) || [])[1] || org.val.replace(/^mailto:/i, '')) : '';
+    const status = (line('STATUS') || {}).val || '';
+    const join = (body.match(/https?:\/\/[^\s"'<>]*(zoom\.us\/j\/|teams\.microsoft\.com\/l\/meetup|meet\.google\.com\/)[^\s"'<>]*/i) || [])[0] || null;
+    out.push({
+      id: (line('UID') || {}).val || `${start.iso}-${summary}`,
+      subject: summary,
+      start: start.iso,
+      end: end.iso,
+      allDay: !!start.allDay,
+      location: loc.replace(/\\,/g, ',').replace(/\\n/g, ' '),
+      organizer: orgName,
+      isOrganizer: false,
+      joinUrl: join,
+      response: /CANCELLED/i.test(status) ? 'declined' : 'none',
+      attendeeCount: (body.match(/^ATTENDEE/gmi) || []).length,
+    });
+  }
+  return out;
+}
+
+export async function icloudCalendar(refreshToken, { start, end }) {
+  const { email, password } = creds(refreshToken);
+  const client = await createDAVClient({
+    serverUrl: 'https://caldav.icloud.com',
+    credentials: { username: email, password },
+    authMethod: 'Basic',
+    defaultAccountType: 'caldav',
+  });
+  const calendars = await client.fetchCalendars();
+  const events = [];
+  for (const calendar of calendars) {
+    if (calendar.components && !calendar.components.includes('VEVENT')) continue;
+    try {
+      const objects = await client.fetchCalendarObjects({ calendar, timeRange: { start: start.toISOString(), end: end.toISOString() } });
+      for (const obj of objects) parseVEvents(obj.data).forEach((e) => { if (e.start) events.push(e); });
+    } catch (e) { /* skip a calendar that errors */ }
+  }
+  // Keep only events within the window (CalDAV recurrence can over-return).
+  return events.filter((e) => { const t = new Date(e.start).getTime(); return t >= start.getTime() - 86400000 && t <= end.getTime(); });
 }
 
 // Send (or reply to) a message via iCloud SMTP.

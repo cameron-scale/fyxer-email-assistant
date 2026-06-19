@@ -22,7 +22,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
-import { icloudVerify, icloudInbox, icloudMessage, icloudAttachment, icloudAction, icloudFolders, icloudSend } from './icloud.js';
+import { icloudVerify, icloudInbox, icloudMessage, icloudAttachment, icloudAction, icloudFolders, icloudSend, icloudCalendar } from './icloud.js';
 
 const app = express();
 app.use(cors());
@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-36',
+    version: 'debug-37',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-36', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-37', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-36',
+    version: 'debug-37',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1532,6 +1532,17 @@ app.post('/calendar/upcoming', async (req, res) => {
     const span = Math.min(Math.max(parseInt(days, 10) || 14, 1), 60);
     const now = new Date();
     const end = new Date(now.getTime() + span * 86400000);
+
+    if (provider === 'icloud') {
+      try {
+        const events = await icloudCalendar(refreshToken, { start: now, end });
+        record({ stage: 'calendar_ok', provider: 'icloud', count: events.length });
+        return res.json({ events });
+      } catch (e) {
+        record({ stage: 'calendar_error', provider: 'icloud', message: e.message });
+        return res.json({ events: [], needsReconnect: true });
+      }
+    }
 
     if (provider === 'google') {
       let accessToken;

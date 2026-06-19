@@ -94,7 +94,7 @@ export default function CalendarScreen({ goBack, navigate }) {
     if (!calAccounts.length) { setLoading(false); return; }
     setLoading(true);
     Promise.all(calAccounts.map((a) => {
-      const provider = a.type === 'google' ? 'google' : 'outlook';
+      const provider = a.type === 'google' ? 'google' : a.type === 'icloud' ? 'icloud' : 'outlook';
       return upcomingEvents(prefs.serverUrl, a.refreshToken, 21, provider)
         .then((r) => ({ events: (r.events || []).map((e) => ({ ...e, _accId: a.id, _token: a.refreshToken, _provider: provider })), needsReconnect: !!r.needsReconnect }))
         .catch(() => ({ events: [], needsReconnect: false }));
