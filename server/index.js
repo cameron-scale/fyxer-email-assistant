@@ -78,7 +78,10 @@ const APP_REDIRECT = 'brisk://auth';
 // Calendars.ReadWrite lets the app show upcoming events and RSVP to invites. It's
 // only requested at sign-in (authorize), never on refresh, so existing tokens keep
 // working — a user re-connects once to grant calendar access.
-const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.Read', 'Mail.Read', 'Mail.Send', 'Calendars.ReadWrite'];
+// Mail.ReadWrite (superset of Mail.Read) is required to mark read/unread and to
+// move messages (archive / trash / report junk) — Mail.Read alone returns
+// "Access is denied" on those. Adding it requires users to reconnect once.
+const MS_SCOPES = ['openid', 'profile', 'offline_access', 'User.Read', 'Mail.ReadWrite', 'Mail.Send', 'Calendars.ReadWrite'];
 // 'common' = any account (needs the Azure app set to multi-tenant). For a
 // single-tenant app, set MS_TENANT to your Directory (tenant) ID instead.
 const MS_TENANT = process.env.MS_TENANT || 'common';
@@ -113,7 +116,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-27',
+    version: 'debug-28',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +320,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-27', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-28', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +334,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-27',
+    version: 'debug-28',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -906,7 +909,11 @@ app.post('/message', async (req, res) => {
     }
 
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
-    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime,meetingMessageType,hasAttachments`, {
+    // NOTE: meetingMessageType lives on the eventMessage subtype, not the base
+    // Message — selecting it here errors ("no property named meetingMessageType")
+    // and takes the whole body with it. Fetch the body plainly; detect invites in
+    // a separate best-effort cast query below.
+    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime,hasAttachments`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const m = await r.json();
@@ -930,26 +937,27 @@ app.post('/message', async (req, res) => {
     }
 
     // If this email is a meeting invite, look up the linked calendar event so the
-    // app can show Accept / Maybe / Decline inline. Best-effort — never fatal.
+    // app can show Accept / Maybe / Decline inline. We query the eventMessage cast
+    // directly — it 400s for ordinary mail, which we swallow. Best-effort, never fatal.
     let invite = null;
-    if (m.meetingMessageType && m.meetingMessageType !== 'none') {
-      try {
-        const er = await fetch(
-          `${GRAPH}/me/messages/${id}/?$expand=microsoft.graph.eventMessage/event($select=id,responseStatus,start,end,location,isOrganizer)`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
+    try {
+      const er = await fetch(
+        `${GRAPH}/me/messages/${id}/microsoft.graph.eventMessage?$select=meetingMessageType&$expand=event($select=id,responseStatus,isOrganizer)`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (er.ok) {
         const ed = await er.json();
         const ev = ed?.event;
-        if (er.ok && ev?.id) {
+        if (ed?.meetingMessageType && ed.meetingMessageType !== 'none' && ev?.id) {
           invite = {
             eventId: ev.id,
             response: ev.responseStatus?.response || 'notResponded',
             isOrganizer: !!ev.isOrganizer,
-            type: m.meetingMessageType,
+            type: ed.meetingMessageType,
           };
         }
-      } catch (e) { /* not all invites expose an event — just skip RSVP */ }
-    }
+      }
+    } catch (e) { /* not an invite, or no event — just skip RSVP */ }
 
     const outHtml = rawHtml ? sanitizeHtml(rawHtml) : '';
     record({ stage: 'message_ok', isHtml, htmlLen: outHtml.length, textLen: text.length, atts: attachments.length });
@@ -1018,8 +1026,10 @@ app.post('/thread', async (req, res) => {
     }
 
     const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    // Graph rejects $filter on conversationId combined with $orderby ("restriction
+    // or sort order is too complex"), so we drop $orderby and sort in JS below.
     const url = `${GRAPH}/me/messages?$filter=${encodeURIComponent(`conversationId eq '${threadKey}'`)}` +
-      `&$select=subject,from,body,bodyPreview,receivedDateTime,isRead&$orderby=receivedDateTime&$top=30`;
+      `&$select=subject,from,body,bodyPreview,receivedDateTime,isRead&$top=30`;
     const r = await graphGet(url, accessToken);
     const d = await r.json();
     if (!r.ok) throw new Error(d.error?.message || 'thread fetch failed');
@@ -1038,6 +1048,7 @@ app.post('/thread', async (req, res) => {
         body: text,
       };
     });
+    messages.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0)); // oldest → newest
     res.json({ messages });
   } catch (e) {
     record({ stage: 'thread_error', message: e.message });
