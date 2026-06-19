@@ -47,6 +47,14 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const [sortOpen, setSortOpen] = useState(false);
   const [aiMode, setAiMode] = useState(false); // search bar becomes an AI chat
 
+  // Multi-select for bulk actions (archive / delete / mark read).
+  const { trashEmail, bulkAction } = useStore();
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const toggleSelect = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const enterSelect = (id) => { setSelectMode(true); setSelected(new Set([id])); };
+  const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
+
   // Onboarding-tour spotlight targets.
   const wordmarkRef = useTourTarget('inbox.wordmark');
   const avatarRef = useTourTarget('inbox.avatar');
@@ -99,6 +107,19 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
       return out.map((e) => (e._g && e._g.count > 1 ? { ...e, threadCount: e._g.count } : e));
     })()
     : shown;
+
+  // Select-all over the currently-visible list.
+  const allVisibleIds = threaded.map((e) => e.id);
+  const allSelected = selectMode && allVisibleIds.length > 0 && allVisibleIds.every((id) => selected.has(id));
+  const selectAll = () => setSelected(allSelected ? new Set() : new Set(allVisibleIds));
+  const applyBulk = (action) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (action === 'trash') bulkAction(ids, 'trash');
+    else if (action === 'archive') bulkAction(ids, 'archive');
+    else if (action === 'read') bulkAction(ids, 'read');
+    exitSelect();
+  };
 
   // Group into Today / Yesterday / Earlier sections.
   const grouped = {};
@@ -269,14 +290,21 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
         )}
         renderItem={({ item }) => {
           const isFirst = item.id === shown[0]?.id;
+          const card = (
+            <EmailCard
+              email={item} tagRef={isFirst ? firstTagRef : undefined}
+              selectMode={selectMode} selected={selected.has(item.id)}
+              onPress={selectMode ? () => toggleSelect(item.id) : () => navigate(item.threadCount > 1 ? 'Thread' : 'Detail', { id: item.id })}
+              onLongPress={() => enterSelect(item.id)}
+            />
+          );
           return (
             <View ref={isFirst ? firstCardRef : undefined} collapsable={false} style={styles.cardWrap}>
-              <SwipeableRow
-                onSwipeRight={() => snooze(item.id)}
-                onSwipeLeft={() => archive(item.id)}
-              >
-                <EmailCard email={item} tagRef={isFirst ? firstTagRef : undefined} onPress={() => navigate(item.threadCount > 1 ? 'Thread' : 'Detail', { id: item.id })} />
-              </SwipeableRow>
+              {selectMode ? card : (
+                <SwipeableRow onSwipeRight={() => snooze(item.id)} onSwipeLeft={() => archive(item.id)}>
+                  {card}
+                </SwipeableRow>
+              )}
             </View>
           );
         }}
@@ -321,13 +349,48 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
           )
         }
       />
+
+      {/* Multi-select: top bar (count + select all + cancel) and bottom actions */}
+      {selectMode && (
+        <>
+          <SafeAreaView style={styles.selTopWrap} pointerEvents="box-none">
+            <View style={styles.selTop}>
+              <Pressable hitSlop={10} onPress={exitSelect}><Text style={styles.selCancel}>Cancel</Text></Pressable>
+              <Text style={styles.selCount}>{selected.size} selected</Text>
+              <Pressable hitSlop={10} onPress={selectAll}><Text style={styles.selAll}>{allSelected ? 'Deselect all' : 'Select all'}</Text></Pressable>
+            </View>
+          </SafeAreaView>
+          <View style={styles.selBar}>
+            <SelAction icon="mail-open-outline" label="Read" onPress={() => applyBulk('read')} disabled={!selected.size} />
+            <SelAction icon="archive-outline" label="Archive" onPress={() => applyBulk('archive')} disabled={!selected.size} />
+            <SelAction icon="trash-outline" label="Delete" color="#FF453A" onPress={() => applyBulk('trash')} disabled={!selected.size} />
+          </View>
+        </>
+      )}
     </SafeAreaView>
+  );
+}
+
+function SelAction({ icon, label, onPress, disabled, color }) {
+  return (
+    <Pressable style={[styles.selActionBtn, disabled && { opacity: 0.4 }]} onPress={onPress} disabled={disabled}>
+      <Ionicons name={icon} size={22} color={color || '#fff'} />
+      <Text style={[styles.selActionLabel, color && { color }]}>{label}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' }, // aurora shows through
   glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 230 },
+  selTopWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
+  selTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(10,12,24,0.96)', paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  selCancel: { color: colors.blue, fontSize: 16, fontWeight: '600' },
+  selCount: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  selAll: { color: colors.blue, fontSize: 15, fontWeight: '600' },
+  selBar: { position: 'absolute', bottom: 96, left: 16, right: 16, zIndex: 30, flexDirection: 'row', justifyContent: 'space-around', backgroundColor: 'rgba(20,22,34,0.98)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', paddingVertical: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
+  selActionBtn: { alignItems: 'center', gap: 4, paddingHorizontal: 18 },
+  selActionLabel: { color: '#fff', fontSize: 11, fontWeight: '600' },
   list: { paddingHorizontal: 16, paddingBottom: 120 },
   header: { paddingHorizontal: 6, paddingTop: 4 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },

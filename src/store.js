@@ -255,6 +255,23 @@ export function StoreProvider({ children }) {
 
   const markRead = useCallback((id) => { setOverride(id, { read: true }); persistAction(id, 'read'); }, [setOverride, persistAction]);
 
+  const trashEmail = useCallback((id) => {
+    setOverride(id, { status: 'archived' }); // hide from the list
+    setRecentAction({ id, label: 'Deleted' });
+    persistAction(id, 'trash');
+  }, [setOverride, persistAction]);
+
+  // Apply an action to many emails at once (multi-select bulk actions).
+  const bulkAction = useCallback((ids, action) => {
+    (ids || []).forEach((id) => {
+      if (action === 'archive') { setOverride(id, { status: 'archived' }); persistAction(id, 'archive'); }
+      else if (action === 'trash') { setOverride(id, { status: 'archived' }); persistAction(id, 'trash'); }
+      else if (action === 'read') { setOverride(id, { read: true }); persistAction(id, 'read'); }
+      else if (action === 'unread') { setOverride(id, { read: false }); persistAction(id, 'unread'); }
+    });
+    setRecentAction(null);
+  }, [setOverride, persistAction]);
+
   const snooze = useCallback((id, hours = 4) => {
     setOverride(id, { snoozedUntil: Date.now() + hours * 3600000 });
     setRecentAction({ id, label: 'Snoozed 4h' });
@@ -703,6 +720,8 @@ export function StoreProvider({ children }) {
     prefs,
     recentAction,
     archive,
+    trashEmail,
+    bulkAction,
     markDone,
     markRead,
     snooze,

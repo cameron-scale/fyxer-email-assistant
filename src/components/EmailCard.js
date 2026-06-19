@@ -11,14 +11,19 @@ import { bandFor } from '../lib/bands';
 import { timeAgo } from '../lib/time';
 import SenderAvatar from './SenderAvatar';
 
-function EmailCard({ email, onPress, tagRef }) {
+function EmailCard({ email, onPress, onLongPress, tagRef, selectMode, selected }) {
   const p = email.priority;
   const band = email.band || bandFor(email); // demo emails carry an explicit band
   const unread = email.read === false;
   const threadCount = email.threadCount || 1;
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.card, selected && styles.cardSelected, pressed && styles.pressed]}>
+      {selectMode && (
+        <View style={[styles.selDot, selected && styles.selDotOn]}>
+          {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
+        </View>
+      )}
       {/* Colored band — single dense row: avatar · name · time */}
       <LinearGradient
         colors={band.grad}
@@ -74,6 +79,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   pressed: { transform: [{ scale: 0.975 }] },
+  cardSelected: { borderWidth: 2, borderColor: colors.blue },
+  selDot: { position: 'absolute', top: 8, right: 8, zIndex: 10, width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#fff', backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
+  selDotOn: { backgroundColor: colors.blue, borderColor: colors.blue },
   band: {
     height: 44,
     flexDirection: 'row',
