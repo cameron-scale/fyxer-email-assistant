@@ -113,7 +113,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-19',
+    version: 'debug-20',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -317,7 +317,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-19', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-20', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -331,7 +331,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-19',
+    version: 'debug-20',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1674,26 +1674,34 @@ function anthropic() {
 async function aiSummarize(emails) {
   if (!ANTHROPIC_API_KEY || emails.length === 0) return {};
   try {
-    const items = emails.map((e) => ({
-      id: e.id,
+    // IMPORTANT: index emails by a SHORT integer `i`, not their real id. Graph
+    // message ids are ~150 chars; making the model echo them back blew past
+    // max_tokens and truncated the JSON (so it returned nothing). We map `i`
+    // back to the real id here.
+    const items = emails.map((e, i) => ({
+      i,
       from: e.from,
       subject: e.subject,
-      body: (e.body || '').slice(0, 600),
+      body: (e.body || '').slice(0, 500),
     }));
     const msg = await anthropic().messages.create({
       model: AI_MODEL,
-      max_tokens: 1500,
+      max_tokens: 2500,
       system:
         'You write TL;DR previews of work emails for a busy executive. For each email, ' +
         'write a brief, direct summary (max 2 short lines, ~30 words) covering what it is ' +
         'about AND why it matters / what it wants. No greetings, no fluff. ' +
-        'Reply with ONLY a JSON array of {"id","summary"} — no prose, no code fences.',
+        'Reply with ONLY a JSON array of {"i": <the item index number>, "summary": "..."} ' +
+        'for every item — no prose, no code fences.',
       messages: [{ role: 'user', content: JSON.stringify(items) }],
     });
     const text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('');
     const arr = JSON.parse(text.slice(text.indexOf('['), text.lastIndexOf(']') + 1));
     const out = {};
-    arr.forEach((x) => { if (x && x.id) out[x.id] = String(x.summary || '').trim(); });
+    arr.forEach((x) => {
+      const idx = typeof x?.i === 'number' ? x.i : parseInt(x?.i, 10);
+      if (Number.isInteger(idx) && emails[idx] && x.summary) out[emails[idx].id] = String(x.summary).trim();
+    });
     return out;
   } catch (e) {
     console.warn('aiSummarize failed:', e.message);
