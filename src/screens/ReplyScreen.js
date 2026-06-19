@@ -152,10 +152,15 @@ export default function ReplyScreen({ params, goBack }) {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        behavior={Platform.OS === 'android' ? 'height' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
+        <ScrollView
+          contentContainerStyle={styles.body}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets
+          contentInsetAdjustmentBehavior="always"
+        >
           {/* Recipient + subject — both editable */}
           <View style={styles.field}>
             <Text style={styles.label}>To</Text>
@@ -274,7 +279,7 @@ const styles = StyleSheet.create({
     shadowColor: colors.blue, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
   },
   sendBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  body: { padding: 20, paddingBottom: 60 },
+  body: { padding: 20, paddingBottom: 140 },
   field: {
     flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11,
     borderBottomWidth: 1, borderBottomColor: colors.hairline,

@@ -97,11 +97,14 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
+const GCAL = 'https://www.googleapis.com/calendar/v3';
 // gmail.modify = read + change labels (mark read/archive); send = send mail.
+// calendar.events = read upcoming events + RSVP (update your attendee status).
 const GOOGLE_SCOPES = [
   'openid', 'email', 'profile',
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/calendar.events',
 ];
 
 function serverUrl(req) {
@@ -116,7 +119,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-29',
+    version: 'debug-30',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -337,7 +340,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-29', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-30', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -351,7 +354,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-29',
+    version: 'debug-30',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1464,11 +1467,45 @@ app.post('/learn/profile', async (req, res) => {
 // accept/decline meeting invites — exactly what they'd do in Outlook itself.
 app.post('/calendar/upcoming', async (req, res) => {
   try {
-    const { refreshToken, days } = req.body || {};
-    const { accessToken } = await accessTokenFromRefresh(refreshToken);
+    const { refreshToken, days, provider } = req.body || {};
     const span = Math.min(Math.max(parseInt(days, 10) || 14, 1), 60);
     const now = new Date();
     const end = new Date(now.getTime() + span * 86400000);
+
+    if (provider === 'google') {
+      let accessToken;
+      try { ({ accessToken } = await googleAccessFromRefresh(refreshToken)); }
+      catch (e) { return res.json({ events: [], needsReconnect: true }); }
+      const url = `${GCAL}/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=50` +
+        `&timeMin=${encodeURIComponent(now.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}`;
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const data = await r.json();
+      // 403 = token predates the calendar scope → reconnect to grant it.
+      if (r.status === 403) return res.json({ events: [], needsReconnect: true });
+      if (!r.ok) throw new Error(data.error?.message || 'calendar fetch failed');
+      const events = (data.items || []).map((e) => {
+        const self = (e.attendees || []).find((a) => a.self);
+        const video = (e.conferenceData?.entryPoints || []).find((p) => p.entryPointType === 'video');
+        const respMap = { accepted: 'accepted', declined: 'declined', tentative: 'tentativelyAccepted', needsAction: 'notResponded' };
+        return {
+          id: e.id,
+          subject: e.summary || '(no title)',
+          start: e.start?.dateTime || (e.start?.date ? `${e.start.date}T00:00:00Z` : null),
+          end: e.end?.dateTime || (e.end?.date ? `${e.end.date}T00:00:00Z` : null),
+          allDay: !e.start?.dateTime && !!e.start?.date,
+          location: e.location || '',
+          organizer: e.organizer?.displayName || e.organizer?.email || '',
+          isOrganizer: !!e.organizer?.self,
+          joinUrl: e.hangoutLink || video?.uri || null,
+          response: e.organizer?.self ? 'organizer' : (self ? (respMap[self.responseStatus] || 'notResponded') : 'none'),
+          attendeeCount: Array.isArray(e.attendees) ? e.attendees.length : 0,
+        };
+      });
+      record({ stage: 'calendar_ok', provider: 'google', count: events.length });
+      return res.json({ events });
+    }
+
+    const { accessToken } = await accessTokenFromRefresh(refreshToken);
     const url =
       `${GRAPH}/me/calendarView?startDateTime=${now.toISOString()}&endDateTime=${end.toISOString()}` +
       `&$select=subject,start,end,location,organizer,isAllDay,isOrganizer,onlineMeeting,onlineMeetingUrl,responseStatus,attendees,webLink` +
@@ -1501,8 +1538,27 @@ app.post('/calendar/upcoming', async (req, res) => {
 
 app.post('/calendar/rsvp', async (req, res) => {
   try {
-    const { refreshToken, id, response } = req.body || {};
+    const { refreshToken, id, response, provider } = req.body || {};
     if (!id) throw new Error('missing event id');
+
+    if (provider === 'google') {
+      const status = { accept: 'accepted', decline: 'declined', tentative: 'tentative' }[String(response || '').toLowerCase()];
+      if (!status) throw new Error('response must be accept | decline | tentative');
+      const { accessToken } = await googleAccessFromRefresh(refreshToken);
+      const auth = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+      // Fetch the event, flip OUR attendee's responseStatus, patch it back.
+      const gr = await fetch(`${GCAL}/calendars/primary/events/${encodeURIComponent(id)}`, { headers: auth });
+      const ev = await gr.json();
+      if (!gr.ok) throw new Error(ev.error?.message || 'event fetch failed');
+      const attendees = (ev.attendees || []).map((a) => (a.self ? { ...a, responseStatus: status } : a));
+      const pr = await fetch(`${GCAL}/calendars/primary/events/${encodeURIComponent(id)}`, {
+        method: 'PATCH', headers: auth, body: JSON.stringify({ attendees }),
+      });
+      if (!pr.ok) { const d = await pr.json().catch(() => ({})); throw new Error(d.error?.message || 'RSVP failed'); }
+      record({ stage: 'calendar_rsvp', provider: 'google', response });
+      return res.json({ ok: true, response });
+    }
+
     const action = { accept: 'accept', decline: 'decline', tentative: 'tentativelyAccept' }[String(response || '').toLowerCase()];
     if (!action) throw new Error('response must be accept | decline | tentative');
     const { accessToken } = await accessTokenFromRefresh(refreshToken);

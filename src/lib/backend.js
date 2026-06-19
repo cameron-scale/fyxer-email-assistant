@@ -153,14 +153,14 @@ export function healthStats(serverUrl, refreshToken) {
   return post(serverUrl, '/health-stats', { refreshToken });
 }
 
-// Upcoming calendar events (Outlook). Returns { events, needsReconnect? }.
-export function upcomingEvents(serverUrl, refreshToken, days = 14) {
-  return post(serverUrl, '/calendar/upcoming', { refreshToken, days });
+// Upcoming calendar events (Outlook or Google). Returns { events, needsReconnect? }.
+export function upcomingEvents(serverUrl, refreshToken, days = 14, provider = 'outlook') {
+  return post(serverUrl, '/calendar/upcoming', { refreshToken, days, provider });
 }
 
 // RSVP to a meeting invite: response = 'accept' | 'decline' | 'tentative'.
-export function rsvpEvent(serverUrl, refreshToken, id, response) {
-  return post(serverUrl, '/calendar/rsvp', { refreshToken, id, response });
+export function rsvpEvent(serverUrl, refreshToken, id, response, provider = 'outlook') {
+  return post(serverUrl, '/calendar/rsvp', { refreshToken, id, response, provider });
 }
 
 // Daily narrative digest. Returns { digest }.

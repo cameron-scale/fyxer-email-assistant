@@ -47,12 +47,17 @@ export default function MailboxDrawerScreen({ goBack, navigate }) {
 
   useEffect(() => { loadMailFolders(); }, [activeAccountId]); // eslint-disable-line
 
-  // Best-effort calendar counts (today / this week) — loaded once.
+  // Best-effort calendar counts (today / this week) — from the active account
+  // (Outlook or Google), falling back to the legacy Outlook token.
   const [calCounts, setCalCounts] = useState({ today: 0, week: 0 });
   useEffect(() => {
-    if (!outlookRefresh) { setCalCounts({ today: 0, week: 0 }); return; }
+    const list = mailAccounts || [];
+    const acc = list.find((a) => a.id === activeAccountId) || list[0];
+    const rt = acc?.refreshToken || outlookRefresh;
+    const provider = acc?.type === 'google' ? 'google' : 'outlook';
+    if (!rt) { setCalCounts({ today: 0, week: 0 }); return; }
     let alive = true;
-    upcomingEvents(prefs?.serverUrl, outlookRefresh, 14)
+    upcomingEvents(prefs?.serverUrl, rt, 14, provider)
       .then((r) => {
         if (!alive) return;
         const now = new Date();
@@ -70,7 +75,7 @@ export default function MailboxDrawerScreen({ goBack, navigate }) {
       })
       .catch(() => {});
     return () => { alive = false; };
-  }, [prefs?.serverUrl, outlookRefresh]);
+  }, [prefs?.serverUrl, outlookRefresh, mailAccounts, activeAccountId]);
 
   const accounts = mailAccounts || [];
   const isAll = activeAccountId === 'all';

@@ -63,20 +63,36 @@ function joinLabel(url) {
 const DOW = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 export default function CalendarScreen({ goBack, navigate }) {
-  const { prefs, outlookRefresh, accounts } = useStore();
+  const { prefs, outlookRefresh, accounts, mailAccounts, activeAccountId } = useStore();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [needsReconnect, setNeedsReconnect] = useState(false);
   const [busyId, setBusyId] = useState(null);
 
+  // Which linked accounts to pull calendars from (the active one, or every one
+  // when viewing "All"). Falls back to the legacy Outlook token.
+  const calAccounts = useMemo(() => {
+    const list = (mailAccounts && mailAccounts.length)
+      ? (activeAccountId === 'all' ? mailAccounts : mailAccounts.filter((a) => a.id === activeAccountId))
+      : (outlookRefresh ? [{ id: 'legacy', type: 'outlook', refreshToken: outlookRefresh }] : []);
+    return list;
+  }, [mailAccounts, activeAccountId, outlookRefresh]);
+
   const load = useCallback(() => {
-    if (!outlookRefresh) { setLoading(false); return; }
+    if (!calAccounts.length) { setLoading(false); return; }
     setLoading(true);
-    upcomingEvents(prefs.serverUrl, outlookRefresh, 21)
-      .then((r) => { setEvents(r.events || []); setNeedsReconnect(!!r.needsReconnect); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [prefs.serverUrl, outlookRefresh]);
+    Promise.all(calAccounts.map((a) => {
+      const provider = a.type === 'google' ? 'google' : 'outlook';
+      return upcomingEvents(prefs.serverUrl, a.refreshToken, 21, provider)
+        .then((r) => ({ events: (r.events || []).map((e) => ({ ...e, _accId: a.id, _token: a.refreshToken, _provider: provider })), needsReconnect: !!r.needsReconnect }))
+        .catch(() => ({ events: [], needsReconnect: false }));
+    })).then((results) => {
+      const merged = results.flatMap((r) => r.events).sort((x, y) => new Date(x.start || 0) - new Date(y.start || 0));
+      setEvents(merged);
+      // Only flag reconnect if EVERY account needs it (so one good account still shows).
+      setNeedsReconnect(results.length > 0 && results.every((r) => r.needsReconnect));
+    }).finally(() => setLoading(false));
+  }, [prefs.serverUrl, calAccounts]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -122,7 +138,7 @@ export default function CalendarScreen({ goBack, navigate }) {
   const rsvp = async (e, response) => {
     setBusyId(e.id);
     try {
-      await rsvpEvent(prefs.serverUrl, outlookRefresh, e.id, response);
+      await rsvpEvent(prefs.serverUrl, e._token || outlookRefresh, e.id, response, e._provider || 'outlook');
       const mapped = response === 'accept' ? 'accepted' : response === 'decline' ? 'declined' : 'tentativelyAccepted';
       setEvents((prev) => prev.map((x) => (x.id === e.id ? { ...x, response: mapped } : x)));
     } catch (err) {
@@ -235,14 +251,14 @@ export default function CalendarScreen({ goBack, navigate }) {
         <View style={styles.center}>
           <Ionicons name="calendar-outline" size={40} color="rgba(255,255,255,0.5)" />
           <Text style={styles.emptyTitle}>Enable calendar access</Text>
-          <Text style={styles.emptySub}>Reconnect your Outlook account once to let ScaleMail show your events and RSVP to invites.</Text>
-          <Pressable style={styles.cta} onPress={() => navigate('Connect')}><Text style={styles.ctaText}>Reconnect Outlook</Text></Pressable>
+          <Text style={styles.emptySub}>Reconnect your account once to let ScaleMail show your events and RSVP to invites.</Text>
+          <Pressable style={styles.cta} onPress={() => navigate('Connect')}><Text style={styles.ctaText}>Reconnect</Text></Pressable>
         </View>
-      ) : !accounts.outlook ? (
+      ) : !calAccounts.length ? (
         <View style={styles.center}>
           <Ionicons name="calendar-outline" size={40} color="rgba(255,255,255,0.5)" />
           <Text style={styles.emptyTitle}>Connect your email</Text>
-          <Text style={styles.emptySub}>Connect Outlook to see your upcoming events here.</Text>
+          <Text style={styles.emptySub}>Connect Outlook or Gmail to see your upcoming events here.</Text>
         </View>
       ) : (
         <SectionList
