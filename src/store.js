@@ -198,7 +198,7 @@ export function StoreProvider({ children }) {
       // loads other folders too). Honor the active account filter ('all' = every
       // mailbox). Works the same for Outlook and Gmail accounts.
       .filter((e) => {
-        const isMailbox = e.account === 'outlook' || e.account === 'gmail';
+        const isMailbox = e.account === 'outlook' || e.account === 'gmail' || e.account === 'icloud';
         if (isMailbox && e.folder && e.folder !== 'inbox') return false;
         if (activeAccountId !== 'all' && isMailbox && e.accountId && e.accountId !== activeAccountId) return false;
         return true;
@@ -249,7 +249,7 @@ export function StoreProvider({ children }) {
   // the token + provider of the account the email belongs to. Best-effort.
   const persistAction = useCallback((id, action) => {
     const e = (rawRef.current || []).find((x) => x.id === id);
-    if (!e || (e.account !== 'outlook' && e.account !== 'gmail')) return;
+    if (!e || (e.account !== 'outlook' && e.account !== 'gmail' && e.account !== 'icloud')) return;
     const acc = (mailAccountsRef.current || []).find((a) => a.id === e.accountId);
     const rt = acc?.refreshToken || outlookRefresh;
     const provider = acc?.type || (e.account === 'gmail' ? 'google' : 'outlook');
@@ -385,7 +385,7 @@ export function StoreProvider({ children }) {
   // detected meeting link for rich display.
   const loadFullBody = useCallback(async (id) => {
     const target = raw.find((e) => e.id === id);
-    if (!target || (target.account !== 'outlook' && target.account !== 'gmail') || target.fullBody) return;
+    if (!target || (target.account !== 'outlook' && target.account !== 'gmail' && target.account !== 'icloud') || target.fullBody) return;
     // Use the token + provider of the account this email belongs to.
     const acc = mailAccounts.find((a) => a.id === target.accountId);
     const rt = acc?.refreshToken || outlookRefresh;
@@ -567,7 +567,8 @@ export function StoreProvider({ children }) {
     mailAccountsRef.current = list;
     setMailAccounts(list);
     persistAccounts(list);
-    setAccounts((a) => ({ ...a, [type === 'google' ? 'gmail' : 'outlook']: true }));
+    const flag = type === 'google' ? 'gmail' : type === 'icloud' ? 'icloud' : 'outlook';
+    setAccounts((a) => ({ ...a, [flag]: true }));
     setActiveAccountId('all');
     setLoading(true);
     try { await loadAccountsList([acc]); } finally { setLoading(false); }
@@ -701,6 +702,22 @@ export function StoreProvider({ children }) {
     }
   }, [addMailAccount]);
 
+  // Link an iCloud mailbox (IMAP/SMTP). `email` + app-specific `password` are
+  // packed into the account's token slot as JSON so the rest of the plumbing works.
+  const connectIcloud = useCallback(async (email, password) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = JSON.stringify({ email: String(email).trim(), password: String(password).trim() });
+      await addMailAccount(token, String(email).trim(), 'icloud');
+    } catch (e) {
+      setError(e.message || 'Could not load iCloud');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [addMailAccount]);
+
   // Connect Gmail (on-device, when its client ID is set). Outlook uses the backend.
   const loadAccount = useCallback(async (provider, token) => {
     if (provider === 'gmail') {
@@ -737,10 +754,10 @@ export function StoreProvider({ children }) {
   }, [outlookRefresh, loadOutlook]);
 
   const disconnect = useCallback(async (provider) => {
-    await clearToken(provider === 'outlook' ? 'outlook_refresh' : 'token_gmail');
-    if (provider === 'outlook') setOutlookRefresh(null);
+    if (provider === 'outlook') { await clearToken('outlook_refresh'); setOutlookRefresh(null); }
+    else if (provider === 'gmail') { await clearToken('token_gmail'); }
     // Remove the matching linked mailboxes from the multi-account list too.
-    const type = provider === 'gmail' ? 'google' : 'outlook';
+    const type = provider === 'gmail' ? 'google' : provider === 'icloud' ? 'icloud' : 'outlook';
     const next = (mailAccountsRef.current || []).filter((a) => (a.type || 'outlook') !== type);
     mailAccountsRef.current = next;
     setMailAccounts(next);
@@ -774,6 +791,7 @@ export function StoreProvider({ children }) {
     loadAccount,
     connectOutlook,
     connectGoogle,
+    connectIcloud,
     outlookRefresh,
     refresh,
     disconnect,

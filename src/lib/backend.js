@@ -57,6 +57,11 @@ export async function deleteSignatureImage(serverUrl, url) {
   return res.json().catch(() => ({ ok: res.ok }));
 }
 
+// Validate iCloud creds (email + app-specific password) before linking the mailbox.
+export function verifyIcloud(serverUrl, email, password) {
+  return post(serverUrl, '/icloud/verify', { email, password });
+}
+
 // Trade a one-time sign-in session id for the real refresh token, over HTTPS.
 // (The token is too long to survive the deep-link URL intact, so we fetch it.)
 export function claimSession(serverUrl, session) {

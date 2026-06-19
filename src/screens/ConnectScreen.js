@@ -3,7 +3,7 @@
 // categories, reply tone, VIPs, insights, preferences, AI usage and server URL.
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, Alert, ActivityIndicator, TextInput,
+  View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, Alert, ActivityIndicator, TextInput, Modal, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -12,7 +12,7 @@ import * as Crypto from 'expo-crypto';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { hasSignature } from '../lib/signature';
-import { isBackendConfigured, microsoftLoginUrl, googleLoginUrl, claimSession, fetchUsage } from '../lib/backend';
+import { isBackendConfigured, microsoftLoginUrl, googleLoginUrl, claimSession, fetchUsage, verifyIcloud } from '../lib/backend';
 
 const TONES = [
   { key: 'professional', label: 'Professional' },
@@ -44,11 +44,14 @@ function Toggle({ value, onChange }) {
 
 export default function ConnectScreen({ goBack, navigate }) {
   const {
-    accounts, prefs, setPrefs, vips, toggleVip, connectOutlook, connectGoogle, disconnect,
+    accounts, prefs, setPrefs, vips, toggleVip, connectOutlook, connectGoogle, connectIcloud, disconnect,
     mailAccounts, removeMailAccount, updateMailAccount, startTour, openLearn,
   } = useStore();
   const [busy, setBusy] = useState(null);
   const [usage, setUsage] = useState(null);
+  const [icloudOpen, setIcloudOpen] = useState(false);
+  const [icloudEmail, setIcloudEmail] = useState('');
+  const [icloudPass, setIcloudPass] = useState('');
   const backendReady = isBackendConfigured(prefs.serverUrl);
 
   useEffect(() => { fetchUsage(prefs.serverUrl).then(setUsage).catch(() => {}); }, [prefs.serverUrl]);
@@ -128,11 +131,19 @@ export default function ConnectScreen({ goBack, navigate }) {
     }
   };
 
-  const iCloudInfo = () =>
-    Alert.alert(
-      'iCloud is a little different',
-      "Apple doesn't offer a 'Sign in for email' button like Google and Microsoft do. iCloud Mail only connects through IMAP with an app-specific password, which needs a small server component to work in a phone app. See README.md → 'Why iCloud is different' for the simple path to enable it."
-    );
+  const connectAppleMail = async () => {
+    if (!icloudEmail.trim() || !icloudPass.trim()) { Alert.alert('Enter your details', 'Add your iCloud email and app-specific password.'); return; }
+    setBusy('icloud');
+    try {
+      await verifyIcloud(prefs.serverUrl, icloudEmail.trim(), icloudPass.trim());
+      await connectIcloud(icloudEmail.trim(), icloudPass.trim());
+      setIcloudOpen(false); setIcloudEmail(''); setIcloudPass('');
+      Alert.alert('Connected 🎉', 'Your iCloud mail is loading, sorted by priority.');
+      goBack();
+    } catch (e) {
+      Alert.alert('iCloud sign-in failed', e.message || 'Check your email and app-specific password.');
+    } finally { setBusy(null); }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -160,8 +171,9 @@ export default function ConnectScreen({ goBack, navigate }) {
           connected={accounts.outlook} busy={busy === 'outlook'} onPress={handleOutlook} onDisconnect={() => disconnect('outlook')}
         />
         <ProviderCard
-          icon="cloud" color="#8E8E93" title="iCloud" subtitle="Read how to enable"
-          connected={false} busy={false} onPress={iCloudInfo}
+          icon="cloud" color="#8E8E93" title="iCloud Mail"
+          subtitle={accounts.icloud ? 'Connected' : 'Sign in with an app-specific password'}
+          connected={accounts.icloud} busy={busy === 'icloud'} onPress={() => setIcloudOpen(true)} onDisconnect={() => disconnect('icloud')}
         />
 
         {/* Linked mailboxes (multi-account) — name + color-tag each one */}
@@ -253,6 +265,31 @@ export default function ConnectScreen({ goBack, navigate }) {
         </View>
         <View style={{ height: 140 }} />
       </ScrollView>
+
+      {/* iCloud connect form (IMAP + app-specific password) */}
+      <Modal visible={icloudOpen} transparent animationType="slide" onRequestClose={() => setIcloudOpen(false)}>
+        <View style={styles.modalWrap}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHead}>
+              <Text style={styles.modalTitle}>Connect iCloud Mail</Text>
+              <Pressable hitSlop={8} onPress={() => setIcloudOpen(false)}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+            </View>
+            <Text style={styles.modalSub}>Apple has no "sign in" button for mail. Use your iCloud email and an app-specific password.</Text>
+            <TextInput style={styles.modalInput} value={icloudEmail} onChangeText={setIcloudEmail}
+              placeholder="you@icloud.com" placeholderTextColor={colors.textFaint}
+              autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
+            <TextInput style={styles.modalInput} value={icloudPass} onChangeText={setIcloudPass}
+              placeholder="App-specific password (xxxx-xxxx-xxxx-xxxx)" placeholderTextColor={colors.textFaint}
+              autoCapitalize="none" autoCorrect={false} secureTextEntry />
+            <Pressable onPress={() => Linking.openURL('https://account.apple.com/account/manage')}>
+              <Text style={styles.modalLink}>Create an app-specific password at account.apple.com →</Text>
+            </Pressable>
+            <Pressable style={[styles.modalBtn, busy === 'icloud' && { opacity: 0.6 }]} onPress={connectAppleMail} disabled={busy === 'icloud'}>
+              {busy === 'icloud' ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnText}>Connect</Text>}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -373,6 +410,15 @@ const styles = StyleSheet.create({
   toggleOn: { backgroundColor: '#34C759' },
   knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff' },
   knobOn: { transform: [{ translateX: 20 }] },
+  modalWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalCard: { backgroundColor: colors.bgElevated, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 22, paddingBottom: 40 },
+  modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  modalTitle: { color: colors.text, fontSize: 19, fontWeight: '800' },
+  modalSub: { color: colors.textDim, fontSize: 13.5, lineHeight: 19, marginBottom: 16 },
+  modalInput: { backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: colors.text, marginBottom: 10 },
+  modalLink: { color: colors.blue, fontSize: 13, fontWeight: '600', marginTop: 2, marginBottom: 16 },
+  modalBtn: { backgroundColor: colors.blue, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' },
+  modalBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   privacy: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: colors.brandSoft, padding: 14, borderRadius: radius.md, marginTop: 26 },
   privacyText: { flex: 1, color: colors.textDim, fontSize: 13, lineHeight: 19 },
 });

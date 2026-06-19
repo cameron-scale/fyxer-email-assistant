@@ -22,6 +22,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
+import { icloudVerify, icloudInbox, icloudMessage, icloudAttachment, icloudAction, icloudFolders, icloudSend } from './icloud.js';
 
 const app = express();
 app.use(cors());
@@ -119,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-30',
+    version: 'debug-31',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -340,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-30', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-31', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -354,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-30',
+    version: 'debug-31',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -680,9 +681,32 @@ async function attachSummaries(emails, { summarizeNew = true } = {}) {
 // Fast + resilient: pages up to `limit`, but if a later page fails or times out
 // it returns what it already has instead of failing the whole load. No AI here —
 // fetching is FREE; summaries are a separate cached step (/summarize).
+// Validate iCloud credentials (email + app-specific password) before linking.
+app.post('/icloud/verify', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) throw new Error('Enter your iCloud email and app-specific password.');
+    await icloudVerify(JSON.stringify({ email: String(email).trim(), password: String(password).trim() }));
+    record({ stage: 'icloud_verify_ok' });
+    res.json({ ok: true });
+  } catch (e) {
+    record({ stage: 'icloud_verify_error', message: e.message });
+    res.status(400).json({ error: 'Could not sign in to iCloud. Check your email and app-specific password.' });
+  }
+});
+
 app.post('/inbox', async (req, res) => {
   try {
     const { refreshToken, limit, folder, skip, folderId, provider } = req.body || {};
+
+    // ── iCloud path (IMAP) ──────────────────────────────────────────────────
+    if (provider === 'icloud') {
+      const want = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
+      const skipN = Math.max(parseInt(skip, 10) || 0, 0);
+      const out = await icloudInbox(refreshToken, { limit: want, folder: String(folder || 'inbox').toLowerCase(), skip: skipN });
+      record({ stage: 'inbox_ok', provider: 'icloud', count: out.emails.length });
+      return res.json({ ...out, skip: skipN, refreshToken });
+    }
 
     // ── Gmail path ──────────────────────────────────────────────────────────
     if (provider === 'google') {
@@ -792,6 +816,12 @@ app.post('/folders', async (req, res) => {
   try {
     const { refreshToken, provider } = req.body || {};
 
+    // ── iCloud path (IMAP folders) ───────────────────────────────────────────
+    if (provider === 'icloud') {
+      const out = await icloudFolders(refreshToken);
+      return res.json({ ...out, refreshToken });
+    }
+
     // ── Gmail path: labels become folders ────────────────────────────────────
     if (provider === 'google') {
       const { accessToken } = await googleAccessFromRefresh(refreshToken);
@@ -899,8 +929,15 @@ function detectMeeting(s = '') {
 // Fetch the full body of one message (on demand, when an email is opened).
 app.post('/message', async (req, res) => {
   try {
-    const { refreshToken, id, provider } = req.body || {};
+    const { refreshToken, id, provider, folder } = req.body || {};
     if (!id) throw new Error('missing id');
+
+    // ── iCloud path (IMAP) ──────────────────────────────────────────────────
+    if (provider === 'icloud') {
+      const out = await icloudMessage(refreshToken, id, String(folder || 'inbox').toLowerCase());
+      record({ stage: 'message_ok', provider: 'icloud', htmlLen: (out.bodyHtml || '').length, atts: (out.attachments || []).length });
+      return res.json(out);
+    }
 
     // ── Gmail path ──────────────────────────────────────────────────────────
     if (provider === 'google') {
@@ -997,8 +1034,12 @@ app.post('/message', async (req, res) => {
 // Download one attachment's bytes as a data URI (for opening/sharing in the app).
 app.post('/attachment', async (req, res) => {
   try {
-    const { refreshToken, id, attachmentId, provider } = req.body || {};
-    if (!id || !attachmentId) throw new Error('missing id or attachmentId');
+    const { refreshToken, id, attachmentId, provider, folder } = req.body || {};
+    if (!id || attachmentId == null) throw new Error('missing id or attachmentId');
+    if (provider === 'icloud') {
+      const out = await icloudAttachment(refreshToken, id, attachmentId, String(folder || 'inbox').toLowerCase());
+      return res.json(out);
+    }
     if (provider === 'google') {
       const { accessToken } = await googleAccessFromRefresh(refreshToken);
       const r = await gmailGet(`/messages/${id}/attachments/${attachmentId}`, accessToken);
@@ -1080,8 +1121,13 @@ app.post('/thread', async (req, res) => {
 // Best-effort — the app already updates its own view optimistically.
 app.post('/action', async (req, res) => {
   try {
-    const { refreshToken, id, action, provider } = req.body || {};
+    const { refreshToken, id, action, provider, folder } = req.body || {};
     if (!id || !action) throw new Error('missing id or action');
+
+    if (provider === 'icloud') {
+      await icloudAction(refreshToken, id, action, String(folder || 'inbox').toLowerCase());
+      return res.json({ ok: true });
+    }
 
     if (provider === 'google') {
       const { accessToken } = await googleAccessFromRefresh(refreshToken);
@@ -1874,6 +1920,13 @@ app.post('/signature/generate', async (req, res) => {
 app.post('/send', async (req, res) => {
   try {
     const { refreshToken, toEmail, subject, body, html, inReplyToId, sendAt, provider } = req.body || {};
+
+    // ── iCloud path (SMTP) ──────────────────────────────────────────────────
+    if (provider === 'icloud') {
+      await icloudSend(refreshToken, { toEmail, subject, html, text: body, inReplyTo: inReplyToId });
+      record({ stage: 'send_ok', provider: 'icloud' });
+      return res.json({ ok: true });
+    }
 
     // ── Gmail path ──────────────────────────────────────────────────────────
     if (provider === 'google') {
