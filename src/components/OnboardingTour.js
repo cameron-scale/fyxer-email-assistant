@@ -19,20 +19,20 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // before/after = navigation actions the App performs; center = no cutout.
 const STEPS = [
-  { id: 'inbox.wordmark', title: 'Your inbox at a glance', body: 'The unread count updates in real time the moment new mail arrives.', before: 'inbox' },
-  { id: 'inbox.avatar', title: 'Profile & Settings', body: 'Tap your avatar to access account settings, email signature, VIP senders, and notification preferences.' },
-  { id: 'inbox.searchRow', title: 'Search & Sort', body: 'Search across all your mail instantly. The sort button switches between newest first, unread first, or by sender.' },
-  { id: 'inbox.chips', title: 'Smart filter chips', body: 'AI tags every email automatically. Tap Urgent, Meeting, or To Respond to filter instantly — the red badges show live counts.' },
-  { id: 'inbox.firstCard', title: 'Color-coded cards', body: 'The colored band tells you the email type at a glance. Red is Urgent, blue is Action, indigo is Meeting, teal is Newsletter. You’ll learn the language after one session.' },
+  { id: 'inbox.wordmark', title: 'Your inbox at a glance', body: 'The unread badge next to ScaleMail updates in real time the moment new mail arrives.', before: 'inbox' },
+  { id: 'inbox.avatar', title: 'Profile & Settings', body: 'Tap your avatar for your account list, email signature, VIP senders, the daily Digest, your Calendar, and inbox health.' },
+  { id: 'inbox.searchRow', title: 'Search & Ask AI', body: 'Search across all your mail instantly — or flip on AI Ask to pose a question (“what did Stripe send last week?”) and get an answer with the matching emails. The sort button reorders by newest, unread, or sender.' },
+  { id: 'inbox.chips', title: 'Smart filter chips', body: 'AI tags every email automatically. Tap Urgent, Action Needed, Meeting, or Client to filter instantly — the red badges show live counts.' },
+  { id: 'inbox.firstCard', title: 'Color-coded cards', body: 'The colored band tells you the email type at a glance: red = Urgent, bright blue = Action Needed, indigo = Meeting, deep blue = Client, slate = Newsletter & FYI. You’ll learn the language after one session.' },
   { id: 'inbox.firstTag', title: 'AI category tag', body: 'The pill matches the band color — the same signal confirmed twice, so you’re never guessing what type of email this is.' },
-  { id: 'detail.actions', title: 'Quick actions', body: 'Archive, star, or open the menu for Reply All, Forward, Move to Folder, or Delete — all without leaving the reading view.', before: 'openEmail' },
-  { id: 'detail.reply', title: 'Inline reply', body: 'Type and send without navigating away. ScaleMail sends from your connected account instantly.', after: 'closeEmail' },
-  { id: 'tabbar', title: 'Tab bar', body: 'Inbox, Starred, Compose, Sent, and Drafts. The aurora background shifts color for each tab automatically.', before: 'inbox' },
-  { id: 'triage.card', title: 'Zip Through — swipe to triage', body: 'One card at a time. Swipe right to mark read, left to archive, up to snooze — or tap the card to open and reply. The progress counter up top tracks your pace.', before: 'openZip' },
-  { id: 'triage.card', title: 'Why it matters', body: 'Each card shows the AI’s priority pill, the category, a one-line summary, and a short reason it flagged the email — so you decide in a glance.' },
+  { id: 'detail.actions', title: 'Quick actions', body: 'Right from the reading view: tap the star to make someone a VIP, snooze to revisit later, or archive to clear it — no extra menus.', before: 'openEmail' },
+  { id: 'detail.reply', title: 'Smart replies & next steps', body: 'ScaleMail drafts one-tap replies and a “recommended next step” for emails that need you. Tap Reply to edit and send from your own account.', after: 'closeEmail' },
+  { id: 'tabbar', title: 'Your tab bar', body: 'Inbox, Starred, Triage, Sent, and Drafts around a center Compose button. Long-press any tab to rearrange or swap it for Calendar, Digest, and more.', before: 'inbox' },
+  { id: 'triage.card', title: 'Triage — swipe through fast', body: 'One card at a time. Swipe right to mark read, left to archive, up to snooze — or tap the card to open and reply. The counter up top tracks your pace.', before: 'openZip' },
+  { id: 'triage.card', title: 'Why it matters', body: 'Each card shows the AI’s priority score, the category, a one-line summary, and a short reason it was flagged — so you decide in a glance.' },
   { id: 'triage.actions', title: 'Tap-friendly actions', body: 'Prefer tapping to swiping? Archive, Snooze, or Mark Read with a single tap each. Clear your whole backlog in minutes.', after: 'closeZip' },
-  { center: true, title: 'Live aurora background', body: 'The animated background shifts color with your context — blue for inbox, red for urgent, gold for starred, indigo for meetings.' },
-  { id: 'inbox.avatar', title: 'You’re all set — connect your account', body: 'Tap your avatar then “Account & accounts” to connect Gmail, Outlook, or iCloud. ScaleMail will sync and categorize your real mail immediately.', before: 'inbox', final: true },
+  { center: true, title: 'Live aurora background', body: 'The animated background shifts color with your context — blue for the inbox, red for urgent, gold for starred, indigo for meetings.' },
+  { id: 'inbox.avatar', title: 'You’re all set — connect your account', body: 'Tap your avatar, then “Connect an account” to add Gmail, Outlook, or iCloud. ScaleMail syncs and categorizes your real mail right away.', before: 'inbox', final: true },
 ];
 
 function FeaturePill({ icon, label }) {
@@ -90,7 +90,7 @@ export default function OnboardingTour({ onAction }) {
             <View style={styles.featRow}>
               <FeaturePill icon="sparkles" label="AI Categorization" />
               <FeaturePill icon="alert-circle" label="Urgent Detection" />
-              <FeaturePill icon="play-forward" label="Zip Triage" />
+              <FeaturePill icon="play-forward" label="Swipe Triage" />
               <FeaturePill icon="color-palette" label="Live Aurora" />
             </View>
             <Pressable style={styles.startBtn} onPress={() => setPhase(0)}>
