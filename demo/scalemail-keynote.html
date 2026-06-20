@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>ScaleMail — Keynote Demo</title>
+<style>
+  /* ─────────────────────────────────────────────────────────────────────────
+     ScaleMail keynote demo — a single, self-contained HTML file. No network,
+     no build, no dependencies. Everything (data, screens, animations) is inline
+     so it runs offline on a presentation laptop. Demo data only.
+     ───────────────────────────────────────────────────────────────────────── */
+  :root{
+    --bg:#0C0F1E; --blue:#0071E3; --blueLite:#E8F1FE;
+    --ink:#1D1D1F; --ink2:#48484A; --ink3:#8E8E93; --ink4:#AEAEB2;
+    --surface:#fff; --surface2:#F5F5F7; --hair:#E5E5EA;
+    --onDark:#fff; --dim:rgba(255,255,255,.45); --faint:rgba(255,255,255,.3);
+    --line:rgba(255,255,255,.08); --fill:rgba(255,255,255,.06);
+    /* category colors (exact app values) */
+    --urgent:#E5484D; --action:#0071E3; --meeting:#4338CA; --client:#1D4ED8;
+    --news:#475569; --fyi:#64748B;
+    --device-w:390px; --device-h:844px;
+    font-synthesis:none; -webkit-font-smoothing:antialiased;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(120% 120% at 20% 0%,#11193a 0%,#070912 55%,#04060d 100%);
+    color:#fff; overflow:hidden; height:100vh;
+    display:flex; align-items:center; justify-content:center; gap:6vw;
+  }
+
+  /* Keynote framing beside the device (hidden on small screens) */
+  .pitch{max-width:430px; display:none}
+  @media(min-width:1100px){ .pitch{display:block} }
+  .pitch .badge{display:inline-flex;align-items:center;gap:8px;background:rgba(0,113,227,.16);
+    border:1px solid rgba(0,113,227,.35);color:#9ecbff;border-radius:999px;padding:7px 14px;
+    font-size:13px;font-weight:700;letter-spacing:.3px}
+  .pitch h1{font-size:64px;line-height:1.02;font-weight:800;letter-spacing:-2px;margin:22px 0 0}
+  .pitch h1 .b{color:#3a9bff}
+  .pitch .tag{font-size:21px;color:rgba(255,255,255,.66);margin-top:16px;line-height:1.45;font-weight:500}
+  .pitch .feats{margin-top:30px;display:grid;gap:14px}
+  .pitch .feat{display:flex;gap:13px;align-items:flex-start}
+  .pitch .feat .fi{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;
+    background:rgba(255,255,255,.06);border:1px solid var(--line)}
+  .pitch .feat .ft{font-size:15.5px;font-weight:700}
+  .pitch .feat .fd{font-size:13.5px;color:rgba(255,255,255,.5);margin-top:2px;line-height:1.4}
+  .pitch .live{margin-top:30px;font-size:13px;color:rgba(255,255,255,.4)}
+  .pitch .live b{color:#7fd1a8}
+
+  /* ── Device ─────────────────────────────────────────────────────────────── */
+  .device{
+    position:relative; width:var(--device-w); height:var(--device-h);
+    border-radius:54px; background:#000; flex:none;
+    box-shadow:0 0 0 13px #1c1f27, 0 0 0 15px #0a0c12, 0 40px 120px rgba(0,0,0,.7), 0 0 80px rgba(33,86,255,.18);
+    transform:scale(var(--scale,1)); transform-origin:center;
+  }
+  .screen{position:absolute; inset:0; border-radius:42px; overflow:hidden; background:var(--bg)}
+  .notch{position:absolute; top:11px; left:50%; transform:translateX(-50%); width:120px; height:34px;
+    background:#000; border-radius:20px; z-index:60}
+
+  /* aurora */
+  .aurora{position:absolute; inset:0; overflow:hidden; z-index:0}
+  .orb{position:absolute; border-radius:50%; filter:blur(46px); opacity:.55; mix-blend-mode:screen}
+  .o1{width:360px;height:360px;background:radial-gradient(circle,#1a6bff,transparent 68%);left:-90px;top:-40px;animation:drift1 20s ease-in-out infinite}
+  .o2{width:320px;height:320px;background:radial-gradient(circle,#7c3aed,transparent 68%);right:-100px;top:120px;animation:drift2 24s ease-in-out infinite}
+  .o3{width:300px;height:300px;background:radial-gradient(circle,#0ea5b7,transparent 68%);left:40px;bottom:-80px;animation:drift3 28s ease-in-out infinite}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,60px) scale(1.12)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-50px,40px) scale(1.08)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(30px,-50px) scale(1.15)}}
+  .scrim{position:absolute; inset:0; background:rgba(8,10,18,.46); z-index:1}
+  .particles{position:absolute; inset:0; z-index:1; pointer-events:none}
+  .pt{position:absolute; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,.5)}
+
+  /* aurora palette shifts per context */
+  .screen[data-pal="urgent"] .o1{background:radial-gradient(circle,#ff4d5e,transparent 68%)}
+  .screen[data-pal="urgent"] .o2{background:radial-gradient(circle,#ff7849,transparent 68%)}
+  .screen[data-pal="starred"] .o1{background:radial-gradient(circle,#ffc24d,transparent 68%)}
+  .screen[data-pal="starred"] .o2{background:radial-gradient(circle,#ff9f0a,transparent 68%)}
+  .screen[data-pal="meeting"] .o1{background:radial-gradient(circle,#4338CA,transparent 68%)}
+  .screen[data-pal="meeting"] .o2{background:radial-gradient(circle,#6366f1,transparent 68%)}
+
+  /* app layer */
+  .app{position:absolute; inset:0; z-index:5; display:flex; flex-direction:column}
+  .statusbar{height:50px; display:flex; align-items:flex-end; justify-content:space-between;
+    padding:0 26px 5px; font-size:14px; font-weight:700; color:#fff; z-index:20; flex:none}
+  .statusbar .r{display:flex; gap:6px; align-items:center}
+
+  .view{flex:1; overflow:hidden; position:relative}
+  .scrollable{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch}
+  .scrollable::-webkit-scrollbar{display:none}
+
+  /* generic */
+  .pad{padding:0 16px}
+  .hide{display:none !important}
+  svg{display:block}
+  .ic{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ── Inbox header ───────────────────────────────────────────────────────── */
+  .ihead{display:flex; align-items:center; justify-content:space-between; padding:6px 16px 10px}
+  .wordmark{font-size:30px; font-weight:800; letter-spacing:-1px; display:flex; align-items:flex-start}
+  .wordmark .s{color:#fff} .wordmark .m{color:#3a9bff}
+  .unreadBadge{font-size:12px; font-weight:800; color:#fff; background:var(--blue); border-radius:999px;
+    padding:2px 7px; margin-left:7px; margin-top:3px}
+  .avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;
+    background:linear-gradient(135deg,#3A82F6,#0055CC); cursor:pointer; border:none}
+
+  .searchRow{display:flex; gap:9px; padding:2px 16px 12px}
+  .searchBox{flex:1; display:flex; align-items:center; gap:8px; background:var(--fill); border:1px solid var(--line);
+    border-radius:12px; padding:10px 12px; color:var(--dim); font-size:14.5px; transition:.2s}
+  .searchBox input{flex:1; background:none; border:none; outline:none; color:#fff; font-size:14.5px}
+  .searchBox input::placeholder{color:var(--dim)}
+  .searchBox.ai{background:rgba(124,58,237,.18); border-color:rgba(124,58,237,.5)}
+  .iconBtn{width:42px; display:grid; place-items:center; background:var(--fill); border:1px solid var(--line);
+    border-radius:12px; color:#fff; cursor:pointer}
+  .iconBtn.on{background:rgba(124,58,237,.25); border-color:rgba(124,58,237,.6); color:#c4b5fd}
+
+  .aiAnswer{margin:0 16px 12px; background:rgba(124,58,237,.14); border:1px solid rgba(124,58,237,.35);
+    border-radius:14px; padding:13px 14px}
+  .aiAnswer .lbl{font-size:11px; font-weight:800; letter-spacing:.5px; color:#c4b5fd; display:flex; gap:6px; align-items:center}
+  .aiAnswer p{font-size:13.5px; line-height:1.5; color:rgba(255,255,255,.82); margin-top:7px}
+
+  /* chips */
+  .chips{display:flex; gap:8px; padding:2px 16px 12px; overflow-x:auto}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:none; display:flex; align-items:center; gap:6px; background:var(--fill); border:1px solid var(--line);
+    border-radius:999px; padding:7px 13px; font-size:13px; font-weight:600; color:var(--dim); cursor:pointer; white-space:nowrap}
+  .chip.on{background:rgba(0,113,227,.2); border-color:var(--blue); color:#fff}
+  .chip .cnt{font-size:11px; font-weight:800; color:#fff; background:var(--urgent); border-radius:999px; padding:1px 6px}
+  .chip.on .cnt{background:rgba(255,255,255,.25)}
+
+  /* triage banner */
+  .triageBanner{margin:0 16px 8px; display:flex; align-items:center; gap:12px; cursor:pointer;
+    background:linear-gradient(120deg,rgba(0,113,227,.22),rgba(124,58,237,.18));
+    border:1px solid rgba(120,150,255,.3); border-radius:16px; padding:13px 15px}
+  .triageBanner .tIcon{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.12);display:grid;place-items:center;flex:none}
+  .triageBanner .tt{font-size:15px;font-weight:800}
+  .triageBanner .ts{font-size:12.5px;color:rgba(255,255,255,.6);margin-top:1px}
+
+  /* email rows */
+  .row{display:flex; align-items:center; padding:11px 8px 11px 0; border-bottom:1px solid rgba(255,255,255,.07); cursor:pointer}
+  .row:active{background:rgba(255,255,255,.04)}
+  .dotcol{width:26px; display:grid; place-items:center; flex:none}
+  .udot{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  .stripav{display:flex; align-items:center; margin-right:11px; flex:none}
+  .strip{width:3px;height:28px;border-radius:2px;margin-right:8px}
+  .sav{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px}
+  .main{flex:1; min-width:0}
+  .topline{display:flex; align-items:center; gap:0}
+  .sender{flex:1; color:rgba(255,255,255,.95); font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .sender.read{color:rgba(255,255,255,.72); font-weight:400}
+  .threadChip{display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.12);border-radius:8px;padding:0 5px;height:16px;margin-left:5px;flex:none}
+  .threadChip span{color:rgba(255,255,255,.7);font-size:10px;font-weight:800}
+  .vipStar{color:#FFD60A;margin:0 4px;flex:none}
+  .rankPill{border-radius:7px;padding:0 6px;height:17px;display:grid;place-items:center;margin-left:6px;flex:none}
+  .rankPill span{font-size:11px;font-weight:800}
+  .time{color:rgba(255,255,255,.55);font-size:11px;font-weight:500;margin-left:6px;flex:none}
+  .subject{color:rgba(255,255,255,.8);font-size:13px;font-weight:500;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .subject.read{color:rgba(255,255,255,.6);font-weight:400}
+  .previewRow{display:flex;align-items:center;gap:4px;margin-top:2px}
+  .preview{flex:1;color:rgba(255,255,255,.62);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .sectionHead{color:#3a9bff;font-size:11px;font-weight:800;letter-spacing:1px;padding:16px 0 6px;text-transform:uppercase}
+
+  /* ── Reading view ───────────────────────────────────────────────────────── */
+  .reader{position:absolute; inset:0; background:#fff; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .28s cubic-bezier(.4,0,.2,1); z-index:30}
+  .reader.in{transform:translateX(0)}
+  .rnav{display:flex; align-items:center; justify-content:space-between; padding:8px 10px; background:#fff; border-bottom:1px solid var(--hair)}
+  .rnav .nb{display:flex;align-items:center;color:var(--blue);font-size:16px;font-weight:600;cursor:pointer;border:none;background:none;gap:2px}
+  .ractions{display:flex; gap:4px}
+  .actIcon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--ink2);cursor:pointer;border:none;background:none}
+  .actIcon:active{background:var(--surface2)}
+  .rbody{flex:1; overflow-y:auto}
+  .rbody::-webkit-scrollbar{display:none}
+  .hero{padding:18px 18px 16px; display:flex; gap:13px; align-items:center; color:#fff}
+  .hero .hav{width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-weight:800;font-size:16px;flex:none}
+  .hero .hn{font-size:17px;font-weight:800}
+  .hero .he{font-size:13px;opacity:.85;margin-top:1px}
+  .subjectBar{padding:14px 18px 8px}
+  .subjectBar .sj{font-size:20px;font-weight:800;color:var(--ink);line-height:1.25}
+  .tagsRow{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+  .tag{border-radius:999px;padding:4px 11px;font-size:12px;font-weight:800}
+  .joinBtn{display:inline-flex;align-items:center;gap:7px;background:rgba(16,185,129,.14);border:1px solid rgba(16,185,129,.34);
+    color:#0c8f5f;border-radius:999px;padding:9px 15px;font-size:13.5px;font-weight:700;margin:6px 18px 0;cursor:pointer}
+  .aiCard{margin:14px 18px 0; background:linear-gradient(135deg,#f3efff,#eaf2ff); border:1px solid #e4dcff; border-radius:16px; padding:14px 15px}
+  .aiCard .h{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:800;letter-spacing:.4px;color:#6d28d9}
+  .aiCard p{font-size:14.5px;line-height:1.5;color:var(--ink);margin-top:8px;font-weight:500}
+  .nextCard{margin:12px 18px 0; background:#fff; border:1px solid var(--hair); border-left:3px solid var(--blue); border-radius:14px; padding:13px 15px}
+  .nextCard .h{font-size:11.5px;font-weight:800;letter-spacing:.4px;color:var(--blue);display:flex;gap:7px;align-items:center}
+  .nextCard p{font-size:14px;line-height:1.5;color:var(--ink);margin-top:7px;font-weight:600}
+  .letter{padding:18px; font-size:15px; line-height:1.6; color:#2b2b2e; font-family:Georgia,"Times New Roman",serif; white-space:pre-wrap}
+  .smartReplies{padding:4px 18px 18px}
+  .srLbl{font-size:11.5px;font-weight:800;letter-spacing:.4px;color:var(--ink3);margin-bottom:9px;display:flex;align-items:center;gap:6px}
+  .sr{display:block;width:100%;text-align:left;background:var(--surface2);border:1px solid var(--hair);border-radius:13px;
+    padding:12px 14px;font-size:14px;color:var(--ink);margin-bottom:8px;cursor:pointer;font-weight:500}
+  .sr:active{background:#ececf0}
+  .replyBar{padding:10px 16px 18px; background:#fff; border-top:1px solid var(--hair); display:flex; gap:10px}
+  .replyBtn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--blue);color:#fff;border:none;
+    border-radius:14px;padding:14px;font-size:15px;font-weight:700;cursor:pointer}
+
+  /* ── Triage deck ────────────────────────────────────────────────────────── */
+  .triageWrap{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;background:transparent}
+  .triageWrap .tnav{display:flex;align-items:center;justify-content:space-between;padding:8px 14px}
+  .triageWrap .tnav .nb{color:#fff;font-size:16px;font-weight:600;background:none;border:none;display:flex;align-items:center;gap:2px;cursor:pointer}
+  .progress{padding:4px 22px 8px}
+  .progress .ptrack{height:6px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+  .progress .pfill{height:100%;background:var(--blue);transition:width .3s}
+  .progress .plabel{font-size:12px;color:rgba(255,255,255,.6);margin-top:7px;text-align:center;font-weight:600}
+  .deck{flex:1;position:relative;margin:8px 18px}
+  .tcard{position:absolute;inset:0;background:#fff;border-radius:24px;box-shadow:0 20px 50px rgba(0,0,0,.4);
+    display:flex;flex-direction:column;overflow:hidden;will-change:transform;touch-action:none}
+  .tcard .tband{height:7px}
+  .tcard .tinner{padding:20px;flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .tcard .trow1{display:flex;align-items:center;gap:11px}
+  .tcard .tav{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:16px;flex:none}
+  .tcard .tname{font-size:16px;font-weight:800;color:var(--ink)}
+  .tcard .temail{font-size:12.5px;color:var(--ink3);margin-top:1px}
+  .tcard .tpill{margin-left:auto;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px}
+  .tcard .tsubject{font-size:19px;font-weight:800;color:var(--ink);margin-top:18px;line-height:1.3}
+  .tcard .ttag{align-self:flex-start;margin-top:12px;border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:800}
+  .tcard .tsummary{font-size:14.5px;line-height:1.55;color:#3a3a3d;margin-top:14px;font-weight:500}
+  .tcard .treason{margin-top:auto;display:flex;gap:8px;align-items:flex-start;background:var(--surface2);border-radius:13px;padding:12px 13px}
+  .tcard .treason .rt{font-size:12.5px;color:var(--ink2);line-height:1.45}
+  .tcard .treason b{color:var(--ink)}
+  .swipeHint{position:absolute;top:26px;font-size:13px;font-weight:900;letter-spacing:1px;padding:8px 14px;border-radius:12px;
+    border:2.5px solid;opacity:0;transition:opacity .1s;text-transform:uppercase}
+  .swipeHint.left{right:22px;color:var(--urgent);border-color:var(--urgent);transform:rotate(12deg)}
+  .swipeHint.right{left:22px;color:#10b981;border-color:#10b981;transform:rotate(-12deg)}
+  .swipeHint.up{left:50%;transform:translateX(-50%);color:#f59e0b;border-color:#f59e0b;top:auto;bottom:26px}
+  .tactions{display:flex;gap:10px;padding:12px 18px 16px;justify-content:center}
+  .tact{flex:1;max-width:120px;display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--fill);
+    border:1px solid var(--line);border-radius:16px;padding:12px 8px;color:#fff;cursor:pointer}
+  .tact .tl{font-size:12px;font-weight:700}
+  .tdone{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px}
+  .tdone .big{width:88px;height:88px;border-radius:50%;background:#22c55e;display:grid;place-items:center}
+  .tdone h2{font-size:24px;font-weight:800}
+  .tdone p{font-size:15px;color:rgba(255,255,255,.6);line-height:1.5}
+
+  /* ── Generic full screens (calendar/digest/health) ──────────────────────── */
+  .fscreen{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;background:transparent;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
+  .fscreen.in{transform:translateX(0)}
+  .fnav{display:flex;align-items:center;justify-content:space-between;padding:8px 14px}
+  .fnav .nb{color:#fff;font-size:16px;font-weight:600;background:none;border:none;display:flex;align-items:center;gap:2px;cursor:pointer}
+  .fnav .ft{font-size:17px;font-weight:800}
+  .fbody{flex:1;overflow-y:auto;padding:0 16px 30px}
+  .fbody::-webkit-scrollbar{display:none}
+
+  /* week strip */
+  .week{display:flex;justify-content:space-between;padding:6px 2px 14px}
+  .day{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .day .dl{font-size:11px;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,.45)}
+  .day .dc{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:15px;font-weight:600;color:rgba(255,255,255,.55)}
+  .day.today .dc{background:var(--blue);color:#fff;font-weight:700}
+  .day .dot2{width:5px;height:5px;border-radius:50%;background:#93c5fd}
+  .evCard{display:flex;background:var(--fill);border:1px solid var(--line);border-top-color:rgba(255,255,255,.16);border-radius:16px;overflow:hidden;margin-bottom:10px}
+  .evCard .eb{width:4px}
+  .evCard .ebody{flex:1;padding:14px}
+  .evCard .et{font-size:12.5px;color:rgba(255,255,255,.6)}
+  .evCard .es{font-size:14px;font-weight:700;margin-top:3px}
+  .evCard .em{font-size:12.5px;color:rgba(255,255,255,.55);margin-top:5px;display:flex;align-items:center;gap:5px}
+  .evCard .ej{display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,.16);border:1px solid rgba(16,185,129,.3);
+    color:#34d399;border-radius:18px;padding:7px 13px;font-size:12.5px;font-weight:700;margin-top:11px;cursor:pointer}
+  .pill2{align-self:flex-start;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700;margin-bottom:7px;display:inline-block}
+
+  /* digest */
+  .dHeader{padding:14px 2px 6px}
+  .dHeader h2{font-size:26px;font-weight:800;letter-spacing:-.5px}
+  .dHeader .sub{font-size:13.5px;color:rgba(255,255,255,.5);margin-top:3px}
+  .statRow{display:flex;gap:10px;margin:14px 0}
+  .statBox{flex:1;background:var(--fill);border:1px solid var(--line);border-radius:16px;padding:14px 10px;text-align:center}
+  .statBox .v{font-size:24px;font-weight:800}
+  .statBox .l{font-size:11px;color:rgba(255,255,255,.5);margin-top:3px;font-weight:600}
+  .dSection{font-size:12px;font-weight:800;letter-spacing:.8px;color:#3a9bff;text-transform:uppercase;margin:18px 0 10px}
+  .actItem{display:flex;gap:12px;background:var(--fill);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:9px;cursor:pointer}
+  .actItem .num{width:24px;height:24px;border-radius:50%;background:rgba(0,113,227,.2);color:#7fb4ff;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+  .actItem .at{font-size:14px;font-weight:700}
+  .actItem .ad{font-size:12.5px;color:rgba(255,255,255,.55);margin-top:2px;line-height:1.4}
+  .digestPara{font-size:14px;line-height:1.6;color:rgba(255,255,255,.75);background:var(--fill);border:1px solid var(--line);
+    border-radius:14px;padding:14px;margin-bottom:9px}
+  .digestPara b{color:#fff}
+
+  /* health */
+  .hRing{display:flex;justify-content:center;padding:18px 0 6px}
+  .hStat{display:flex;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--line)}
+  .hStat .hl{font-size:14px;color:rgba(255,255,255,.6)}
+  .hStat .hv{font-size:15px;font-weight:800}
+
+  /* ── Tab bar ────────────────────────────────────────────────────────────── */
+  .tabbar{height:78px;flex:none;display:flex;align-items:flex-start;padding-top:9px;justify-content:space-around;
+    background:rgba(10,12,24,.92);backdrop-filter:blur(20px);border-top:1px solid var(--line);position:relative;z-index:15}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,.4);cursor:pointer;background:none;border:none}
+  .tab.on{color:#fff}
+  .tab .tlbl{font-size:10px;font-weight:600}
+  .fab{width:54px;height:54px;border-radius:18px;background:linear-gradient(135deg,#0a84ff,#0060df);display:grid;place-items:center;
+    margin-top:-14px;box-shadow:0 8px 22px rgba(10,132,255,.5);cursor:pointer;border:none;color:#fff}
+
+  /* ── Bottom sheets (compose / profile) ──────────────────────────────────── */
+  .sheetWrap{position:absolute;inset:0;z-index:50;display:none}
+  .sheetWrap.in{display:block}
+  .sheetWrap .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5);opacity:0;transition:opacity .25s}
+  .sheetWrap.in .backdrop{opacity:1}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:#13182a;border-top-left-radius:24px;border-top-right-radius:24px;
+    border-top:1px solid var(--line);transform:translateY(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);max-height:92%;display:flex;flex-direction:column}
+  .sheetWrap.in .sheet{transform:translateY(0)}
+  .grab{width:38px;height:5px;border-radius:3px;background:rgba(255,255,255,.25);margin:9px auto 4px}
+  .sheetHead{display:flex;align-items:center;justify-content:space-between;padding:8px 18px 12px;border-bottom:1px solid var(--line)}
+  .sheetHead .st{font-size:17px;font-weight:800}
+  .sheetHead .sx{color:var(--dim);cursor:pointer;background:none;border:none}
+  .sheetBody{padding:16px 18px 24px;overflow-y:auto}
+  .sheetBody::-webkit-scrollbar{display:none}
+
+  .field{margin-bottom:12px}
+  .field label{font-size:11.5px;font-weight:700;color:var(--dim);letter-spacing:.3px;text-transform:uppercase}
+  .field .fv{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:11px 2px;font-size:15px;color:#fff}
+  .field .fv input{flex:1;background:none;border:none;outline:none;color:#fff;font-size:15px}
+  .field .fv input::placeholder{color:var(--faint)}
+  .composeBody{width:100%;min-height:150px;background:none;border:none;outline:none;color:#fff;font-size:15px;line-height:1.5;resize:none;margin-top:12px}
+  .composeBody::placeholder{color:var(--faint)}
+  .aiSuggest{display:inline-flex;align-items:center;gap:7px;background:rgba(124,58,237,.18);border:1px solid rgba(124,58,237,.4);
+    color:#c4b5fd;border-radius:999px;padding:9px 14px;font-size:13px;font-weight:700;margin-top:14px;cursor:pointer}
+  .sendRow{display:flex;justify-content:flex-end;margin-top:18px}
+  .sendBtn{display:flex;align-items:center;gap:8px;background:var(--blue);color:#fff;border:none;border-radius:14px;padding:12px 22px;font-size:15px;font-weight:700;cursor:pointer}
+
+  /* profile sheet rows */
+  .pProfile{display:flex;align-items:center;gap:13px;padding:6px 2px 18px}
+  .pProfile .pav{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#3A82F6,#0055CC);display:grid;place-items:center;font-size:20px;font-weight:800}
+  .pProfile .pn{font-size:18px;font-weight:800}
+  .pProfile .pe{font-size:13px;color:var(--dim);margin-top:2px}
+  .prow{display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+  .prow .pri{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none}
+  .prow .prt{flex:1;font-size:15px;font-weight:600}
+  .prow .prc{color:var(--faint)}
+
+  /* toast */
+  .toast{position:absolute;bottom:96px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(20,24,40,.97);
+    border:1px solid var(--line);color:#fff;font-size:13.5px;font-weight:600;padding:11px 18px;border-radius:14px;
+    opacity:0;transition:.3s;z-index:80;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .toast.in{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* guided tour */
+  .tour{position:absolute;inset:0;z-index:90;display:none}
+  .tour.in{display:block}
+  .tourDim{position:absolute;inset:0;background:rgba(0,0,0,.72)}
+  .spot{position:absolute;border:2px solid #fff;border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.72);transition:.3s;pointer-events:none}
+  .tip{position:absolute;left:16px;right:16px;background:rgba(12,16,26,.98);border:1px solid var(--line);border-radius:20px;padding:18px}
+  .tip .tc{font-size:11px;font-weight:800;letter-spacing:1px;color:#3a9bff}
+  .tip h3{font-size:17px;font-weight:800;margin-top:6px}
+  .tip p{font-size:13px;line-height:1.5;color:rgba(255,255,255,.6);margin-top:6px}
+  .tip .trow{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
+  .tip .skip{color:rgba(255,255,255,.5);font-size:14px;font-weight:600;background:none;border:none;cursor:pointer}
+  .tip .next{background:var(--blue);color:#fff;border:none;border-radius:12px;padding:9px 20px;font-size:14px;font-weight:800;cursor:pointer}
+  .tipDots{display:flex;gap:5px;margin-bottom:8px}
+  .tipDots i{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.25)}
+  .tipDots i.on{width:18px;background:var(--blue)}
+
+  .hintBtn{position:fixed;bottom:18px;right:18px;background:rgba(255,255,255,.08);border:1px solid var(--line);color:#fff;
+    border-radius:12px;padding:9px 14px;font-size:12.5px;cursor:pointer;z-index:200;backdrop-filter:blur(8px)}
+  @media(max-width:1099px){.hintBtn{display:none}}
+</style>
+</head>
+<body>
+
+  <!-- Keynote pitch panel (desktop only) -->
+  <div class="pitch">
+    <span class="badge">✦ Now in beta</span>
+    <h1>Scale<span class="b">Mail</span></h1>
+    <div class="tag">The inbox that reads, sorts and triages your mail for you — so you clear what matters in minutes.</div>
+    <div class="feats">
+      <div class="feat"><div class="fi">🧠</div><div><div class="ft">AI categorization</div><div class="fd">Every email tagged Urgent, Action, Meeting, Client, Newsletter or FYI — automatically.</div></div></div>
+      <div class="feat"><div class="fi">⚡</div><div><div class="ft">Swipe triage</div><div class="fd">Clear the backlog one card at a time. Swipe to read, archive or snooze.</div></div></div>
+      <div class="feat"><div class="fi">✨</div><div><div class="ft">Summaries & next steps</div><div class="fd">A one-line TL;DR and a recommended action on every email that needs you.</div></div></div>
+      <div class="feat"><div class="fi">📅</div><div><div class="ft">Calendar & daily digest</div><div class="fd">Meetings, RSVPs and a morning brief of everything that matters today.</div></div></div>
+    </div>
+    <div class="live">Fully interactive demo → <b>tap anything</b>. All data is fictional.</div>
+  </div>
+
+  <!-- Device -->
+  <div class="device" id="device">
+    <div class="notch"></div>
+    <div class="screen" id="screen" data-pal="default">
+      <div class="aurora"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+      <div class="scrim"></div>
+      <div class="particles" id="particles"></div>
+
+      <div class="app">
+        <div class="statusbar">
+          <span id="clock">9:41</span>
+          <span class="r">
+            <svg width="18" height="12" viewBox="0 0 18 12" fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4" width="3" height="8" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#fff"><path d="M8.5 2.5c2 0 3.8.8 5.2 2.1l1.2-1.2A9.4 9.4 0 0 0 8.5.9 9.4 9.4 0 0 0 1.6 3.4l1.2 1.2A7.4 7.4 0 0 1 8.5 2.5z"/><path d="M8.5 6c1.1 0 2.1.4 2.8 1.2l1.2-1.2A6 6 0 0 0 8.5 4a6 6 0 0 0-4 1.9l1.2 1.2A4.2 4.2 0 0 1 8.5 6z"/><circle cx="8.5" cy="9.5" r="1.6"/></svg>
+            <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="#fff"/><rect x="23" y="4" width="2" height="5" rx="1" fill="#fff" opacity=".5"/></svg>
+          </span>
+        </div>
+
+        <!-- Main scrollable view holds the active screen -->
+        <div class="view">
+          <div class="scrollable" id="mainScroll"></div>
+
+          <!-- overlay screens get injected/toggled here -->
+          <div id="overlayHost"></div>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="tabbar" id="tabbar"></div>
+      </div>
+
+      <!-- Sheets -->
+      <div class="sheetWrap" id="sheetWrap">
+        <div class="backdrop" onclick="closeSheet()"></div>
+        <div class="sheet" id="sheet"></div>
+      </div>
+
+      <!-- Toast -->
+      <div class="toast" id="toast"></div>
+
+      <!-- Guided tour -->
+      <div class="tour" id="tour">
+        <div class="tourDim"></div>
+        <div class="spot" id="spot"></div>
+        <div class="tip" id="tip"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="hintBtn" onclick="startTour()">▶ Replay guided tour</button>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   DEMO DATA  (all fictional)
+   ════════════════════════════════════════════════════════════════════════════ */
+const BANDS = {
+  Urgent:          { strip:'#E5484D', grad:['#E5484D','#B91C1C'], tagBg:'#FEECEC', tagFg:'#D32F2F' },
+  'Action Needed': { strip:'#0071E3', grad:['#0071E3','#0055B3'], tagBg:'#EAF3FF', tagFg:'#0071E3' },
+  Meeting:         { strip:'#4338CA', grad:['#4338CA','#312E81'], tagBg:'#EEF2FF', tagFg:'#4338CA' },
+  Client:          { strip:'#1D4ED8', grad:['#1D4ED8','#1E3A8A'], tagBg:'#E7EFFE', tagFg:'#1D4ED8' },
+  Newsletter:      { strip:'#475569', grad:['#475569','#1E293B'], tagBg:'#F1F3F6', tagFg:'#475569' },
+  FYI:             { strip:'#64748B', grad:['#64748B','#334155'], tagBg:'#F1F3F6', tagFg:'#475569' },
+};
+const AV_COLORS = ['#0071E3','#4338CA','#1D4ED8','#0891B2','#7C3AED','#E5484D','#059669','#D97706','#DB2777'];
+function avColor(s){ let h=0; for(const c of (s||'')) h=(h*31+c.charCodeAt(0))>>>0; return AV_COLORS[h%AV_COLORS.length]; }
+function initials(name){ const p=(name||'').trim().split(/\s+/); return ((p[0]?.[0]||'')+(p[1]?.[0]||'')).toUpperCase()||'?'; }
+
+let UID=0;
+function mk(o){ return Object.assign({ id:'e'+(++UID), read:false, threadCount:1, vip:false, join:null }, o); }
+
+const INBOX = [
+  mk({ name:'Priya Nair', email:'priya@acmevc.com', subject:'Term sheet follow-up — need redlines today',
+    cat:'Urgent', rank:9.4, when:'2h', vip:true,
+    summary:'Needs your redlines on the term sheet before EOD to keep the round on schedule.',
+    reason:'From a VIP investor and contains a same-day deadline.',
+    body:'Hi,\n\nGreat speaking earlier. To keep the round on schedule we need your redlines on the term sheet before end of day. Flag anything on valuation or the board seat and we will turn it around tonight.\n\nBest,\nPriya' }),
+  mk({ name:'Sarah Chen', email:'sarah.chen@northwind.com', subject:'Q2 Revenue Report — needs your sign-off',
+    cat:'Urgent', rank:9.0,  when:'3h',
+    summary:'Board approval needed on the Q2 numbers before Friday’s meeting.',
+    reason:'Explicit sign-off requested with a Friday deadline.',
+    body:'Hi,\n\nThe Q2 revenue report is finalized and needs your sign-off before the board meeting on Friday. Please review the attached numbers and confirm we are good to circulate.\n\nThanks,\nSarah' }),
+  mk({ name:'James Whitfield', email:'james@whitfield.partners', subject:'Partnership call — Thursday 2:00 PM',
+    cat:'Meeting', rank:7.6, when:'4h', threadCount:2, join:'zoom',
+    summary:'Confirms the partnership call for Thursday; Zoom link attached.',
+    reason:'Calendar invite with a join link for this week.',
+    body:'Hi,\n\nConfirming our partnership call for Thursday at 2:00 PM. Zoom link is below — talk then.\n\nJoin Zoom Meeting\nhttps://zoom.us/j/9921045583\n\nBest,\nJames' }),
+  mk({ name:'Marcus Lee', email:'marcus@brightlabs.io', subject:'Re: Proposal draft — final version',
+    cat:'Client', rank:7.8, when:'5h', threadCount:4,
+    summary:'Approved overall — asks you to soften the pricing language on page 4.',
+    reason:'Active client thread awaiting your revision.',
+    body:'Hi,\n\nThe proposal looks great and we are approved to move ahead. One note: could you soften the pricing language on page 4 before we send it up the chain?\n\nThanks,\nMarcus' }),
+  mk({ name:'Daniel Brooks', email:'daniel@horizonrealty.com', subject:'Site visit — can we move to Wednesday?',
+    cat:'Action Needed', rank:6.2, when:'8h', threadCount:3,
+    summary:'Wants to reschedule Tuesday’s site visit to Wednesday morning.',
+    reason:'Direct question that needs a yes/no from you.',
+    body:'Hey,\n\nSomething came up on Tuesday — any chance we can move the site visit to Wednesday morning instead? Happy to work around your schedule.\n\nDaniel' }),
+  mk({ name:'Alex Rivera', email:'alex.rivera@gmail.com', subject:'Lunch tomorrow?',
+    cat:'Action Needed', rank:5.4, when:'9h',
+    summary:'Wants to know if you’re free for lunch around noon tomorrow.',
+    reason:'Personal note expecting a reply.',
+    body:'Hey! Are you free for lunch around noon tomorrow? Would love to catch up — your pick of spot.\n\nAlex' }),
+  mk({ name:'Lena Park', email:'lena.park@summit.io', subject:'Contract renewal — 30% off if we close this week',
+    cat:'Client', rank:7.0, when:'1d',
+    summary:'Offers 30% off the annual renewal if signed before Friday.',
+    reason:'Time-boxed offer from an existing vendor relationship.',
+    body:'Hi,\n\nYour contract renews in 45 days. If we can close this week I can lock in 30% off the annual plan. Want me to send the paperwork?\n\nLena' }),
+  mk({ name:'Finance Team', email:'finance@northwind.com', subject:'Invoice #4821 approved — payment processing', read:true,
+    cat:'FYI', rank:4.0, when:'1d',
+    summary:'$3,400 payment approved and processing; arrives in 2–3 days.',
+    reason:'Informational confirmation, no action needed.',
+    body:'Invoice #4821 for $3,400 has been approved and payment is processing. Funds should arrive in 2 to 3 business days.' }),
+  mk({ name:'Notion', email:'team@notion.so', subject:'Your workspace is ready to explore', read:true,
+    cat:'Newsletter', rank:2.1, when:'1d',
+    summary:'Getting-started guide for your new Notion workspace.',
+    reason:'Bulk product email from a known sender.',
+    body:'Welcome to Notion! Your workspace is ready. Here is a quick getting-started guide to help you and your team explore.' }),
+  mk({ name:'Stripe', email:'receipts@stripe.com', subject:'Your receipt for $1,240.00', read:true,
+    cat:'FYI', rank:3.2, when:'2d',
+    summary:'Receipt for your $1,240.00 subscription payment.',
+    reason:'Automated receipt — filed for your records.',
+    body:'Thanks for your payment. This is your receipt for $1,240.00. Keep it for your records.' }),
+  mk({ name:'Mailchimp', email:'no-reply@mailchimp.com', subject:'📣 New features this month', read:true,
+    cat:'Newsletter', rank:1.7, when:'2d',
+    summary:'Monthly roundup of new Mailchimp features.',
+    reason:'Marketing newsletter, low priority.',
+    body:'Here is what is new this month — new automations, a refreshed editor, and more.' }),
+];
+
+const SENT = [
+  mk({ name:'Me', email:'cameron@scalembs.com', subject:'Re: Proposal draft — final version', read:true, cat:'Client', rank:0, when:'6h',
+    summary:'You sent the revised proposal with softened pricing on page 4.', reason:'', body:'Hi Marcus — updated page 4 as discussed, take a look.' }),
+  mk({ name:'Me', email:'cameron@scalembs.com', subject:'Intro: Priya <> Daniel', read:true, cat:'FYI', rank:0, when:'1d',
+    summary:'You introduced Priya and Daniel over email.', reason:'', body:'You two should connect — copying you both here.' }),
+];
+const DRAFTS = [
+  mk({ name:'To: lena.park@summit.io', email:'lena.park@summit.io', subject:'Re: Contract renewal', read:true, cat:'Client', rank:0, when:'now',
+    summary:'Draft reply accepting the 30% renewal offer.', reason:'', body:'Hi Lena — let’s do it. Send the paperwork and I’ll sign this week.' }),
+];
+
+const EVENTS = [
+  { day:'Today', time:'2:00 – 2:30 PM', subject:'Partnership call', cat:'Meeting', who:'James Whitfield', join:true, status:'Going' },
+  { day:'Today', time:'4:00 – 4:45 PM', subject:'Design review', cat:'Meeting', who:'Product team', join:false, status:null },
+  { day:'Tomorrow', time:'12:00 PM', subject:'Lunch with Alex', cat:'Action Needed', who:'Alex Rivera', join:false, status:null },
+  { day:'Wed, Jun 24', time:'9:00 AM', subject:'Board meeting — Q2 sign-off', cat:'Urgent', who:'Sarah Chen', join:false, status:'Going' },
+  { day:'Thu, Jun 25', time:'11:00 AM', subject:'1:1 with Marcus', cat:'Client', who:'Marcus Lee', join:true, status:null },
+];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ICONS (inline SVG)
+   ════════════════════════════════════════════════════════════════════════════ */
+const P = {
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  sparkles:'<path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M19 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  back:'<path d="M15 18l-6-6 6-6"/>',
+  star:'<path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.5 9.9 9.1 9z"/>',
+  archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11h14V8M10 12h4"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  reply:'<path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/>',
+  video:'<rect x="2" y="6" width="13" height="12" rx="2"/><path d="M22 8l-5 4 5 4z"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/>',
+  send:'<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
+  close:'<path d="M18 6L6 18M6 6l12 12"/>',
+  chevron:'<path d="M9 18l6-6-6-6"/>',
+  inbox:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13l3.5 7v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
+  triage:'<path d="M5 4l8 8-8 8M13 4l8 8-8 8"/>',
+  sent:'<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
+  drafts:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  person:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  flame:'<path d="M12 2s5 4 5 9a5 5 0 0 1-10 0c0-2 1-3 1-3s0 2 2 2 1-3 2-5z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/>',
+  heart:'<path d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/>',
+  sig:'<path d="M3 17c3 0 3-6 6-6s3 6 6 6 3-6 6-6"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.3 1a7 7 0 0 0-1.7-1l-.3-2.5h-4l-.3 2.5a7 7 0 0 0-1.7 1l-2.3-1-2 3.5 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.3 1 2-3.5-2-1.5a7 7 0 0 0 .1-1z"/>',
+  play:'<path d="M5 4l8 8-8 8M13 4l8 8-8 8"/>',
+  location:'<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 6l10 7 10-7"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+};
+function svg(name, cls='ic'){ return `<svg class="${cls}" viewBox="0 0 24 24">${P[name]||''}</svg>`; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════════════════════════════════════ */
+let TAB = 'Inbox';           // Inbox | Starred | Sent | Drafts
+let FILTER = 'All';
+let AI_MODE = false;
+let AI_SHOWN = false;
+
+const $ = (id)=>document.getElementById(id);
+const main = ()=>$('mainScroll');
+
+function counts(){
+  const c = { Urgent:0, 'Action Needed':0, Meeting:0, Client:0, Newsletter:0, FYI:0 };
+  INBOX.forEach(e=>{ if(e.read===false) c[e.cat]++; });
+  return c;
+}
+function unread(){ return INBOX.filter(e=>e.read===false).length; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   RENDER: tab bar
+   ════════════════════════════════════════════════════════════════════════════ */
+function renderTabs(){
+  const tabs=[['Inbox','inbox'],['Starred','star'],['Sent','sent'],['Drafts','drafts']];
+  const left=tabs.slice(0,2), right=tabs.slice(2);
+  const tb=(k,ic)=>`<button class="tab ${TAB===k?'on':''}" onclick="switchTab('${k}')">${svg(ic)}<span class="tlbl">${k}</span></button>`;
+  $('tabbar').innerHTML =
+    left.map(t=>tb(t[0],t[1])).join('') +
+    `<button class="fab" onclick="openCompose()">${svg('pencil')}</button>` +
+    right.map(t=>tb(t[0],t[1])).join('');
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   RENDER: list screens
+   ════════════════════════════════════════════════════════════════════════════ */
+function rowHTML(e, showRank=true){
+  const b=BANDS[e.cat]||BANDS.FYI;
+  const read=e.read!==false?'read':'';
+  const rank = (showRank && e.rank>0) ? `<div class="rankPill" style="background:${b.strip}26"><span style="color:${b.strip}">${e.rank.toFixed(1)}</span></div>` : '';
+  const thread = e.threadCount>1 ? `<div class="threadChip">${svg('mail','ic')==''?'':''}<svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>${e.threadCount}</span></div>` : '';
+  const vip = e.vip ? `<svg class="vipStar" viewBox="0 0 24 24" width="12" height="12" fill="#FFD60A" stroke="#FFD60A"><path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.5 9.9 9.1 9z"/></svg>` : '';
+  return `<div class="row" onclick="openReader('${e.id}')">
+    <div class="dotcol">${e.read===false?'<div class="udot"></div>':''}</div>
+    <div class="stripav"><div class="strip" style="background:${b.strip}"></div>
+      <div class="sav" style="background:${avColor(e.name)}">${initials(e.name)}</div></div>
+    <div class="main">
+      <div class="topline">
+        <div class="sender ${read}">${e.name}</div>${vip}${thread}${rank}
+        <div class="time">${e.when}</div>
+      </div>
+      <div class="subject ${read}">${e.subject}</div>
+      <div class="previewRow">${svg('sparkles','ic')=='' ?'':'<svg viewBox="0 0 24 24" width="10.5" height="10.5" fill="none" stroke="#3a9bff" stroke-width="2"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/></svg>'}
+        <div class="preview">${e.summary}</div></div>
+    </div>
+  </div>`;
+}
+
+function renderInbox(){
+  setPalette('default');
+  const c=counts();
+  const chip=(k,label)=>{ const n=k==='All'?0:c[k]; const on=FILTER===k?'on':'';
+    return `<div class="chip ${on}" onclick="setFilter('${k}')">${label}${n>0?`<span class="cnt">${n}</span>`:''}</div>`; };
+  let list = INBOX.slice();
+  if(FILTER!=='All') list = list.filter(e=>e.cat===FILTER);
+
+  const aiBanner = AI_SHOWN ? `<div class="aiAnswer">
+      <div class="lbl">${spark()} ASKED YOUR INBOX</div>
+      <p>You have <b>3 emails that need a reply today</b>: Priya (term-sheet redlines, due EOD), Sarah (Q2 sign-off before Friday), and Daniel (site-visit reschedule). Priya’s is the most time-sensitive.</p>
+    </div>` : '';
+
+  main().innerHTML = `
+    <div class="ihead">
+      <div class="wordmark"><span class="s">Scale</span><span class="m">Mail</span><span class="unreadBadge" id="ub">${unread()}</span></div>
+      <button class="avatar" id="avatarBtn" onclick="openProfile()">CG</button>
+    </div>
+    <div class="searchRow">
+      <div class="searchBox ${AI_MODE?'ai':''}" id="searchBox">${AI_MODE?spark():svg('search','ic')}
+        <input id="searchInput" placeholder="${AI_MODE?'Ask about your mail…':'Search all mail'}" onkeydown="if(event.key==='Enter')runAI()"/>
+      </div>
+      <div class="iconBtn ${AI_MODE?'on':''}" id="aiToggle" onclick="toggleAI()">${spark()}</div>
+    </div>
+    ${aiBanner}
+    <div class="chips" id="chips">
+      ${chip('All','All')}${chip('Urgent','Urgent')}${chip('Action Needed','Action')}${chip('Meeting','Meeting')}${chip('Client','Client')}${chip('Newsletter','Newsletter')}${chip('FYI','FYI')}
+    </div>
+    <div class="triageBanner" id="triageBanner" onclick="openTriage()">
+      <div class="tIcon">${svg('triage')}</div>
+      <div style="flex:1"><div class="tt">${unread()} emails to triage</div><div class="ts">Swipe through them one at a time →</div></div>
+      ${svg('chevron','ic')}
+    </div>
+    <div class="pad" id="listHost">${list.map(e=>rowHTML(e)).join('')}</div>
+    <div style="height:30px"></div>
+  `;
+}
+function spark(){ return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M19 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>'; }
+
+function renderStarred(){
+  setPalette('starred');
+  const list = INBOX.filter(e=>e.vip || e.cat==='Urgent' || e.cat==='Client');
+  main().innerHTML = `
+    <div class="ihead"><div class="wordmark"><span class="s">Star</span><span class="m">red</span></div>
+      <button class="avatar" onclick="openProfile()">CG</button></div>
+    <div class="pad"><div class="sectionHead">VIP & priority senders</div>${list.map(e=>rowHTML(e)).join('')}</div>`;
+}
+function renderMailbox(title, list){
+  setPalette('default');
+  main().innerHTML = `
+    <div class="ihead"><div class="wordmark"><span class="s">${title}</span></div>
+      <button class="avatar" onclick="openProfile()">CG</button></div>
+    <div class="pad">${list.map(e=>rowHTML(e,false)).join('') || emptyState(title)}</div>`;
+}
+function emptyState(t){ return `<div style="text-align:center;padding:80px 20px;color:rgba(255,255,255,.4)">${svg('mail','ic')}<div style="margin-top:14px;font-size:15px">No ${t.toLowerCase()} yet</div></div>`; }
+
+function switchTab(k){
+  TAB=k; closeAllOverlays(); renderTabs();
+  if(k==='Inbox') renderInbox();
+  else if(k==='Starred') renderStarred();
+  else if(k==='Sent') renderMailbox('Sent', SENT);
+  else if(k==='Drafts') renderMailbox('Drafts', DRAFTS);
+}
+function setFilter(k){ FILTER=k; renderInbox(); }
+function toggleAI(){ AI_MODE=!AI_MODE; AI_SHOWN=false; renderInbox(); if(AI_MODE) setTimeout(()=>$('searchInput')?.focus(),50); }
+function runAI(){ AI_SHOWN=true; renderInbox(); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   READER (overlay)
+   ════════════════════════════════════════════════════════════════════════════ */
+function findEmail(id){ return [...INBOX,...SENT,...DRAFTS].find(e=>e.id===id); }
+
+function openReader(id){
+  const e=findEmail(id); if(!e) return;
+  e.read=true;
+  setPalette(e.cat==='Urgent'?'urgent':e.cat==='Meeting'?'meeting':'default');
+  const b=BANDS[e.cat]||BANDS.FYI;
+  const join = e.join ? `<div class="joinBtn" onclick="toast('Opening ${e.join==='zoom'?'Zoom':'meeting'}…')">${svg('video','ic')} Join ${e.join==='zoom'?'Zoom':'Meeting'}</div>` : '';
+  const needsReply = ['Urgent','Action Needed','Client','Meeting'].includes(e.cat);
+  const next = needsReply ? `<div class="nextCard"><div class="h">${svg('sparkles','ic')} RECOMMENDED NEXT STEP</div><p>${nextStep(e)}</p></div>` : '';
+  const replies = needsReply ? smartReplies(e) : [];
+  const host=$('overlayHost');
+  const el=document.createElement('div');
+  el.className='reader'; el.id='readerEl';
+  el.innerHTML = `
+    <div class="rnav">
+      <button class="nb" onclick="closeReader()">${svg('back','ic')} Inbox</button>
+      <div class="ractions">
+        <button class="actIcon" onclick="vipToggle('${e.id}')" title="VIP">${starIcon(e.vip)}</button>
+        <button class="actIcon" onclick="afterAction('Snoozed')">${svg('clock','ic')}</button>
+        <button class="actIcon" onclick="afterAction('Archived')">${svg('archive','ic')}</button>
+      </div>
+    </div>
+    <div class="rbody">
+      <div class="hero" style="background:linear-gradient(135deg,${b.grad[0]},${b.grad[1]})">
+        <div class="hav">${initials(e.name)}</div>
+        <div><div class="hn">${e.name}</div><div class="he">${e.email}</div></div>
+      </div>
+      <div class="subjectBar"><div class="sj">${e.subject}</div>
+        <div class="tagsRow"><div class="tag" style="background:${b.tagBg};color:${b.tagFg}">${e.cat}</div>
+        ${e.vip?'<div class="tag" style="background:#FFF8E1;color:#C77D00">⭐ VIP</div>':''}</div>
+      </div>
+      ${join}
+      <div class="aiCard"><div class="h">${svg('sparkles','ic')} SCALEMAIL SUMMARY</div><p>${e.summary}</p></div>
+      ${next}
+      <div class="letter">${e.body}</div>
+      ${replies.length?`<div class="smartReplies"><div class="srLbl">${svg('sparkles','ic')} SMART REPLIES</div>
+        ${replies.map(r=>`<button class="sr" onclick="openCompose('${e.id}',\`${r.replace(/`/g,'')}\`)">${r}</button>`).join('')}</div>`:''}
+    </div>
+    <div class="replyBar"><button class="replyBtn" onclick="openCompose('${e.id}')">${svg('reply','ic')} Reply</button></div>`;
+  host.appendChild(el);
+  requestAnimationFrame(()=>el.classList.add('in'));
+  $('ub') && ($('ub').textContent=unread());
+}
+function closeReader(){ const el=$('readerEl'); if(!el) return; el.classList.remove('in');
+  setTimeout(()=>el.remove(),280); setPalette('default'); renderInbox(); }
+function starIcon(on){ return `<svg class="ic" viewBox="0 0 24 24" fill="${on?'#FF9F0A':'none'}" stroke="${on?'#FF9F0A':'currentColor'}"><path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.5 9.9 9.1 9z"/></svg>`; }
+function vipToggle(id){ const e=findEmail(id); e.vip=!e.vip; toast(e.vip?'Added to VIPs':'Removed from VIPs');
+  const btn=document.querySelector('#readerEl .actIcon'); if(btn) btn.innerHTML=starIcon(e.vip); }
+function afterAction(label){ closeReader(); toast(label); }
+
+function nextStep(e){
+  const m={
+    Urgent:'Reply today confirming you’ll review and give a firm time — this one has a hard deadline.',
+    'Action Needed':'Send a one-line yes/no so they can plan around your answer.',
+    Client:'Make the small edit they asked for and reply with the updated version.',
+    Meeting:'Accept the invite and add it to your calendar so the time is blocked.',
+  };
+  return m[e.cat]||'No action needed — this is informational.';
+}
+function smartReplies(e){
+  if(e.cat==='Meeting') return ['Confirmed — see you Thursday at 2.','Can we push 30 minutes later?'];
+  if(e.cat==='Client') return ['On it — sending the revised version today.','Looks good, one quick question first.'];
+  if(e.cat==='Urgent') return ['Reviewing now, you’ll have it by 4pm.','Got it — let me loop in the team and revert.'];
+  return ['Sounds good, works for me!','Let me check and get back to you.'];
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TRIAGE deck (overlay, swipeable)
+   ════════════════════════════════════════════════════════════════════════════ */
+let triageQueue=[], triageIndex=0;
+function openTriage(){
+  triageQueue = INBOX.filter(e=>e.read===false); triageIndex=0;
+  if(!triageQueue.length) triageQueue = INBOX.slice(0,6);
+  setPalette('default');
+  const host=$('overlayHost');
+  const el=document.createElement('div'); el.className='triageWrap'; el.id='triageEl';
+  el.innerHTML=`
+    <div class="tnav"><button class="nb" onclick="closeTriage()">${svg('back','ic')} Done</button>
+      <div style="font-size:17px;font-weight:800">Triage</div><div style="width:64px"></div></div>
+    <div class="progress"><div class="ptrack"><div class="pfill" id="pfill"></div></div>
+      <div class="plabel" id="plabel"></div></div>
+    <div class="deck" id="deck"></div>
+    <div class="tactions" id="tactions">
+      <div class="tact" onclick="swipeBtn('left')">${svg('archive','ic')}<span class="tl">Archive</span></div>
+      <div class="tact" onclick="swipeBtn('up')">${svg('clock','ic')}<span class="tl">Snooze</span></div>
+      <div class="tact" onclick="swipeBtn('right')">${svg('check','ic')}<span class="tl">Mark read</span></div>
+    </div>`;
+  host.appendChild(el);
+  renderDeck();
+}
+function closeTriage(){ const el=$('triageEl'); if(el) el.remove(); switchTab('Inbox'); }
+function renderDeck(){
+  const deck=$('deck'); if(!deck) return;
+  const total=triageQueue.length;
+  $('pfill').style.width = `${(triageIndex/total)*100}%`;
+  $('plabel').textContent = triageIndex>=total ? 'All clear' : `${triageIndex} of ${total} cleared`;
+  if(triageIndex>=total){
+    $('tactions').style.visibility='hidden';
+    deck.innerHTML=`<div class="tdone"><div class="big">${svg('check','ic')=='' ?'':'<svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>'}</div>
+      <h2>Inbox zero 🎉</h2><p>You triaged ${total} emails. Everything’s sorted — enjoy the clear inbox.</p></div>`;
+    return;
+  }
+  $('tactions').style.visibility='visible';
+  // render up to 2 stacked cards (top + peek)
+  deck.innerHTML='';
+  for(let k=Math.min(triageIndex+1,total-1); k>=triageIndex; k--){
+    const e=triageQueue[k]; const b=BANDS[e.cat]||BANDS.FYI;
+    const top=k===triageIndex;
+    const card=document.createElement('div'); card.className='tcard';
+    card.style.zIndex=100-k;
+    if(!top){ card.style.transform='scale(.94) translateY(14px)'; card.style.filter='brightness(.8)'; }
+    card.innerHTML=`
+      <div class="tband" style="background:linear-gradient(90deg,${b.grad[0]},${b.grad[1]})"></div>
+      <div class="swipeHint left">Archive</div><div class="swipeHint right">Read</div><div class="swipeHint up">Snooze</div>
+      <div class="tinner">
+        <div class="trow1">
+          <div class="tav" style="background:${avColor(e.name)}">${initials(e.name)}</div>
+          <div><div class="tname">${e.name}</div><div class="temail">${e.email}</div></div>
+          <div class="tpill" style="background:${b.strip}1f;color:${b.strip}">${e.rank>0?e.rank.toFixed(1):''} ${e.cat==='Urgent'?'🔥':''}</div>
+        </div>
+        <div class="tsubject">${e.subject}</div>
+        <div class="ttag" style="background:${b.tagBg};color:${b.tagFg}">${e.cat}</div>
+        <div class="tsummary">${e.summary}</div>
+        <div class="treason"><div style="color:#7c3aed">${svg('sparkles','ic')}</div><div class="rt"><b>Why it’s here:</b> ${e.reason}</div></div>
+      </div>`;
+    deck.appendChild(card);
+    if(top) attachSwipe(card);
+  }
+}
+function attachSwipe(card){
+  let sx=0,sy=0,dx=0,dy=0,drag=false;
+  const hintL=card.querySelector('.swipeHint.left'), hintR=card.querySelector('.swipeHint.right'), hintU=card.querySelector('.swipeHint.up');
+  const down=(x,y)=>{ drag=true; sx=x; sy=y; card.style.transition='none'; };
+  const move=(x,y)=>{ if(!drag) return; dx=x-sx; dy=y-sy;
+    card.style.transform=`translate(${dx}px,${dy}px) rotate(${dx*0.05}deg)`;
+    hintR.style.opacity = dx>40 ? Math.min(1,dx/120):0;
+    hintL.style.opacity = dx<-40 ? Math.min(1,-dx/120):0;
+    hintU.style.opacity = dy<-40 && Math.abs(dx)<60 ? Math.min(1,-dy/120):0;
+  };
+  const up=()=>{ if(!drag) return; drag=false; card.style.transition='transform .3s ease, opacity .3s ease';
+    const TH=95;
+    if(dx>TH) fly(card,'right'); else if(dx<-TH) fly(card,'left'); else if(dy<-TH) fly(card,'up');
+    else { card.style.transform=''; hintL.style.opacity=hintR.style.opacity=hintU.style.opacity=0; }
+    dx=dy=0;
+  };
+  card.addEventListener('mousedown',e=>down(e.clientX,e.clientY));
+  window.addEventListener('mousemove',e=>move(e.clientX,e.clientY));
+  window.addEventListener('mouseup',up);
+  card.addEventListener('touchstart',e=>down(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
+  card.addEventListener('touchmove',e=>move(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
+  card.addEventListener('touchend',up);
+}
+function fly(card,dir){
+  const x = dir==='right'?600:dir==='left'?-600:0;
+  const y = dir==='up'?-800:0;
+  card.style.transform=`translate(${x}px,${y}px) rotate(${x*0.05}deg)`; card.style.opacity='0';
+  const e=triageQueue[triageIndex];
+  if(e) e.read=true;
+  triageIndex++;
+  toast(dir==='right'?'Marked read':dir==='left'?'Archived':'Snoozed 3h');
+  setTimeout(renderDeck,180);
+}
+function swipeBtn(dir){ const top=$('deck')?.querySelector('.tcard'); if(top) fly(top,dir); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CALENDAR / DIGEST / HEALTH  (full screens)
+   ════════════════════════════════════════════════════════════════════════════ */
+function fullScreen(id, html, pal='default'){
+  setPalette(pal);
+  const host=$('overlayHost');
+  const el=document.createElement('div'); el.className='fscreen'; el.id=id;
+  el.innerHTML=html; host.appendChild(el);
+  requestAnimationFrame(()=>el.classList.add('in'));
+}
+function closeFull(id){ const el=$(id); if(!el) return; el.classList.remove('in'); setTimeout(()=>el.remove(),280); setPalette('default'); }
+
+function openCalendar(){
+  const week=[['MON',22],['TUE',23],['WED',24,true],['THU',25],['FRI',26],['SAT',27],['SUN',28]];
+  const days={};
+  EVENTS.forEach(ev=>{ (days[ev.day]=days[ev.day]||[]).push(ev); });
+  const evHTML=(ev)=>{ const b=BANDS[ev.cat]||BANDS.Meeting;
+    const pill = ev.status?`<span class="pill2" style="background:rgba(16,185,129,.16);color:#34d399">${ev.status}</span>`:'';
+    return `<div class="evCard"><div class="eb" style="background:${b.strip}"></div><div class="ebody">
+      ${pill}${pill?'<br>':''}<div class="et">${ev.time}</div><div class="es">${ev.subject}</div>
+      <div class="em">${svg('person','ic')=='' ?'':'<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>'} ${ev.who}</div>
+      ${ev.join?`<div class="ej" onclick="toast('Opening meeting…')">${svg('video','ic')} Join</div>`:''}
+    </div></div>`; };
+  let body='';
+  for(const d of ['Today','Tomorrow','Wed, Jun 24','Thu, Jun 25']){
+    if(!days[d]) continue;
+    body+=`<div class="sectionHead">${d}</div>${days[d].map(evHTML).join('')}`;
+  }
+  fullScreen('calEl', `
+    <div class="fnav"><button class="nb" onclick="closeFull('calEl')">${svg('back','ic')} Back</button>
+      <div class="ft">Calendar</div><div style="width:64px"></div></div>
+    <div class="fbody">
+      <div class="week">${week.map(d=>`<div class="day ${d[2]?'today':''}"><div class="dl">${d[0]}</div>
+        <div class="dc">${d[1]}</div>${(d[2]||d[1]==22||d[1]==25)?'<div class="dot2"></div>':'<div style="height:5px"></div>'}</div>`).join('')}</div>
+      ${body}
+    </div>`,'meeting');
+}
+
+function openDigest(){
+  fullScreen('digEl', `
+    <div class="fnav"><button class="nb" onclick="closeFull('digEl')">${svg('back','ic')} Back</button>
+      <div class="ft">Daily Digest</div><div style="width:64px"></div></div>
+    <div class="fbody">
+      <div class="dHeader"><h2>Good morning, Cameron ☀️</h2><div class="sub">Friday, June 20 · here’s what matters today</div></div>
+      <div class="statRow">
+        <div class="statBox"><div class="v">${unread()}</div><div class="l">New</div></div>
+        <div class="statBox"><div class="v" style="color:#ff6b6b">3</div><div class="l">Need action</div></div>
+        <div class="statBox"><div class="v" style="color:#7fb4ff">2</div><div class="l">Meetings</div></div>
+      </div>
+      <div class="dSection">Needs you today</div>
+      <div class="actItem" onclick="toast('Opening Priya\\'s email')"><div class="num">1</div><div><div class="at">Priya Nair — term sheet redlines</div><div class="ad">Investor needs your edits before end of day.</div></div></div>
+      <div class="actItem" onclick="toast('Opening Sarah\\'s email')"><div class="num">2</div><div><div class="at">Sarah Chen — Q2 sign-off</div><div class="ad">Approve the revenue report before Friday’s board meeting.</div></div></div>
+      <div class="actItem" onclick="toast('Opening Marcus\\'s email')"><div class="num">3</div><div><div class="at">Marcus Lee — proposal edit</div><div class="ad">Soften pricing language on page 4 and resend.</div></div></div>
+      <div class="dSection">The brief</div>
+      <div class="digestPara"><b>Two meetings today:</b> a partnership call with James at 2 PM (Zoom) and a design review at 4 PM. Both are on your calendar.</div>
+      <div class="digestPara"><b>Quiet wins:</b> Stripe receipt and an approved $3,400 invoice were filed automatically — nothing needed from you. 6 newsletters were sorted out of your inbox.</div>
+    </div>`);
+}
+
+function openHealth(){
+  fullScreen('healthEl', `
+    <div class="fnav"><button class="nb" onclick="closeFull('healthEl')">${svg('back','ic')} Back</button>
+      <div class="ft">Inbox Health</div><div style="width:64px"></div></div>
+    <div class="fbody">
+      <div class="hRing">${ring(82)}</div>
+      <div style="text-align:center;font-size:14px;color:rgba(255,255,255,.6);margin-bottom:10px">Inbox health is <b style="color:#34d399">great</b> this week</div>
+      <div class="hStat"><div class="hl">Reply rate (direct mail)</div><div class="hv">91%</div></div>
+      <div class="hStat"><div class="hl">Avg. response time</div><div class="hv">2.4 hrs</div></div>
+      <div class="hStat"><div class="hl">Auto-sorted this week</div><div class="hv">148 emails</div></div>
+      <div class="hStat"><div class="hl">Hours saved (est.)</div><div class="hv">5.2 hrs</div></div>
+      <div class="hStat"><div class="hl">Inbox zero streak</div><div class="hv">4 days</div></div>
+    </div>`);
+}
+function ring(pct){
+  const r=54,c=2*Math.PI*r,off=c*(1-pct/100);
+  return `<svg width="140" height="140" viewBox="0 0 140 140">
+    <circle cx="70" cy="70" r="${r}" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="12"/>
+    <circle cx="70" cy="70" r="${r}" fill="none" stroke="#34d399" stroke-width="12" stroke-linecap="round"
+      stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 70 70)"/>
+    <text x="70" y="78" text-anchor="middle" fill="#fff" font-size="30" font-weight="800">${pct}</text></svg>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SHEETS: compose + profile
+   ════════════════════════════════════════════════════════════════════════════ */
+function openSheet(html){ $('sheet').innerHTML=html; $('sheetWrap').classList.add('in'); }
+function closeSheet(){ $('sheetWrap').classList.remove('in'); }
+
+function openCompose(replyId, prefill){
+  const e = replyId ? findEmail(replyId) : null;
+  const to = e ? e.email : '';
+  const subj = e ? (e.subject.startsWith('Re:')?e.subject:'Re: '+e.subject) : '';
+  openSheet(`
+    <div class="grab"></div>
+    <div class="sheetHead"><div class="st">${e?'Reply':'New message'}</div>
+      <button class="sx" onclick="closeSheet()">${svg('close','ic')}</button></div>
+    <div class="sheetBody">
+      <div class="field"><div class="fv"><span style="color:var(--dim);font-size:14px">To</span><input value="${to}" placeholder="name@email.com"/></div></div>
+      <div class="field"><div class="fv"><span style="color:var(--dim);font-size:14px">Subject</span><input value="${subj}" placeholder="Subject"/></div></div>
+      <textarea class="composeBody" placeholder="Write your message…">${prefill||''}</textarea>
+      <div class="aiSuggest" onclick="aiDraft()">${spark()} Draft with AI</div>
+      <div class="sendRow"><button class="sendBtn" onclick="sendMail()">${svg('send','ic')} Send</button></div>
+    </div>`);
+}
+function aiDraft(){
+  const ta=document.querySelector('.composeBody');
+  if(ta) ta.value = "Hi,\n\nThanks for the note — this works for me. I’ll get you what you need by end of day and follow up if anything changes.\n\nBest,\nCameron";
+  toast('AI drafted a reply ✨');
+}
+function sendMail(){ closeSheet(); toast('Message sent ✓'); }
+function openSignature(){ toast('Opening signature editor…'); }
+function openSettings(){ toast('Opening settings…'); }
+
+function openProfile(){
+  const row=(ic,t,fn,color)=>`<div class="prow" onclick="${fn}"><div class="pri" style="background:${color}22;color:${color}">${svg(ic,'ic')}</div><div class="prt">${t}</div><div class="prc">${svg('chevron','ic')}</div></div>`;
+  openSheet(`
+    <div class="grab"></div>
+    <div class="sheetHead"><div class="st">Account</div><button class="sx" onclick="closeSheet()">${svg('close','ic')}</button></div>
+    <div class="sheetBody">
+      <div class="pProfile"><div class="pav">CG</div><div><div class="pn">Cameron Graff</div><div class="pe">cameron@scalembs.com</div></div></div>
+      ${row('calendar','Calendar','closeSheet();openCalendar()','#4338CA')}
+      ${row('sun','Daily Digest','closeSheet();openDigest()','#F59E0B')}
+      ${row('heart','Inbox Health','closeSheet();openHealth()','#10B981')}
+      ${row('sig','Email Signature','closeSheet();openSignature()','#0071E3')}
+      ${row('play','Replay Tutorial','closeSheet();startTour()','#7C3AED')}
+      ${row('settings','Settings','closeSheet();openSettings()','#8E8E93')}
+    </div>`);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   HELPERS
+   ════════════════════════════════════════════════════════════════════════════ */
+function setPalette(p){ $('screen').dataset.pal=p; }
+function closeAllOverlays(){ ['readerEl','triageEl','calEl','digEl','healthEl'].forEach(id=>{const el=$(id); if(el) el.remove();}); $('overlayHost').innerHTML=''; }
+let toastT;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('in'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('in'),1700); }
+
+/* clock */
+function tick(){ const d=new Date(); let h=d.getHours(), m=d.getMinutes();
+  $('clock').textContent = `${h%12||12}:${String(m).padStart(2,'0')}`; }
+setInterval(tick,10000);
+
+/* particles */
+(function(){ const host=$('particles'); for(let i=0;i<26;i++){ const p=document.createElement('div'); p.className='pt';
+  const x=Math.random()*100, dur=18+Math.random()*22, delay=-Math.random()*dur, size=1+Math.random()*2.5;
+  p.style.left=x+'%'; p.style.bottom='-10px'; p.style.width=p.style.height=size+'px'; p.style.opacity=0.2+Math.random()*0.5;
+  p.style.animation=`floatUp ${dur}s linear ${delay}s infinite`; host.appendChild(p);
+}})();
+const styleEl=document.createElement('style');
+styleEl.textContent='@keyframes floatUp{0%{transform:translateY(0);opacity:0}10%{opacity:.6}90%{opacity:.5}100%{transform:translateY(-760px);opacity:0}}';
+document.head.appendChild(styleEl);
+
+/* scale device to fit viewport height */
+function fit(){ const vh=window.innerHeight, scale=Math.min(1,(vh-40)/844); document.documentElement.style.setProperty('--scale',scale); }
+window.addEventListener('resize',fit); fit();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   GUIDED TOUR
+   ════════════════════════════════════════════════════════════════════════════ */
+const TOUR=[
+  { sel:'.wordmark', title:'Your inbox at a glance', body:'The unread badge updates in real time as new mail arrives.' },
+  { sel:'#aiToggle', title:'Ask your inbox', body:'Flip on AI Ask and pose a question — “what needs a reply today?” — and get an answer with the matching emails.' },
+  { sel:'#chips', title:'Smart filter chips', body:'AI tags every email — Urgent, Action Needed, Meeting, Client. The red badges show live counts.' },
+  { sel:'#listHost .row:first-child', title:'Color-coded rows', body:'The colored strip and rank tell you what each email is, and how much it matters, at a glance.' },
+  { sel:'#triageBanner', title:'Swipe triage', body:'Clear the backlog one card at a time — swipe to read, archive, or snooze.' },
+  { sel:'#tabbar', title:'Everything one tap away', body:'Inbox, Starred, Sent, Drafts and a center Compose. Your avatar opens Calendar, Digest and Inbox Health.' },
+];
+let tourI=0;
+function startTour(){ switchTab('Inbox'); closeSheet(); tourI=0; $('tour').classList.add('in'); showTourStep(); }
+function endTour(){ $('tour').classList.remove('in'); }
+function showTourStep(){
+  const step=TOUR[tourI]; const el=document.querySelector(step.sel);
+  const spot=$('spot'), tip=$('tip');
+  if(el){ const dr=$('device').getBoundingClientRect(), r=el.getBoundingClientRect(), sc=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scale'))||1;
+    // convert to screen-local (device) coords
+    const sx=(r.left-dr.left)/sc, sy=(r.top-dr.top)/sc, sw=r.width/sc, sh=r.height/sc;
+    spot.style.left=(sx-6)+'px'; spot.style.top=(sy-6)+'px'; spot.style.width=(sw+12)+'px'; spot.style.height=(sh+12)+'px';
+    const below = sy < 380;
+    tip.style.top = below ? (sy+sh+18)+'px' : '';
+    tip.style.bottom = below ? '' : (844-sy+18)+'px';
+  } else { spot.style.width=spot.style.height='0'; tip.style.top='300px'; tip.style.bottom=''; }
+  const last=tourI===TOUR.length-1;
+  tip.innerHTML=`<div class="tipDots">${TOUR.map((_,i)=>`<i class="${i===tourI?'on':''}"></i>`).join('')}</div>
+    <div class="tc">STEP ${tourI+1} OF ${TOUR.length}</div><h3>${step.title}</h3><p>${step.body}</p>
+    <div class="trow"><button class="skip" onclick="endTour()">Skip</button>
+      <button class="next" onclick="nextTour()">${last?'Done':'Next'}</button></div>`;
+}
+function nextTour(){ tourI++; if(tourI>=TOUR.length){ endTour(); return; } showTourStep(); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BOOT
+   ════════════════════════════════════════════════════════════════════════════ */
+tick(); renderTabs(); renderInbox();
+/* auto-launch the tour shortly after load for the keynote */
+setTimeout(()=>{ let seen=false; try{ seen=sessionStorage.getItem('seen'); }catch(e){}
+  if(!seen){ startTour(); try{ sessionStorage.setItem('seen','1'); }catch(e){} } }, 900);
+</script>
+</body>
+</html>
