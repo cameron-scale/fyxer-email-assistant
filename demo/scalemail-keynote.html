@@ -357,6 +357,134 @@
   .hintBtn{position:fixed;bottom:18px;right:18px;background:rgba(255,255,255,.08);border:1px solid var(--line);color:#fff;
     border-radius:12px;padding:9px 14px;font-size:12.5px;cursor:pointer;z-index:200;backdrop-filter:blur(8px)}
   @media(max-width:1099px){.hintBtn{display:none}}
+
+  /* header menu button + account pill */
+  .hdrBtn{width:38px;height:38px;border-radius:11px;background:var(--fill);border:1px solid var(--line);color:#fff;display:grid;place-items:center;cursor:pointer}
+  .acctPill{display:inline-flex;align-items:center;gap:7px;margin:0 16px 12px;background:var(--fill);border:1px solid var(--line);
+    border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;color:#fff;cursor:pointer}
+  .acctPill .adot{width:8px;height:8px;border-radius:50%}
+
+  /* drawer */
+  .drawer{position:absolute;inset:0;z-index:55;display:none}
+  .drawer.in{display:block}
+  .drawer .dbk{position:absolute;inset:0;background:rgba(0,0,0,.5);opacity:0;transition:.25s}
+  .drawer.in .dbk{opacity:1}
+  .drawerPanel{position:absolute;top:0;bottom:0;left:0;width:300px;background:#0d1224;border-right:1px solid var(--line);
+    transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow-y:auto;padding:46px 0 20px}
+  .drawer.in .drawerPanel{transform:translateX(0)}
+  .drawerPanel::-webkit-scrollbar{display:none}
+  .dHead{padding:6px 18px 10px;font-size:11px;font-weight:800;letter-spacing:1px;color:var(--dim);text-transform:uppercase}
+  .acctRow{display:flex;align-items:center;gap:11px;padding:10px 18px;cursor:pointer}
+  .acctRow.on{background:rgba(0,113,227,.12)}
+  .acctRow .alogo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px;flex:none}
+  .acctRow .an{font-size:14px;font-weight:700}
+  .acctRow .ae{font-size:11.5px;color:var(--dim);margin-top:1px}
+  .acctRow .au{margin-left:auto;background:var(--blue);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:2px 7px}
+  .drawerDiv{height:1px;background:var(--line);margin:10px 18px}
+  .folderRow{display:flex;align-items:center;gap:13px;padding:11px 18px;cursor:pointer;color:rgba(255,255,255,.85)}
+  .folderRow:active{background:rgba(255,255,255,.05)}
+  .folderRow .fn{flex:1;font-size:14.5px;font-weight:600}
+  .folderRow .fc{font-size:12px;color:var(--dim);font-weight:700}
+  .ldot{width:11px;height:11px;border-radius:3px;flex:none}
+
+  /* more-menu popover */
+  .moreMenu{position:absolute;top:50px;right:10px;background:#161b2e;border:1px solid var(--line);border-radius:14px;
+    padding:6px;z-index:42;box-shadow:0 16px 40px rgba(0,0,0,.55);min-width:208px}
+  .mItem{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:9px;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+  .mItem:active{background:rgba(255,255,255,.07)}
+  .mItem.danger{color:#ff6b6b}
+  .moreCatcher{position:absolute;inset:0;z-index:41}
+
+  /* sheet option rows */
+  .optRow{display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+  .optRow .ol{font-size:15px;font-weight:600}
+  .optRow .ot{font-size:13px;color:var(--dim)}
+  .relStat{display:flex;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--line)}
+  .relStat .rl{font-size:14px;color:var(--dim)} .relStat .rv{font-size:14px;font-weight:800}
+  .teachInput{width:100%;min-height:96px;background:var(--fill);border:1px solid var(--line);border-radius:14px;
+    padding:13px;color:#fff;font-size:14.5px;line-height:1.5;outline:none;resize:none;margin-top:6px}
+  .teachInput::placeholder{color:var(--faint)}
+  .chipPick{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chipPick .cp{background:var(--fill);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:13px;font-weight:600;color:rgba(255,255,255,.75);cursor:pointer}
+
+  /* attachments */
+  .attachWrap{padding:6px 18px 4px}
+  .attachChip{display:flex;align-items:center;gap:11px;background:var(--surface2);border:1px solid var(--hair);border-radius:12px;
+    padding:11px 13px;cursor:pointer;margin-bottom:8px}
+  .attachChip .aIcon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff}
+  .attachChip .anm{font-size:13.5px;font-weight:700;color:var(--ink)}
+  .attachChip .asz{font-size:12px;color:var(--ink3);margin-top:1px}
+
+  /* thread */
+  .threadHead{margin:14px 18px 2px;font-size:11.5px;font-weight:800;letter-spacing:.4px;color:var(--ink3);display:flex;align-items:center;gap:7px}
+  .tmsg{margin:8px 18px 0;background:var(--surface2);border:1px solid var(--hair);border-radius:13px;padding:12px 13px}
+  .tmsg .tmh{display:flex;justify-content:space-between;font-size:12.5px}
+  .tmsg .tmw{font-weight:800;color:var(--ink)} .tmsg .tmt{color:var(--ink3)}
+  .tmsg .tmb{font-size:13px;color:#3a3a3d;margin-top:5px;line-height:1.45}
+
+  /* attachment viewer modal */
+  .docModal{position:absolute;inset:0;z-index:60;background:rgba(0,0,0,.7);display:none;flex-direction:column}
+  .docModal.in{display:flex}
+  .docBar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;color:#fff}
+  .docPage{flex:1;margin:0 16px 20px;background:#fff;border-radius:12px;padding:24px;overflow-y:auto;color:#1d1d1f}
+  .docPage h4{font-size:18px;font-weight:800} .docPage p{font-size:13px;line-height:1.7;color:#48484A;margin-top:10px}
+  .docPage .rowln{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:9px 0;font-size:13px}
+
+  /* onboarding */
+  .ob{position:absolute;inset:0;z-index:70;background:#0a0e1c;display:none;flex-direction:column}
+  .ob.in{display:flex}
+  .obBody{flex:1;overflow-y:auto;padding:24px 22px}
+  .obBody::-webkit-scrollbar{display:none}
+  .obLogo{width:78px;height:78px;border-radius:22px;background:linear-gradient(135deg,#3A82F6,#0055CC);display:grid;place-items:center;margin:24px auto 0}
+  .obWord{text-align:center;font-size:34px;font-weight:800;margin-top:18px}
+  .obWord .b{color:#3a9bff}
+  .obTag{text-align:center;color:#3a9bff;font-weight:700;margin-top:4px}
+  .obDesc{text-align:center;color:rgba(255,255,255,.62);font-size:14.5px;line-height:1.55;margin-top:16px}
+  .obH{font-size:23px;font-weight:800;margin-top:6px}
+  .obSub{color:rgba(255,255,255,.55);font-size:14px;line-height:1.45;margin-top:8px;margin-bottom:18px}
+  .obGrid{display:flex;flex-wrap:wrap;gap:9px}
+  .obChip{background:var(--fill);border:1px solid var(--line);border-radius:999px;padding:10px 15px;font-size:14px;font-weight:600;color:rgba(255,255,255,.72);cursor:pointer}
+  .obChip.on{background:rgba(0,113,227,.2);border-color:var(--blue);color:#fff}
+  .obCard{background:var(--fill);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;cursor:pointer}
+  .obCard.on{background:rgba(0,113,227,.16);border-color:var(--blue)}
+  .obCard .ocn{font-size:16px;font-weight:800;display:flex;align-items:center;gap:9px}
+  .obCard .ocd{font-size:13.5px;color:rgba(255,255,255,.6);line-height:1.45;margin-top:7px}
+  .obProv{display:flex;align-items:center;gap:13px;background:var(--fill);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer}
+  .obProv .opl{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:#fff;font-weight:800;flex:none}
+  .obProv .opn{font-size:15px;font-weight:700;flex:1}
+  .obProv .opc{font-size:13px;font-weight:800;color:#34d399}
+  .obFoot{padding:14px 22px 24px;border-top:1px solid var(--line)}
+  .obBtn{width:100%;background:var(--blue);color:#fff;border:none;border-radius:14px;padding:15px;font-size:16px;font-weight:800;cursor:pointer}
+  .obSkip{display:block;margin:14px auto 0;color:rgba(255,255,255,.5);font-size:13px;background:none;border:none;cursor:pointer}
+  .obProgress{display:flex;gap:7px;justify-content:center;padding:6px 0 14px}
+  .obProgress i{width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,.2)}
+  .obProgress i.on{width:22px;background:var(--blue)}
+  .obBigNum{text-align:center;font-size:52px;font-weight:800;letter-spacing:-1px}
+  .obReady{width:96px;height:96px;border-radius:50%;background:#22c55e;display:grid;place-items:center;margin:10px auto 0}
+  .obStatRow{display:flex;gap:10px;margin-top:24px}
+  .obStat{flex:1;background:var(--fill);border:1px solid var(--line);border-radius:14px;padding:14px 8px;text-align:center}
+  .obStat .v{font-size:20px;font-weight:800} .obStat .l{font-size:11px;color:var(--dim);margin-top:3px;font-weight:600}
+
+  /* categories / bulk / signature */
+  .catRow{display:flex;align-items:center;gap:13px;padding:14px 4px;border-bottom:1px solid var(--line)}
+  .catRow .cdot{width:15px;height:15px;border-radius:4px;flex:none}
+  .catRow .cn{flex:1;font-size:15px;font-weight:700}
+  .catRow .cc{font-size:12.5px;color:var(--dim);margin-top:1px}
+  .addBtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--fill);border:1px dashed var(--line);
+    color:#7fb4ff;border-radius:14px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;margin-top:16px}
+  .bulkBucket{display:flex;align-items:center;gap:13px;background:var(--fill);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:11px}
+  .bulkBucket .bi{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex:none;color:#fff}
+  .bulkBucket .bn{font-size:15px;font-weight:700}
+  .bulkBucket .bd{font-size:12.5px;color:var(--dim);margin-top:1px}
+  .bulkBucket .bbtn{margin-left:auto;background:rgba(255,255,255,.1);border:1px solid var(--line);color:#fff;border-radius:10px;padding:8px 13px;font-size:12.5px;font-weight:700;cursor:pointer}
+  .sigCard{background:#fff;border-radius:16px;padding:20px;margin:12px 0 16px;color:#1d1d1f;overflow:hidden}
+  .sigName{font-size:18px;font-weight:800} .sigTitle{font-size:13.5px;color:#0071E3;font-weight:700;margin-top:2px}
+  .sigContact{font-size:13px;color:#48484A;margin-top:12px;line-height:1.7}
+  .sigPhoto{width:58px;height:58px;border-radius:29px;background:linear-gradient(135deg,#3A82F6,#0055CC);display:grid;place-items:center;color:#fff;font-weight:800;font-size:21px;float:right;margin-left:12px}
+  .styleRow{display:flex;gap:9px;overflow-x:auto;padding-bottom:6px}
+  .styleRow::-webkit-scrollbar{display:none}
+  .styleChip{flex:none;background:var(--fill);border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:13px;font-weight:700;color:rgba(255,255,255,.8);cursor:pointer}
+  .styleChip.on{background:rgba(0,113,227,.2);border-color:var(--blue);color:#fff}
 </style>
 </head>
 <body>
@@ -552,7 +680,21 @@ const P = {
   location:'<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 6l10 7 10-7"/>',
   check:'<path d="M20 6L9 17l-5-5"/>',
+  menu:'<path d="M3 6h18M3 12h18M3 18h18"/>',
+  forward:'<path d="M15 17l5-5-5-5"/><path d="M20 12H9a5 5 0 0 0-5 5v1"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  photo:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+  swap:'<path d="M7 16V4M7 4L3.5 7.5M7 4l3.5 3.5M17 8v12M17 20l3.5-3.5M17 20l-3.5-3.5"/>',
+  doc:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
+  tag:'<path d="M20 10l-8-8H4v8l8 8z"/><circle cx="7.5" cy="7.5" r="1"/>',
+  broom:'<path d="M19 5l-7 7M5 21l4-4M9 13l2 2M6 16l2 2"/><path d="M9 17l-4 4-2-2 4-4z"/>',
+  eraser:'<path d="M3 17l6 6M8 21h11"/><path d="M9 13l6-6 6 6-7 7H6z"/>',
+  lock:'<rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
 };
+function dots(){ return '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>'; }
 function svg(name, cls='ic'){ return `<svg class="${cls}" viewBox="0 0 24 24">${P[name]||''}</svg>`; }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -562,16 +704,33 @@ let TAB = 'Inbox';           // Inbox | Starred | Sent | Drafts
 let FILTER = 'All';
 let AI_MODE = false;
 let AI_SHOWN = false;
+let ACCOUNT = 'all';         // all | outlook | gmail | icloud
 
 const $ = (id)=>document.getElementById(id);
 const main = ()=>$('mainScroll');
 
+// Multi-account: tag each inbox email with the mailbox it came from.
+const ACCOUNTS = [
+  { id:'all',     name:'All Inboxes', sub:'3 mailboxes',               logo:'∞', color:'#0071E3' },
+  { id:'outlook', name:'Scale MBS',   sub:'cameron@scalembs.com',      logo:'O', color:'#0A6BE0' },
+  { id:'gmail',   name:'Personal',    sub:'cameron.gallup@gmail.com',  logo:'G', color:'#EA4335' },
+  { id:'icloud',  name:'iCloud',      sub:'cameron@icloud.com',        logo:'', color:'#3b3b40' },
+];
+['outlook','outlook','outlook','outlook','outlook','gmail','outlook','outlook','gmail','gmail','icloud']
+  .forEach((a,i)=>{ if(INBOX[i]) INBOX[i].acct = a; });
+function currentAccount(){ return ACCOUNTS.find(a=>a.id===ACCOUNT) || ACCOUNTS[0]; }
+function inboxFor(){ return ACCOUNT==='all' ? INBOX : INBOX.filter(e=>e.acct===ACCOUNT); }
+
 function counts(){
   const c = { Urgent:0, 'Action Needed':0, Meeting:0, Client:0, Newsletter:0, FYI:0 };
-  INBOX.forEach(e=>{ if(e.read===false) c[e.cat]++; });
+  inboxFor().forEach(e=>{ if(e.read===false) c[e.cat]++; });
   return c;
 }
-function unread(){ return INBOX.filter(e=>e.read===false).length; }
+function unread(acct){
+  const list = (acct && acct!=='all') ? INBOX.filter(e=>e.acct===acct)
+             : (acct==='all') ? INBOX : inboxFor();
+  return list.filter(e=>e.read===false).length;
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    RENDER: tab bar
@@ -616,8 +775,9 @@ function renderInbox(){
   const c=counts();
   const chip=(k,label)=>{ const n=k==='All'?0:c[k]; const on=FILTER===k?'on':'';
     return `<div class="chip ${on}" onclick="setFilter('${k}')">${label}${n>0?`<span class="cnt">${n}</span>`:''}</div>`; };
-  let list = INBOX.slice();
+  let list = inboxFor().slice();
   if(FILTER!=='All') list = list.filter(e=>e.cat===FILTER);
+  const acc = currentAccount();
 
   const aiBanner = AI_SHOWN ? `<div class="aiAnswer">
       <div class="lbl">${spark()} ASKED YOUR INBOX</div>
@@ -626,9 +786,11 @@ function renderInbox(){
 
   main().innerHTML = `
     <div class="ihead">
+      <button class="hdrBtn" onclick="openDrawer()">${svg('menu','ic')}</button>
       <div class="wordmark"><span class="s">Scale</span><span class="m">Mail</span><span class="unreadBadge" id="ub">${unread()}</span></div>
       <button class="avatar" id="avatarBtn" onclick="openProfile()">CG</button>
     </div>
+    <div class="acctPill" onclick="openDrawer()"><span class="adot" style="background:${acc.color}"></span>${acc.name} · ${unread()} unread ▾</div>
     <div class="searchRow">
       <div class="searchBox ${AI_MODE?'ai':''}" id="searchBox">${AI_MODE?spark():svg('search','ic')}
         <input id="searchInput" placeholder="${AI_MODE?'Ask about your mail…':'Search all mail'}" onkeydown="if(event.key==='Enter')runAI()"/>
@@ -700,14 +862,15 @@ function openReader(id){
       <button class="nb" onclick="closeReader()">${svg('back','ic')} Inbox</button>
       <div class="ractions">
         <button class="actIcon" onclick="vipToggle('${e.id}')" title="VIP">${starIcon(e.vip)}</button>
-        <button class="actIcon" onclick="afterAction('Snoozed')">${svg('clock','ic')}</button>
+        <button class="actIcon" onclick="openSnooze('${e.id}')">${svg('clock','ic')}</button>
         <button class="actIcon" onclick="afterAction('Archived')">${svg('archive','ic')}</button>
+        <button class="actIcon" onclick="openMore('${e.id}')">${dots()}</button>
       </div>
     </div>
     <div class="rbody">
       <div class="hero" style="background:linear-gradient(135deg,${b.grad[0]},${b.grad[1]})">
-        <div class="hav">${initials(e.name)}</div>
-        <div><div class="hn">${e.name}</div><div class="he">${e.email}</div></div>
+        <div class="hav" style="cursor:pointer" onclick="openRel('${e.id}')">${initials(e.name)}</div>
+        <div style="cursor:pointer" onclick="openRel('${e.id}')"><div class="hn">${e.name}</div><div class="he">${e.email}</div></div>
       </div>
       <div class="subjectBar"><div class="sj">${e.subject}</div>
         <div class="tagsRow"><div class="tag" style="background:${b.tagBg};color:${b.tagFg}">${e.cat}</div>
@@ -716,7 +879,9 @@ function openReader(id){
       ${join}
       <div class="aiCard"><div class="h">${svg('sparkles','ic')} SCALEMAIL SUMMARY</div><p>${e.summary}</p></div>
       ${next}
+      ${threadBlock(e)}
       <div class="letter">${e.body}</div>
+      ${attachBlock(e)}
       ${replies.length?`<div class="smartReplies"><div class="srLbl">${svg('sparkles','ic')} SMART REPLIES</div>
         ${replies.map(r=>`<button class="sr" onclick="openCompose('${e.id}',\`${r.replace(/`/g,'')}\`)">${r}</button>`).join('')}</div>`:''}
     </div>
@@ -965,11 +1130,15 @@ function openProfile(){
     <div class="grab"></div>
     <div class="sheetHead"><div class="st">Account</div><button class="sx" onclick="closeSheet()">${svg('close','ic')}</button></div>
     <div class="sheetBody">
-      <div class="pProfile"><div class="pav">CG</div><div><div class="pn">Cameron Graff</div><div class="pe">cameron@scalembs.com</div></div></div>
+      <div class="pProfile"><div class="pav">CG</div><div><div class="pn">Cameron Gallup</div><div class="pe">cameron@scalembs.com</div></div></div>
+      ${row('menu','Mailboxes & folders','closeSheet();openDrawer()','#0071E3')}
       ${row('calendar','Calendar','closeSheet();openCalendar()','#4338CA')}
       ${row('sun','Daily Digest','closeSheet();openDigest()','#F59E0B')}
       ${row('heart','Inbox Health','closeSheet();openHealth()','#10B981')}
-      ${row('sig','Email Signature','closeSheet();openSignature()','#0071E3')}
+      ${row('tag','Categories','closeSheet();openCategories()','#1D4ED8')}
+      ${row('broom','Smart Cleanup','closeSheet();openBulk()','#059669')}
+      ${row('sig','Email Signature','closeSheet();openSignaturePreview()','#0071E3')}
+      ${row('play','Replay Setup','closeSheet();openOnboarding()','#0EA5B7')}
       ${row('play','Replay Tutorial','closeSheet();startTour()','#7C3AED')}
       ${row('settings','Settings','closeSheet();openSettings()','#8E8E93')}
     </div>`);
@@ -979,7 +1148,7 @@ function openProfile(){
    HELPERS
    ════════════════════════════════════════════════════════════════════════════ */
 function setPalette(p){ $('screen').dataset.pal=p; }
-function closeAllOverlays(){ ['readerEl','triageEl','calEl','digEl','healthEl'].forEach(id=>{const el=$(id); if(el) el.remove();}); $('overlayHost').innerHTML=''; }
+function closeAllOverlays(){ ['readerEl','triageEl','calEl','digEl','healthEl','drawerEl','obEl','catEl','bulkEl','sigEl','docModal','moreWrap'].forEach(id=>{const el=$(id); if(el) el.remove();}); $('overlayHost').innerHTML=''; }
 let toastT;
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('in'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('in'),1700); }
 
@@ -1007,6 +1176,7 @@ window.addEventListener('resize',fit); fit();
    ════════════════════════════════════════════════════════════════════════════ */
 const TOUR=[
   { sel:'.wordmark', title:'Your inbox at a glance', body:'The unread badge updates in real time as new mail arrives.' },
+  { sel:'.acctPill', title:'All your inboxes, unified', body:'Gmail, Outlook and iCloud in one list — tap to focus a single mailbox and browse its folders and labels.' },
   { sel:'#aiToggle', title:'Ask your inbox', body:'Flip on AI Ask and pose a question — “what needs a reply today?” — and get an answer with the matching emails.' },
   { sel:'#chips', title:'Smart filter chips', body:'AI tags every email — Urgent, Action Needed, Meeting, Client. The red badges show live counts.' },
   { sel:'#listHost .row:first-child', title:'Color-coded rows', body:'The colored strip and rank tell you what each email is, and how much it matters, at a glance.' },
@@ -1034,6 +1204,307 @@ function showTourStep(){
       <button class="next" onclick="nextTour()">${last?'Done':'Next'}</button></div>`;
 }
 function nextTour(){ tourI++; if(tourI>=TOUR.length){ endTour(); return; } showTourStep(); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ATTACHMENTS + THREADS  (reader add-ons)
+   ════════════════════════════════════════════════════════════════════════════ */
+(function(){
+  const byName=(n)=>INBOX.find(e=>e.name===n);
+  if(byName('Sarah Chen')) byName('Sarah Chen').attachments=[{name:'Q2-Revenue-Report.pdf',size:'248 KB',kind:'pdf'}];
+  if(byName('Marcus Lee')) byName('Marcus Lee').attachments=[{name:'Proposal-v4.pdf',size:'1.2 MB',kind:'pdf'},{name:'Pricing-grid.xlsx',size:'56 KB',kind:'xls'}];
+})();
+function attachBlock(e){
+  if(!e.attachments||!e.attachments.length) return '';
+  const tile=(a,i)=>{ const col=a.kind==='xls'?'#1d7a4d':'#d93a34';
+    return `<div class="attachChip" onclick="openAttachment('${e.id}',${i})">
+      <div class="aIcon" style="background:${col}">${svg('doc','ic')}</div>
+      <div><div class="anm">${a.name}</div><div class="asz">${a.size}</div></div></div>`; };
+  return `<div class="attachWrap"><div class="srLbl" style="margin:0 0 8px">${svg('doc','ic')} ${e.attachments.length} ATTACHMENT${e.attachments.length>1?'S':''}</div>
+    ${e.attachments.map(tile).join('')}</div>`;
+}
+function openAttachment(id,i){
+  const e=findEmail(id); const a=e&&e.attachments&&e.attachments[i]; if(!a) return;
+  const m=document.createElement('div'); m.className='docModal in'; m.id='docModal';
+  m.innerHTML=`<div class="docBar"><div style="font-size:14px;font-weight:700">${a.name}</div>
+      <button class="actIcon" style="color:#fff" onclick="closeDoc()">${svg('close','ic')}</button></div>
+    <div class="docPage">
+      <h4>${a.name.replace(/\.[a-z]+$/i,'')}</h4>
+      <p>Northwind Holdings — confidential. Prepared for the board, Q2 FY26.</p>
+      <div class="rowln"><span>Total revenue</span><b>$4.82M</b></div>
+      <div class="rowln"><span>Quarter over quarter</span><b>+18%</b></div>
+      <div class="rowln"><span>Gross margin</span><b>71%</b></div>
+      <div class="rowln"><span>Net new clients</span><b>34</b></div>
+      <p>This is a demo document rendered inside the in-app viewer — attachments open without ever leaving ScaleMail.</p>
+    </div>`;
+  $('overlayHost').appendChild(m);
+}
+function closeDoc(){ const m=$('docModal'); if(m) m.remove(); }
+
+function threadMessages(e){
+  const out=[]; const n=e.threadCount;
+  const samples=[
+    {you:false,t:'Wanted to get this in front of you before the week wraps.'},
+    {you:true ,t:'Thanks — taking a look now, will circle back shortly.'},
+    {you:false,t:'Appreciate it. Flag anything and we’ll adjust on our side.'},
+  ];
+  for(let i=0;i<n-1;i++){ const s=samples[i%samples.length];
+    out.push({who:s.you?'You':e.name, when:`${n-1-i}d ago`, text:s.t}); }
+  return out;
+}
+function threadBlock(e){
+  if(!(e.threadCount>1)) return '';
+  const msgs=threadMessages(e);
+  return `<div class="threadHead">${svg('mail','ic')} EARLIER IN THIS THREAD · ${e.threadCount} messages</div>
+    ${msgs.map(m=>`<div class="tmsg"><div class="tmh"><span class="tmw">${m.who}</span><span class="tmt">${m.when}</span></div>
+      <div class="tmb">${m.text}</div></div>`).join('')}`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MAILBOX DRAWER (accounts + folders)
+   ════════════════════════════════════════════════════════════════════════════ */
+function openDrawer(){
+  closeSheet();
+  const d=document.createElement('div'); d.className='drawer'; d.id='drawerEl';
+  const folders=[['Inbox','inbox',unread('all')],['Starred','star',0],['Sent','sent',0],['Drafts','drafts',1],['Archive','archive',0],['Junk','flame',3]];
+  const labels=[['Clients','#1D4ED8',5],['Investors','#7C3AED',2],['Receipts','#059669',12]];
+  const acctRow=(a)=>`<div class="acctRow ${ACCOUNT===a.id?'on':''}" onclick="switchAccount('${a.id}')">
+      <div class="alogo" style="background:${a.color}">${a.logo||''}</div>
+      <div><div class="an">${a.name}</div><div class="ae">${a.sub}</div></div>
+      ${unread(a.id)?`<div class="au">${unread(a.id)}</div>`:''}</div>`;
+  d.innerHTML=`<div class="dbk" onclick="closeDrawer()"></div>
+    <div class="drawerPanel">
+      <div class="dHead">Mailboxes</div>
+      ${ACCOUNTS.map(acctRow).join('')}
+      <div class="drawerDiv"></div>
+      <div class="dHead">Folders</div>
+      ${folders.map(f=>`<div class="folderRow" onclick="pickFolder('${f[0]}')">${svg(f[1],'ic')}<span class="fn">${f[0]}</span>${f[2]?`<span class="fc">${f[2]}</span>`:''}</div>`).join('')}
+      <div class="drawerDiv"></div>
+      <div class="dHead">Labels</div>
+      ${labels.map(l=>`<div class="folderRow" onclick="pickFolder('${l[0]}')"><span class="ldot" style="background:${l[1]}"></span><span class="fn">${l[0]}</span><span class="fc">${l[2]}</span></div>`).join('')}
+    </div>`;
+  $('overlayHost').appendChild(d);
+  requestAnimationFrame(()=>d.classList.add('in'));
+}
+function closeDrawer(){ const d=$('drawerEl'); if(!d) return; d.classList.remove('in'); setTimeout(()=>d.remove(),280); }
+function switchAccount(id){ ACCOUNT=id; FILTER='All'; closeDrawer(); switchTab('Inbox'); setTimeout(()=>toast(`Showing ${currentAccount().name}`),140); }
+function pickFolder(name){
+  closeDrawer();
+  if(name==='Starred'){ switchTab('Starred'); return; }
+  if(name==='Sent'){ switchTab('Sent'); return; }
+  if(name==='Drafts'){ switchTab('Drafts'); return; }
+  setTimeout(()=>toast(`Opening ${name}`),140);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   READER: more-menu, teach AI, snooze, relationship
+   ════════════════════════════════════════════════════════════════════════════ */
+function openMore(id){
+  const r=$('readerEl'); if(!r) return;
+  if($('moreWrap')){ closeMore(); return; }
+  const wrap=document.createElement('div'); wrap.id='moreWrap';
+  wrap.innerHTML=`<div class="moreCatcher" onclick="closeMore()"></div>
+    <div class="moreMenu">
+      <div class="mItem" onclick="openTeach('${id}')">${svg('sparkles','ic')} Teach AI about this</div>
+      <div class="mItem" onclick="closeMore();openCompose('${id}')">${svg('reply','ic')} Reply all</div>
+      <div class="mItem" onclick="closeMore();afterAction('Forwarded')">${svg('forward','ic')} Forward</div>
+      <div class="mItem" onclick="openMoveFolder('${id}')">${svg('folder','ic')} Move to folder</div>
+      <div class="mItem" onclick="markUnread('${id}')">${svg('mail','ic')} Mark unread</div>
+      <div class="mItem danger" onclick="closeMore();afterAction('Reported spam')">${svg('flame','ic')} Report spam</div>
+    </div>`;
+  r.appendChild(wrap);
+}
+function closeMore(){ const w=$('moreWrap'); if(w) w.remove(); }
+function markUnread(id){ const e=findEmail(id); if(e) e.read=false; closeMore(); closeReader(); toast('Marked unread'); }
+function openMoveFolder(id){
+  closeMore();
+  const folders=['Archive','Clients','Investors','Receipts','Junk'];
+  openSheet(`<div class="grab"></div>
+    <div class="sheetHead"><div class="st">Move to folder</div><button class="sx" onclick="closeSheet()">${svg('close','ic')}</button></div>
+    <div class="sheetBody">
+      ${folders.map(f=>`<div class="optRow" onclick="closeSheet();afterAction('Moved to ${f}')"><span class="ol">${f}</span>${svg('chevron','ic')}</div>`).join('')}
+    </div>`);
+}
+function openTeach(id){
+  closeMore(); const e=findEmail(id);
+  openSheet(`<div class="grab"></div>
+    <div class="sheetHead"><div class="st">Teach AI</div><button class="sx" onclick="closeSheet()">${svg('close','ic')}</button></div>
+    <div class="sheetBody">
+      <div style="font-size:13.5px;color:var(--dim);line-height:1.5;margin-bottom:6px">Tell ScaleMail how to treat mail like this from <b style="color:#fff">${e?e.name:'this sender'}</b>. It learns and applies it going forward.</div>
+      <textarea class="teachInput" placeholder="e.g. Anything from this client is always urgent — keep it at the top."></textarea>
+      <div class="chipPick">
+        <div class="cp" onclick="fillTeach(this)">Always urgent</div>
+        <div class="cp" onclick="fillTeach(this)">Never a newsletter</div>
+        <div class="cp" onclick="fillTeach(this)">Summarize shorter</div>
+        <div class="cp" onclick="fillTeach(this)">Auto-archive</div>
+      </div>
+      <div class="sendRow"><button class="sendBtn" onclick="saveTeach()">${svg('check','ic')} Save</button></div>
+    </div>`);
+}
+function fillTeach(el){ const ta=document.querySelector('.teachInput'); if(ta) ta.value=el.textContent.trim(); }
+function saveTeach(){ closeSheet(); toast('Got it — ScaleMail will remember that ✨'); }
+function openSnooze(id){
+  const opts=[['Later today','4:00 PM'],['This evening','6:30 PM'],['Tomorrow','8:00 AM'],['This weekend','Sat 9 AM'],['Next week','Mon 8 AM'],['Pick a date','—']];
+  openSheet(`<div class="grab"></div>
+    <div class="sheetHead"><div class="st">Snooze until</div><button class="sx" onclick="closeSheet()">${svg('close','ic')}</button></div>
+    <div class="sheetBody">
+      ${opts.map(o=>`<div class="optRow" onclick="snoozePick('${o[0]}')"><span class="ol">${o[0]}</span><span class="ot">${o[1]}</span></div>`).join('')}
+    </div>`);
+}
+function snoozePick(label){ closeSheet(); closeReader(); toast(`Snoozed · ${label}`); }
+function openRel(id){
+  const e=findEmail(id); if(!e) return;
+  openSheet(`<div class="grab"></div>
+    <div class="sheetHead"><div class="st">Contact</div><button class="sx" onclick="closeSheet()">${svg('close','ic')}</button></div>
+    <div class="sheetBody">
+      <div class="pProfile"><div class="pav" style="background:${avColor(e.name)}">${initials(e.name)}</div>
+        <div><div class="pn">${e.name}</div><div class="pe">${e.email}</div></div></div>
+      <div class="relStat"><span class="rl">Relationship</span><span class="rv">${e.vip?'⭐ VIP':e.cat==='Client'?'Client':'Known sender'}</span></div>
+      <div class="relStat"><span class="rl">Emails exchanged</span><span class="rv">${20+Math.floor(e.rank*5)}</span></div>
+      <div class="relStat"><span class="rl">Avg. reply time</span><span class="rv">2.3 hrs</span></div>
+      <div class="relStat"><span class="rl">Last contact</span><span class="rv">${e.when} ago</span></div>
+      <div class="sendRow" style="justify-content:space-between;margin-top:18px">
+        <button class="aiSuggest" style="margin-top:0" onclick="closeSheet();toast('Opening note…')">${svg('pencil','ic')} Add note</button>
+        <button class="sendBtn" onclick="vipQuick('${e.id}')">${svg('star','ic')} ${e.vip?'Remove VIP':'Make VIP'}</button>
+      </div>
+    </div>`);
+}
+function vipQuick(id){ const e=findEmail(id); if(e) e.vip=!e.vip; closeSheet(); toast(e&&e.vip?'Added to VIPs ⭐':'Removed from VIPs'); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ONBOARDING (first-run setup + profiling)
+   ════════════════════════════════════════════════════════════════════════════ */
+let OB={step:0,role:'Founder & CEO',reach:['Clients','My team'],sens:'balanced'};
+const OB_ROLES=['Founder & CEO','Sales','Freelancer','Marketing','Developer','Operations','Personal'];
+const OB_REACH=['Clients','My team','Investors','Family','Attorney','Accountant','Partners','Banks'];
+const OB_SENS=[
+  {k:'relaxed',n:'Relaxed',d:'Keep most things in the inbox; only quietly handle obvious junk. About 25–40 a day.'},
+  {k:'balanced',n:'Balanced',rec:true,d:'Auto-handle newsletters, promos and routine noise; surface what matters. About 5–15 a day.'},
+  {k:'aggressive',n:'Aggressive',d:'Anything not clearly important gets filed for you. About 2–6 a day.'},
+];
+function openOnboarding(){
+  closeSheet(); OB={step:0,role:'Founder & CEO',reach:['Clients','My team'],sens:'balanced'};
+  let el=$('obEl'); if(!el){ el=document.createElement('div'); el.className='ob'; el.id='obEl'; $('overlayHost').appendChild(el); }
+  el.classList.add('in'); obRender();
+}
+function closeOnboarding(){ const el=$('obEl'); if(el) el.remove(); switchTab('Inbox'); }
+function obSet(k,v){ if(k==='reach'){ const i=OB.reach.indexOf(v); if(i>=0)OB.reach.splice(i,1); else OB.reach.push(v); } else OB[k]=v; obRender(); }
+function obNext(){ OB.step++; if(OB.step===5){ obRender(); animateProfiling(); return; } if(OB.step>6){ closeOnboarding(); return; } obRender(); }
+function obConnect(el,name){ el.querySelector('.opc').textContent='Connected ✓'; toast(`${name} connected`); }
+function obRender(){
+  const el=$('obEl'); if(!el) return; const s=OB.step; let body='',foot='';
+  const prog=`<div class="obProgress">${[1,2,3,4,5,6].map(i=>`<i class="${i===s?'on':''}"></i>`).join('')}</div>`;
+  if(s===0){
+    body=`<div class="obLogo">${svg('mail')}</div>
+      <div class="obWord">Scale<span class="b">Mail</span></div><div class="obTag">AI-POWERED INBOX</div>
+      <div class="obDesc">ScaleMail reads, sorts and triages your email for you — surfacing what needs you and quietly handling the rest. Let’s set it up in 30 seconds.</div>`;
+    foot=`<button class="obBtn" onclick="obNext()">Set up my inbox</button><button class="obSkip" onclick="closeOnboarding()">Skip for now</button>`;
+  } else if(s===1){
+    body=`${prog}<div class="obH">What best describes you?</div><div class="obSub">So ScaleMail knows what matters and what’s just noise.</div>
+      <div class="obGrid">${OB_ROLES.map(r=>`<div class="obChip ${OB.role===r?'on':''}" onclick="obSet('role','${r.replace(/&/g,'and')}')">${r}</div>`).join('')}</div>`;
+    foot=`<button class="obBtn" onclick="obNext()">Next</button>`;
+  } else if(s===2){
+    body=`${prog}<div class="obH">Who should always reach you?</div><div class="obSub">Mail from these people skips the filters and lands up top.</div>
+      <div class="obGrid">${OB_REACH.map(r=>`<div class="obChip ${OB.reach.includes(r)?'on':''}" onclick="obSet('reach','${r}')">${OB.reach.includes(r)?'✓ ':''}${r}</div>`).join('')}</div>`;
+    foot=`<button class="obBtn" onclick="obNext()">Next</button>`;
+  } else if(s===3){
+    body=`${prog}<div class="obH">How aggressive should we be?</div><div class="obSub">You can change this anytime in Settings.</div>
+      ${OB_SENS.map(o=>`<div class="obCard ${OB.sens===o.k?'on':''}" onclick="obSet('sens','${o.k}')">
+        <div class="ocn">${o.n}${o.rec?'<span style="font-size:11px;color:#7fb4ff;background:rgba(0,113,227,.2);border-radius:999px;padding:2px 8px">Recommended</span>':''}</div>
+        <div class="ocd">${o.d}</div></div>`).join('')}`;
+    foot=`<button class="obBtn" onclick="obNext()">Next</button>`;
+  } else if(s===4){
+    body=`${prog}<div class="obH">Connect your mailboxes</div><div class="obSub">ScaleMail works across all of them at once.</div>
+      <div class="obProv" onclick="obConnect(this,'Outlook')"><div class="opl" style="background:#0A6BE0">O</div><div class="opn">Outlook · Microsoft 365</div><div class="opc"></div></div>
+      <div class="obProv" onclick="obConnect(this,'Gmail')"><div class="opl" style="background:#EA4335">G</div><div class="opn">Gmail · Google</div><div class="opc"></div></div>
+      <div class="obProv" onclick="obConnect(this,'iCloud')"><div class="opl" style="background:#3b3b40"></div><div class="opn">iCloud · Apple</div><div class="opc"></div></div>`;
+    foot=`<button class="obBtn" onclick="obNext()">Continue</button>`;
+  } else if(s===5){
+    body=`${prog}<div class="obRing" id="obRingHost"></div><div class="obBigNum" id="obNum">0</div>
+      <div class="obSub" style="text-align:center" id="obMsg">Reading your mail…</div>`;
+  } else if(s===6){
+    body=`<div class="obReady"><svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></div>
+      <div class="obH" style="text-align:center">You’re all set</div>
+      <div class="obSub" style="text-align:center">Your inbox is sorted and ScaleMail is ready to keep it that way.</div>
+      <div class="obStatRow">
+        <div class="obStat"><div class="v">4,218</div><div class="l">Sorted</div></div>
+        <div class="obStat"><div class="v">6</div><div class="l">Categories</div></div>
+        <div class="obStat"><div class="v">${(OB_SENS.find(o=>o.k===OB.sens)||{}).n||'Balanced'}</div><div class="l">Mode</div></div>
+      </div>`;
+    foot=`<button class="obBtn" onclick="closeOnboarding()">Go to my inbox</button>`;
+  }
+  el.innerHTML=`<div class="obBody">${body}</div>${foot?`<div class="obFoot">${foot}</div>`:''}`;
+}
+function animateProfiling(){
+  const rh=$('obRingHost'); if(rh) rh.innerHTML=ring(0);
+  let v=0; const target=4218; const num=$('obNum');
+  const msgs=['Reading your mail…','Learning your contacts…','Spotting what matters…','Applying your preferences…','Finishing up…'];
+  const t=setInterval(()=>{
+    v+=Math.round(target/42); if(v>=target){ v=target; clearInterval(t); setTimeout(()=>{ OB.step=6; obRender(); },450); }
+    if(num) num.textContent=v.toLocaleString();
+    const ms=$('obMsg'); if(ms) ms.textContent=msgs[Math.min(msgs.length-1,Math.floor(v/target*msgs.length))];
+    const r2=$('obRingHost'); if(r2) r2.innerHTML=ring(Math.round(v/target*100));
+  },45);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CATEGORIES · SMART CLEANUP · SIGNATURE
+   ════════════════════════════════════════════════════════════════════════════ */
+const CATS=[
+  ['Urgent','#E5484D','Time-sensitive, needs you now'],
+  ['Action Needed','#0071E3','Awaiting your reply or decision'],
+  ['Meeting','#4338CA','Invites, calls and scheduling'],
+  ['Client','#1D4ED8','Your customers and accounts'],
+  ['Newsletter','#475569','Bulk and marketing mail'],
+  ['FYI','#64748B','Receipts, notifications — no action'],
+  ['Investors','#7C3AED','Custom · VC and board mail'],
+];
+function openCategories(){
+  fullScreen('catEl',`
+    <div class="fnav"><button class="nb" onclick="closeFull('catEl')">${svg('back','ic')} Back</button><div class="ft">Categories</div><div style="width:64px"></div></div>
+    <div class="fbody">
+      <div style="color:rgba(255,255,255,.55);font-size:13.5px;line-height:1.5;padding:8px 2px 6px">Every email is auto-tagged into one of these. Add your own with custom colors and rules.</div>
+      ${CATS.map(c=>`<div class="catRow"><span class="cdot" style="background:${c[1]}"></span><div style="flex:1"><div class="cn">${c[0]}</div><div class="cc">${c[2]}</div></div>${svg('chevron','ic')}</div>`).join('')}
+      <div class="addBtn" onclick="toast('New category…')">${svg('plus','ic')} Add custom category</div>
+    </div>`);
+}
+let BULK=[['Newsletters','#475569','broom',24],['Receipts','#059669','doc',31],['Social updates','#7C3AED','bell',18],['Promotions','#D97706','tag',46]];
+function openBulk(){
+  fullScreen('bulkEl',`
+    <div class="fnav"><button class="nb" onclick="closeFull('bulkEl')">${svg('back','ic')} Back</button><div class="ft">Smart Cleanup</div><div style="width:64px"></div></div>
+    <div class="fbody"><div id="bulkIntro" style="color:rgba(255,255,255,.55);font-size:13.5px;line-height:1.5;padding:8px 2px 10px">ScaleMail grouped your low-priority mail. Clear a whole bucket in one tap.</div>
+      <div id="bulkList">${renderBuckets()}</div></div>`);
+}
+function renderBuckets(){
+  const live=BULK.filter(b=>b[3]>0);
+  if(!live.length) return `<div style="text-align:center;padding:50px 20px;color:rgba(255,255,255,.5)">${svg('check','ic')}<div style="margin-top:12px;font-size:15px;font-weight:700">All cleaned up 🎉</div></div>`;
+  return live.map(b=>`<div class="bulkBucket"><div class="bi" style="background:${b[1]}">${svg(b[2],'ic')}</div>
+    <div style="flex:1"><div class="bn">${b[0]}</div><div class="bd">${b[3]} emails</div></div>
+    <button class="bbtn" onclick="clearBucket('${b[0]}')">Archive all</button></div>`).join('');
+}
+function clearBucket(name){ const b=BULK.find(x=>x[0]===name); if(!b) return; const n=b[3]; b[3]=0;
+  const host=$('bulkList'); if(host) host.innerHTML=renderBuckets(); toast(`Archived ${n} emails`); }
+let SIG_STYLE='Modern';
+function openSignaturePreview(){
+  fullScreen('sigEl',`
+    <div class="fnav"><button class="nb" onclick="closeFull('sigEl')">${svg('back','ic')} Back</button><div class="ft">Signature</div><div style="width:64px"></div></div>
+    <div class="fbody">
+      <div style="color:rgba(255,255,255,.55);font-size:13.5px;line-height:1.5;padding:8px 2px 12px">AI generated signature styles from your details. Pick one — or open the block editor to fine-tune.</div>
+      <div class="styleRow">${['Modern','Classic','Minimal','Bold'].map(x=>`<div class="styleChip ${SIG_STYLE===x?'on':''}" onclick="setSig('${x}')">${x}</div>`).join('')}</div>
+      <div id="sigHost">${sigCardHTML()}</div>
+      <button class="addBtn" onclick="toast('Opening block editor…')">${svg('pencil','ic')} Edit blocks manually</button>
+    </div>`);
+}
+function setSig(x){ SIG_STYLE=x; const h=$('sigHost'); if(h) h.innerHTML=sigCardHTML(); }
+function sigCardHTML(){
+  const accent = SIG_STYLE==='Bold'?'#E5484D':SIG_STYLE==='Classic'?'#1d1d1f':SIG_STYLE==='Minimal'?'#64748B':'#0071E3';
+  return `<div class="sigCard">
+    <div class="sigPhoto">CG</div>
+    <div class="sigName">Cameron Gallup</div>
+    <div class="sigTitle" style="color:${accent}">Managing Partner · Scale MBS</div>
+    <div class="sigContact">📧 cameron@scalembs.com<br>📱 (415) 555-0148<br>🔗 scalembs.com</div>
+    <div style="clear:both;border-top:2px solid ${accent};margin-top:14px;padding-top:10px;font-size:11px;color:#8E8E93">Sent using ScaleMail</div>
+  </div>`;
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    BOOT
