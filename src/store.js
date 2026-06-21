@@ -350,41 +350,71 @@ export function StoreProvider({ children }) {
 
   // ── "Archiving Soon" — a passive, high-confidence auto-archive queue ─────────
   // Low-priority bulk mail (the 'noise' bucket: newsletters/promos/notifications)
-  // is staged for archiving 7 days after it lands, unless you keep it. Removing an
-  // email from the queue keeps it for good. The 7-day expiry is checked lazily on
-  // each inbox refresh (no server cron needed).
-  const ARCHIVE_AFTER = 7 * 24 * 3600 * 1000;
+  // auto-archives. An email becomes eligible once it's 7+ days old, and a nightly
+  // sweep at 11:59 PM archives everything eligible (unless you keep it). The sweep
+  // runs client-side — it fires while the app is open at 11:59, and catches up the
+  // next time you open the app after a missed night (no server cron needed).
+  const ARCHIVE_AGE = 7 * 24 * 3600 * 1000;
   const archiveKeptSet = useMemo(() => new Set((prefs.archiveKept || []).map(String)), [prefs.archiveKept]);
+  const gone = (id) => { const ov = overrides[id]; return !!ov && (ov.status === 'archived' || ov.status === 'done'); };
+
+  // Eligible = low-priority mail that's already 7+ days old and not kept. These are
+  // the emails the next nightly sweep will archive.
   const archivingSoon = useMemo(
-    () => emails.filter((e) => e.priority.bucket === 'noise' && !archiveKeptSet.has(e.id)),
+    () => {
+      const cutoff = Date.now() - ARCHIVE_AGE;
+      return emails.filter((e) =>
+        e.priority.bucket === 'noise' && !archiveKeptSet.has(e.id) && new Date(e.date).getTime() <= cutoff);
+    },
     [emails, archiveKeptSet],
   );
-  // The banner count comes from the PERSISTENT staged queue (prefs.archiveStaged),
+  // The banner count comes from a PERSISTENT set of eligible ids (prefs.archiveStaged),
   // not the currently-loaded slice — otherwise it jumps every refresh as different
-  // pages load. Items only leave the queue when kept, archived, or auto-expired.
-  const gone = (id) => { const ov = overrides[id]; return !!ov && (ov.status === 'archived' || ov.status === 'done'); };
+  // pages load. Ids only leave when kept, archived, or swept.
   const archivingSoonCount = useMemo(
     () => Object.keys(prefs.archiveStaged || {}).filter((id) => !archiveKeptSet.has(id) && !gone(id)).length,
     [prefs.archiveStaged, archiveKeptSet, overrides],
   );
-  // Stamp newly-staged mail with a timestamp and auto-archive anything past 7 days.
-  // We deliberately do NOT drop stamps just because an email isn't in this page —
-  // that's what made the count recalculate on every sync.
+
+  // Most recent / next 11:59 PM local boundary, for the sweep + the countdown.
+  const lastNightly = () => { const n = new Date(); const b = new Date(n.getFullYear(), n.getMonth(), n.getDate(), 23, 59, 0, 0); if (n.getTime() < b.getTime()) b.setDate(b.getDate() - 1); return b.getTime(); };
+
+  // Keep the persistent eligible-id set in sync with what we've seen (stable count).
   useEffect(() => {
     const staged = { ...(prefs.archiveStaged || {}) };
     const now = Date.now();
     let changed = false;
-    const expired = [];
-    for (const e of archivingSoon) {
-      if (!staged[e.id]) { staged[e.id] = now; changed = true; }
-      else if (now - staged[e.id] > ARCHIVE_AFTER) expired.push(e.id);
-    }
-    // Remove stamps for mail the user kept, archived, or otherwise cleared, so the
-    // queue (and its count) shrinks when you act — but never just from paging.
+    for (const e of archivingSoon) { if (!staged[e.id]) { staged[e.id] = now; changed = true; } }
     for (const id of Object.keys(staged)) { if (archiveKeptSet.has(id) || gone(id)) { delete staged[id]; changed = true; } }
-    if (expired.length) { expired.forEach((id) => { setOverride(id, { status: 'archived' }); persistAction(id, 'archive'); delete staged[id]; }); changed = true; }
     if (changed) setPrefsState((p) => { const next = { ...p, archiveStaged: staged }; saveToken('prefs', JSON.stringify(next)).catch(() => {}); return next; });
   }, [archivingSoon, archiveKeptSet, overrides]); // eslint-disable-line
+
+  // Nightly sweep: archive every eligible email at 11:59 PM (catching up on next open).
+  useEffect(() => {
+    const sweep = () => {
+      const boundary = lastNightly();
+      const last = prefs.archiveLastRun;
+      // First run ever: seed the marker to the current boundary so we don't archive
+      // everything on launch — the first real sweep happens at the upcoming 11:59 PM.
+      if (last == null) {
+        setPrefsState((p) => { const next = { ...p, archiveLastRun: boundary }; saveToken('prefs', JSON.stringify(next)).catch(() => {}); return next; });
+        return;
+      }
+      if (last >= boundary) return; // already swept for this night
+      const ids = archivingSoon.map((e) => e.id);
+      if (ids.length) bulkAction(ids, 'archive');
+      setPrefsState((p) => {
+        const staged = { ...(p.archiveStaged || {}) };
+        for (const id of ids) delete staged[id];
+        const next = { ...p, archiveStaged: staged, archiveLastRun: Date.now() };
+        saveToken('prefs', JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    };
+    sweep();
+    const t = setInterval(sweep, 60 * 1000); // re-check every minute while open
+    return () => clearInterval(t);
+  }, [archivingSoon, prefs.archiveLastRun]); // eslint-disable-line
 
   const keepFromArchive = useCallback((id) => {
     setPrefsState((p) => {

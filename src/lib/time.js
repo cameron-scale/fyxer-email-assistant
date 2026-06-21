@@ -27,6 +27,17 @@ export function dayBucket(iso) {
   return 'Earlier';
 }
 
+// Time until the next nightly auto-archive sweep (11:59 PM local), as "6h" / "45m".
+export function nightlyArchiveEta() {
+  const now = new Date();
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 0, 0);
+  if (now.getTime() >= b.getTime()) b.setDate(b.getDate() + 1);
+  const ms = b.getTime() - now.getTime();
+  const h = Math.floor(ms / 3600000);
+  if (h >= 1) return `${h}h`;
+  return `${Math.max(1, Math.floor((ms % 3600000) / 60000))}m`;
+}
+
 // A friendly long date like "Wednesday, June 17".
 export function longToday() {
   return new Date().toLocaleDateString(undefined, {

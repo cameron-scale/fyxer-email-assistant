@@ -7,7 +7,7 @@ import { View, Text, StyleSheet, Pressable, SafeAreaView, FlatList, Alert } from
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { useStore } from '../store';
-import { timeAgo } from '../lib/time';
+import { timeAgo, nightlyArchiveEta } from '../lib/time';
 import SenderAvatar from '../components/SenderAvatar';
 
 export default function ArchivingSoonScreen({ goBack, navigate }) {
@@ -33,7 +33,7 @@ export default function ArchivingSoonScreen({ goBack, navigate }) {
       <View style={styles.banner}>
         <Ionicons name="time-outline" size={18} color="#F59E0B" />
         <Text style={styles.bannerText}>
-          {archivingSoonCount.toLocaleString()} low-priority emails will archive in 7 days unless you keep them. Nothing is deleted.
+          {archivingSoonCount.toLocaleString()} low-priority emails (7+ days old) archive tonight at 11:59 PM — in {nightlyArchiveEta()} — unless you keep them. Nothing is deleted.
         </Text>
       </View>
 

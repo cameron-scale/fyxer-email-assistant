@@ -15,7 +15,7 @@ import EmailCard from '../components/EmailCard';
 import SwipeableRow from '../components/SwipeableRow';
 import ProfileAvatar from '../components/ProfileAvatar';
 import LearnInboxCard from '../components/LearnInboxCard';
-import { dayBucket, longToday } from '../lib/time';
+import { dayBucket, longToday, nightlyArchiveEta } from '../lib/time';
 import { useTourTarget } from '../lib/tour';
 
 const FILTERS = [
@@ -337,8 +337,8 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
               <Pressable style={styles.archiveBar} onPress={() => navigate('ArchivingSoon')}>
                 <Ionicons name="time-outline" size={17} color="#F59E0B" />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.archiveBarTitle}>{archivingSoonCount.toLocaleString()} archiving soon</Text>
-                  <Text style={styles.archiveBarSub} numberOfLines={1}>Low-priority mail · clears in 7 days unless you keep it</Text>
+                  <Text style={styles.archiveBarTitle}>{archivingSoonCount.toLocaleString()} archiving in {nightlyArchiveEta()}</Text>
+                  <Text style={styles.archiveBarSub} numberOfLines={1}>Low-priority mail 7+ days old · clears at 11:59 PM unless you keep it</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="rgba(245,158,11,0.7)" />
               </Pressable>
