@@ -359,22 +359,32 @@ export function StoreProvider({ children }) {
     () => emails.filter((e) => e.priority.bucket === 'noise' && !archiveKeptSet.has(e.id)),
     [emails, archiveKeptSet],
   );
+  // The banner count comes from the PERSISTENT staged queue (prefs.archiveStaged),
+  // not the currently-loaded slice — otherwise it jumps every refresh as different
+  // pages load. Items only leave the queue when kept, archived, or auto-expired.
+  const gone = (id) => { const ov = overrides[id]; return !!ov && (ov.status === 'archived' || ov.status === 'done'); };
+  const archivingSoonCount = useMemo(
+    () => Object.keys(prefs.archiveStaged || {}).filter((id) => !archiveKeptSet.has(id) && !gone(id)).length,
+    [prefs.archiveStaged, archiveKeptSet, overrides],
+  );
   // Stamp newly-staged mail with a timestamp and auto-archive anything past 7 days.
+  // We deliberately do NOT drop stamps just because an email isn't in this page —
+  // that's what made the count recalculate on every sync.
   useEffect(() => {
     const staged = { ...(prefs.archiveStaged || {}) };
     const now = Date.now();
     let changed = false;
     const expired = [];
-    const liveIds = new Set(archivingSoon.map((e) => e.id));
     for (const e of archivingSoon) {
       if (!staged[e.id]) { staged[e.id] = now; changed = true; }
       else if (now - staged[e.id] > ARCHIVE_AFTER) expired.push(e.id);
     }
-    // Drop stamps for mail no longer in the queue (archived/kept elsewhere).
-    for (const id of Object.keys(staged)) { if (!liveIds.has(id)) { delete staged[id]; changed = true; } }
+    // Remove stamps for mail the user kept, archived, or otherwise cleared, so the
+    // queue (and its count) shrinks when you act — but never just from paging.
+    for (const id of Object.keys(staged)) { if (archiveKeptSet.has(id) || gone(id)) { delete staged[id]; changed = true; } }
     if (expired.length) { expired.forEach((id) => { setOverride(id, { status: 'archived' }); persistAction(id, 'archive'); delete staged[id]; }); changed = true; }
     if (changed) setPrefsState((p) => { const next = { ...p, archiveStaged: staged }; saveToken('prefs', JSON.stringify(next)).catch(() => {}); return next; });
-  }, [archivingSoon]); // eslint-disable-line
+  }, [archivingSoon, archiveKeptSet, overrides]); // eslint-disable-line
 
   const keepFromArchive = useCallback((id) => {
     setPrefsState((p) => {
@@ -905,6 +915,7 @@ export function StoreProvider({ children }) {
     updateMailAccount,
     bootstrapped,
     archivingSoon,
+    archivingSoonCount,
     keepFromArchive,
     archiveStagedNow,
     learnOpen,

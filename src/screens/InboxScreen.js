@@ -37,7 +37,7 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const {
     emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
     searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
-    mailboxUnread, syncingAll, prefs, archivingSoon,
+    mailboxUnread, syncingAll, prefs, archivingSoon, archivingSoonCount,
   } = useStore();
   const connected = accounts.outlook || accounts.gmail || accounts.icloud;
   const [filter, setFilter] = useState(params?.filter || 'all');
@@ -333,11 +333,11 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
             )}
 
             {/* Archiving Soon — passive auto-archive queue */}
-            {!starred && !usingSearch && filter === 'all' && (archivingSoon?.length || 0) > 0 && (
+            {!starred && !usingSearch && filter === 'all' && (archivingSoonCount || 0) > 0 && (
               <Pressable style={styles.archiveBar} onPress={() => navigate('ArchivingSoon')}>
                 <Ionicons name="time-outline" size={17} color="#F59E0B" />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.archiveBarTitle}>{archivingSoon.length.toLocaleString()} archiving soon</Text>
+                  <Text style={styles.archiveBarTitle}>{archivingSoonCount.toLocaleString()} archiving soon</Text>
                   <Text style={styles.archiveBarSub} numberOfLines={1}>Low-priority mail · clears in 7 days unless you keep it</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="rgba(245,158,11,0.7)" />

@@ -11,11 +11,11 @@ import { timeAgo } from '../lib/time';
 import SenderAvatar from '../components/SenderAvatar';
 
 export default function ArchivingSoonScreen({ goBack, navigate }) {
-  const { archivingSoon, keepFromArchive, archiveStagedNow } = useStore();
+  const { archivingSoon, archivingSoonCount, keepFromArchive, archiveStagedNow } = useStore();
 
   const archiveAll = () => {
     if (!archivingSoon.length) return;
-    Alert.alert('Archive all now?', `Archive ${archivingSoon.length.toLocaleString()} emails. Nothing is deleted — you can find them in Archive.`, [
+    Alert.alert('Archive all now?', `Archive ${archivingSoonCount.toLocaleString()} emails. Nothing is deleted — you can find them in Archive.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Archive all', style: 'destructive', onPress: () => { archiveStagedNow(); goBack(); } },
     ]);
@@ -33,7 +33,7 @@ export default function ArchivingSoonScreen({ goBack, navigate }) {
       <View style={styles.banner}>
         <Ionicons name="time-outline" size={18} color="#F59E0B" />
         <Text style={styles.bannerText}>
-          {archivingSoon.length.toLocaleString()} low-priority emails will archive in 7 days unless you keep them. Nothing is deleted.
+          {archivingSoonCount.toLocaleString()} low-priority emails will archive in 7 days unless you keep them. Nothing is deleted.
         </Text>
       </View>
 
@@ -70,7 +70,7 @@ export default function ArchivingSoonScreen({ goBack, navigate }) {
       {archivingSoon.length > 0 && (
         <Pressable style={styles.archiveAll} onPress={archiveAll}>
           <Ionicons name="archive-outline" size={18} color="#fff" />
-          <Text style={styles.archiveAllText}>Archive all {archivingSoon.length.toLocaleString()} now</Text>
+          <Text style={styles.archiveAllText}>Archive all {archivingSoonCount.toLocaleString()} now</Text>
         </Pressable>
       )}
     </SafeAreaView>
