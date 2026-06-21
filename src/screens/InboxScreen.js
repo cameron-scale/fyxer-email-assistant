@@ -31,7 +31,7 @@ const FILTERS = [
 ];
 const CATEGORY_FILTERS = ['Action Needed', 'Meeting', 'Client', 'Newsletter', 'FYI'];
 
-const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
+const SECTION_ORDER = ['Today', 'Last 7 days', 'Earlier'];
 
 export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const {

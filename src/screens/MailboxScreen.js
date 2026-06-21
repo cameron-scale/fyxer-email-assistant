@@ -18,7 +18,7 @@ const COPY = {
   Sent: { key: 'sent', suffix: 'Sent', icon: 'paper-plane-outline', title: 'No sent mail yet', sub: 'Messages you send will appear here.' },
   Drafts: { key: 'drafts', suffix: 'Drafts', icon: 'document-text-outline', title: 'No drafts', sub: 'Start a message with the compose button and it’ll be saved here.' },
 };
-const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
+const SECTION_ORDER = ['Today', 'Last 7 days', 'Earlier'];
 
 export default function MailboxScreen({ navigate, route, openSheet }) {
   const c = COPY[route] || COPY.Sent;

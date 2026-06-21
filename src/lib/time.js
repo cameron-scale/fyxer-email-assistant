@@ -14,7 +14,8 @@ export function timeAgo(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-// Which day-section an email belongs to, for the inbox eyebrows.
+// Which day-section an email belongs to, for the inbox eyebrows:
+// Today → the last 7 days → everything Earlier.
 export function dayBucket(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return 'Earlier';
@@ -22,7 +23,7 @@ export function dayBucket(iso) {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const t = d.getTime();
   if (t >= startOfToday) return 'Today';
-  if (t >= startOfToday - 86400000) return 'Yesterday';
+  if (t >= startOfToday - 7 * 86400000) return 'Last 7 days';
   return 'Earlier';
 }
 

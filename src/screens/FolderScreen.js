@@ -9,7 +9,7 @@ import { useStore } from '../store';
 import EmailCard from '../components/EmailCard';
 import { dayBucket, longToday } from '../lib/time';
 
-const SECTION_ORDER = ['Today', 'Yesterday', 'Earlier'];
+const SECTION_ORDER = ['Today', 'Last 7 days', 'Earlier'];
 
 export default function FolderScreen({ goBack, navigate }) {
   const { folderEmails, currentFolder, folderLoading, openFolder } = useStore();
