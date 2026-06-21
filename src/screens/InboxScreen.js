@@ -333,7 +333,7 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
             )}
 
             {/* Archiving Soon — passive auto-archive queue */}
-            {!starred && !usingSearch && filter === 'all' && (archivingSoonCount || 0) > 0 && (
+            {!starred && !usingSearch && filter === 'all' && prefs?.autoArchive !== false && (archivingSoonCount || 0) > 0 && (
               <Pressable style={styles.archiveBar} onPress={() => navigate('ArchivingSoon')}>
                 <Ionicons name="time-outline" size={17} color="#F59E0B" />
                 <View style={{ flex: 1 }}>

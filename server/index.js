@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-40',
+    version: 'debug-41',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-40', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-41', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-40',
+    version: 'debug-41',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1151,6 +1151,7 @@ app.post('/action', async (req, res) => {
           read: { removeLabelIds: ['UNREAD'] },
           unread: { addLabelIds: ['UNREAD'] },
           archive: { removeLabelIds: ['INBOX'] },
+          inbox: { addLabelIds: ['INBOX'], removeLabelIds: ['SPAM'] }, // un-archive / restore
           junk: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
         }[action];
         if (!body) throw new Error(`unknown action ${action}`);
@@ -1166,8 +1167,8 @@ app.post('/action', async (req, res) => {
     let r;
     if (action === 'read' || action === 'unread') {
       r = await fetch(`${GRAPH}/me/messages/${id}`, { method: 'PATCH', headers: auth, body: JSON.stringify({ isRead: action === 'read' }) });
-    } else if (action === 'archive' || action === 'trash' || action === 'junk') {
-      const destinationId = action === 'trash' ? 'deleteditems' : action === 'junk' ? 'junkemail' : 'archive';
+    } else if (action === 'archive' || action === 'trash' || action === 'junk' || action === 'inbox') {
+      const destinationId = action === 'trash' ? 'deleteditems' : action === 'junk' ? 'junkemail' : action === 'inbox' ? 'inbox' : 'archive';
       r = await fetch(`${GRAPH}/me/messages/${id}/move`, { method: 'POST', headers: auth, body: JSON.stringify({ destinationId }) });
     } else {
       throw new Error(`unknown action ${action}`);

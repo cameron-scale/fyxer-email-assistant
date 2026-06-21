@@ -4,7 +4,7 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, TextInput,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -69,6 +69,29 @@ export default function SettingsScreen({ navigate, goBack }) {
             <Ionicons name="chevron-forward" size={18} color={colors.ink4} />
           </View>
         </Pressable>
+
+        {/* Auto-archive */}
+        <Text style={styles.sectionLabel}>Auto-archive</Text>
+        <View style={styles.group}>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: '#FEF3D9' }]}>
+              <Ionicons name="time-outline" size={16} color="#F59E0B" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Archive old low-priority mail</Text>
+            </View>
+            <Switch
+              value={prefs.autoArchive !== false}
+              onValueChange={(v) => setPrefs({ autoArchive: v })}
+              trackColor={{ true: colors.blue, false: '#D1D1D6' }}
+            />
+          </View>
+        </View>
+        <Text style={styles.help}>
+          When on, newsletters and other low-priority mail that's 7+ days old are moved to
+          your Archive folder each night at 11:59 PM. Nothing is ever deleted — it stays in
+          Archive and you can move it back anytime. Turn this off to keep everything in your inbox.
+        </Text>
 
         {/* Backend server */}
         <Text style={styles.sectionLabel}>Backend server URL</Text>

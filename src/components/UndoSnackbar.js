@@ -19,7 +19,7 @@ export default function UndoSnackbar() {
       Animated.timing(y, { toValue: 120, duration: 220, useNativeDriver: true }).start(
         () => dismissRecent()
       );
-    }, 3500);
+    }, recentAction.durationMs || 3500);
     return () => clearTimeout(timer);
   }, [recentAction]); // eslint-disable-line react-hooks/exhaustive-deps
 

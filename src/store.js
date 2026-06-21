@@ -15,6 +15,7 @@ import {
   listFolders, mailAction, DEFAULT_SERVER_URL,
 } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
+import { Alert } from 'react-native';
 
 // How sorting works. "importance" defers to the on-device priority engine.
 export const SORTS = {
@@ -27,7 +28,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {} };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, autoArchive: true, archiveNoticeSeen: false };
 
 const StoreContext = createContext(null);
 
@@ -44,7 +45,8 @@ export function StoreProvider({ children }) {
   const [overrides, setOverrides] = useState({}); // id -> { status, read, snoozedUntil }
 
   // The most recent reversible action, powering the Undo snackbar.
-  const [recentAction, setRecentAction] = useState(null); // { id, label }
+  const [recentAction, setRecentAction] = useState(null); // { id | ids, label, durationMs }
+  const undoLastRef = useRef(null); // so the sweep effect can offer Undo before undoLast is declared
 
   // VIP senders the user has "taught" us, plus draft preferences. Both persist.
   const [vips, setVips] = useState([]); // lowercased emails
@@ -390,7 +392,10 @@ export function StoreProvider({ children }) {
   }, [archivingSoon, archiveKeptSet, overrides]); // eslint-disable-line
 
   // Nightly sweep: archive every eligible email at 11:59 PM (catching up on next open).
+  // Auto-archive only MOVES mail to the Archive folder — it never deletes — and you
+  // can switch it off entirely (prefs.autoArchive). Each sweep is undoable.
   useEffect(() => {
+    if (prefs.autoArchive === false) return; // user turned it off → never sweep
     const sweep = () => {
       const boundary = lastNightly();
       const last = prefs.archiveLastRun;
@@ -402,11 +407,26 @@ export function StoreProvider({ children }) {
       }
       if (last >= boundary) return; // already swept for this night
       const ids = archivingSoon.map((e) => e.id);
-      if (ids.length) bulkAction(ids, 'archive');
+      if (ids.length) {
+        bulkAction(ids, 'archive');
+        // Offer an undo for the whole batch, and explain it once (it's recoverable).
+        setRecentAction({ ids, label: `Archived ${ids.length} older email${ids.length === 1 ? '' : 's'}`, durationMs: 8000 });
+        if (!prefs.archiveNoticeSeen) {
+          Alert.alert(
+            'Older mail tidied into Archive',
+            `ScaleMail filed ${ids.length} low-priority email${ids.length === 1 ? '' : 's'} (7+ days old) into your Archive folder. Nothing is deleted — it's all searchable and you can move anything back anytime. This runs automatically at 11:59 PM.`,
+            [
+              { text: 'Turn off', style: 'destructive', onPress: () => setPrefs({ autoArchive: false }) },
+              { text: 'Undo', onPress: () => undoLastRef.current && undoLastRef.current() },
+              { text: 'Keep it on', style: 'cancel' },
+            ],
+          );
+        }
+      }
       setPrefsState((p) => {
         const staged = { ...(p.archiveStaged || {}) };
         for (const id of ids) delete staged[id];
-        const next = { ...p, archiveStaged: staged, archiveLastRun: Date.now() };
+        const next = { ...p, archiveStaged: staged, archiveLastRun: Date.now(), archiveNoticeSeen: true };
         saveToken('prefs', JSON.stringify(next)).catch(() => {});
         return next;
       });
@@ -414,7 +434,7 @@ export function StoreProvider({ children }) {
     sweep();
     const t = setInterval(sweep, 60 * 1000); // re-check every minute while open
     return () => clearInterval(t);
-  }, [archivingSoon, prefs.archiveLastRun]); // eslint-disable-line
+  }, [archivingSoon, prefs.archiveLastRun, prefs.autoArchive]); // eslint-disable-line
 
   const keepFromArchive = useCallback((id) => {
     setPrefsState((p) => {
@@ -442,10 +462,24 @@ export function StoreProvider({ children }) {
   // Revert whatever the snackbar is currently offering to undo.
   const undoLast = useCallback(() => {
     setRecentAction((cur) => {
-      if (cur) setOverride(cur.id, { status: undefined, snoozedUntil: undefined });
+      if (!cur) return null;
+      if (cur.ids && cur.ids.length) {
+        // Batch auto-archive undo: restore on the server AND keep them out of future
+        // sweeps (undoing means "I want to hold onto these").
+        cur.ids.forEach((id) => { setOverride(id, { status: undefined }); persistAction(id, 'inbox'); });
+        setPrefsState((p) => {
+          const kept = Array.from(new Set([...(p.archiveKept || []), ...cur.ids]));
+          const next = { ...p, archiveKept: kept };
+          saveToken('prefs', JSON.stringify(next)).catch(() => {});
+          return next;
+        });
+      } else if (cur.id != null) {
+        setOverride(cur.id, { status: undefined, snoozedUntil: undefined });
+      }
       return null;
     });
-  }, [setOverride]);
+  }, [setOverride, persistAction]);
+  undoLastRef.current = undoLast;
 
   const dismissRecent = useCallback(() => setRecentAction(null), []);
 

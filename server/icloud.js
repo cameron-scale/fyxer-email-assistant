@@ -118,10 +118,11 @@ export async function icloudAttachment(refreshToken, uid, attachmentId, folder =
   });
 }
 
-// read | unread | archive | trash | junk — flags or moves between mailboxes.
+// read | unread | archive | trash | junk | inbox — flags or moves between mailboxes.
 export async function icloudAction(refreshToken, uid, action, folder = 'inbox') {
   return withClient(refreshToken, async (client) => {
-    const mbox = FOLDER[folder] || 'INBOX';
+    // Un-archive restores from the Archive mailbox back to the inbox.
+    const mbox = action === 'inbox' ? FOLDER.archive : (FOLDER[folder] || 'INBOX');
     const lock = await client.getMailboxLock(mbox);
     try {
       const u = { uid: String(uid) };
@@ -130,6 +131,7 @@ export async function icloudAction(refreshToken, uid, action, folder = 'inbox') 
       else if (action === 'trash') await client.messageMove(u, FOLDER.deleted, { uid: true });
       else if (action === 'archive') await client.messageMove(u, FOLDER.archive, { uid: true });
       else if (action === 'junk') await client.messageMove(u, FOLDER.junk, { uid: true });
+      else if (action === 'inbox') await client.messageMove(u, 'INBOX', { uid: true });
       else throw new Error(`unknown action ${action}`);
       return { ok: true };
     } finally { lock.release(); }
