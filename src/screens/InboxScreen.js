@@ -346,12 +346,18 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
             )}
 
             {/* Archiving Soon — passive auto-archive queue */}
-            {!starred && !usingSearch && filter === 'all' && prefs?.autoArchive !== false && (archivingSoonCount || 0) > 0 && (
+            {!starred && !usingSearch && filter === 'all' && (archivingSoonCount || 0) > 0 && (
               <Pressable style={styles.archiveBar} onPress={() => navigate('ArchivingSoon')}>
-                <Ionicons name="time-outline" size={17} color="#F59E0B" />
+                <Ionicons name={prefs?.autoArchive === false ? 'pause-circle-outline' : 'time-outline'} size={17} color="#F59E0B" />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.archiveBarTitle}>{archivingSoonCount.toLocaleString()} archiving in {nightlyArchiveEta()}</Text>
-                  <Text style={styles.archiveBarSub} numberOfLines={1}>Low-priority mail 7+ days old · clears at 11:59 PM unless you keep it</Text>
+                  <Text style={styles.archiveBarTitle}>
+                    {prefs?.autoArchive === false
+                      ? `${archivingSoonCount.toLocaleString()} low-priority · auto-archive paused`
+                      : `${archivingSoonCount.toLocaleString()} archiving in ${nightlyArchiveEta()}`}
+                  </Text>
+                  <Text style={styles.archiveBarSub} numberOfLines={1}>
+                    {prefs?.autoArchive === false ? 'Tap to review or resume auto-archive' : 'Low-priority mail 7+ days old · clears at 11:59 PM unless you keep it'}
+                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="rgba(245,158,11,0.7)" />
               </Pressable>

@@ -28,7 +28,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, autoArchive: true, archiveNoticeSeen: false };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, hiddenIds: {}, autoArchive: true, archiveNoticeSeen: false };
 
 const StoreContext = createContext(null);
 
@@ -217,11 +217,13 @@ export function StoreProvider({ children }) {
   const rankedBase = useMemo(() => {
     if (demoMode) return DEMO_EMAILS;
     const now = Date.now();
+    const hidden = prefs.hiddenIds || {};
     const visible = raw
       .filter((e) => {
         const isMailbox = e.account === 'outlook' || e.account === 'gmail' || e.account === 'icloud';
         if (isMailbox && e.folder && e.folder !== 'inbox') return false;
         if (activeAccountId !== 'all' && isMailbox && e.accountId && e.accountId !== activeAccountId) return false;
+        if (hidden[e.id]) return false; // archived/trashed earlier — stay gone across reloads
         return true;
       })
       .map((e) => ({ ...e, ...(overrides[e.id] || {}) }))
@@ -235,7 +237,7 @@ export function StoreProvider({ children }) {
     const seen = new Set();
     const deduped = visible.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
     return applySort(prioritize(deduped, vips, prefs.categories, knownImportantList, senderLabels, keptSenders));
-  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, prefs.senderLabels, prefs.keptSenders, demoMode, activeAccountId, applySort]); // eslint-disable-line
+  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, prefs.senderLabels, prefs.keptSenders, prefs.hiddenIds, demoMode, activeAccountId, applySort]); // eslint-disable-line
 
   const emails = useMemo(() => {
     if (demoMode) return rankedBase;
@@ -302,18 +304,48 @@ export function StoreProvider({ children }) {
     if (rt) mailAction(prefs.serverUrl, rt, id, action, provider).catch(() => {});
   }, [outlookRefresh, prefs.serverUrl]);
 
+  // Persist which emails have left the inbox (archived/trashed/junked/done) so they
+  // stay gone after a reload — even if the server move didn't go through (e.g. an
+  // Outlook account still pending the Mail.ReadWrite reconnect). Undo un-hides them.
+  const hideIds = useCallback((ids) => {
+    const list = (ids || []).filter(Boolean);
+    if (!list.length) return;
+    setPrefsState((p) => {
+      const hidden = { ...(p.hiddenIds || {}) };
+      list.forEach((id) => { hidden[id] = 1; });
+      const next = { ...p, hiddenIds: hidden };
+      saveToken('prefs', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+  const unhideIds = useCallback((ids) => {
+    const list = (ids || []).filter(Boolean);
+    if (!list.length) return;
+    setPrefsState((p) => {
+      const hidden = { ...(p.hiddenIds || {}) };
+      let changed = false;
+      list.forEach((id) => { if (hidden[id]) { delete hidden[id]; changed = true; } });
+      if (!changed) return p;
+      const next = { ...p, hiddenIds: hidden };
+      saveToken('prefs', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
   // --- Actions used by swipes / buttons (each records an undoable "recent action") ---
   const archive = useCallback((id) => {
     setOverride(id, { status: 'archived' });
     setRecentAction({ id, label: 'Archived' });
     persistAction(id, 'archive');
-  }, [setOverride, persistAction]);
+    hideIds([id]);
+  }, [setOverride, persistAction, hideIds]);
 
   const markDone = useCallback((id) => {
     setOverride(id, { status: 'done' });
     setRecentAction({ id, label: 'Marked done' });
     persistAction(id, 'read'); // "done" also marks it read in the mailbox
-  }, [setOverride, persistAction]);
+    hideIds([id]);
+  }, [setOverride, persistAction, hideIds]);
 
   const markRead = useCallback((id) => {
     setOverride(id, { read: true });
@@ -331,31 +363,36 @@ export function StoreProvider({ children }) {
     setOverride(id, { read: false });
     setRecentAction({ id, label: 'Marked unread' });
     persistAction(id, 'unread');
-  }, [setOverride, persistAction]);
+    unhideIds([id]); // marking unread brings it back to the inbox
+  }, [setOverride, persistAction, unhideIds]);
 
   const trashEmail = useCallback((id) => {
     setOverride(id, { status: 'archived' }); // hide from the list
     setRecentAction({ id, label: 'Deleted' });
     persistAction(id, 'trash');
-  }, [setOverride, persistAction]);
+    hideIds([id]);
+  }, [setOverride, persistAction, hideIds]);
 
   // Report as junk / spam: move it to the Junk folder and hide it.
   const reportJunk = useCallback((id) => {
     setOverride(id, { status: 'archived' });
     setRecentAction({ id, label: 'Reported as junk' });
     persistAction(id, 'junk');
-  }, [setOverride, persistAction]);
+    hideIds([id]);
+  }, [setOverride, persistAction, hideIds]);
 
   // Apply an action to many emails at once (multi-select bulk actions).
   const bulkAction = useCallback((ids, action) => {
     (ids || []).forEach((id) => {
       if (action === 'archive') { setOverride(id, { status: 'archived' }); persistAction(id, 'archive'); }
       else if (action === 'trash') { setOverride(id, { status: 'archived' }); persistAction(id, 'trash'); }
+      else if (action === 'junk') { setOverride(id, { status: 'archived' }); persistAction(id, 'junk'); }
       else if (action === 'read') { setOverride(id, { read: true }); persistAction(id, 'read'); }
       else if (action === 'unread') { setOverride(id, { read: false }); persistAction(id, 'unread'); }
     });
+    if (action === 'archive' || action === 'trash' || action === 'junk') hideIds(ids);
     setRecentAction(null);
-  }, [setOverride, persistAction]);
+  }, [setOverride, persistAction, hideIds]);
 
   // ── "Archiving Soon" — a passive, high-confidence auto-archive queue ─────────
   // Low-priority bulk mail (the 'noise' bucket: newsletters/promos/notifications)
@@ -511,6 +548,7 @@ export function StoreProvider({ children }) {
         // Batch auto-archive undo: restore on the server AND keep them out of future
         // sweeps (undoing means "I want to hold onto these").
         cur.ids.forEach((id) => { setOverride(id, { status: undefined }); persistAction(id, 'inbox'); });
+        unhideIds(cur.ids);
         setPrefsState((p) => {
           const kept = Array.from(new Set([...(p.archiveKept || []), ...cur.ids]));
           const next = { ...p, archiveKept: kept };
@@ -519,10 +557,11 @@ export function StoreProvider({ children }) {
         });
       } else if (cur.id != null) {
         setOverride(cur.id, { status: undefined, snoozedUntil: undefined });
+        unhideIds([cur.id]);
       }
       return null;
     });
-  }, [setOverride, persistAction]);
+  }, [setOverride, persistAction, unhideIds]);
   undoLastRef.current = undoLast;
 
   const dismissRecent = useCallback(() => setRecentAction(null), []);
