@@ -6,7 +6,7 @@ from typing import List
 
 from guardrails import Action
 from intelligence.decision_core.scoring import Opportunity
-from strategies.base import Strategy
+from strategies.base import Strategy, ExecutionResult
 
 
 class DigitalProductsStrategy(Strategy):
@@ -36,3 +36,29 @@ class DigitalProductsStrategy(Strategy):
                 meta={"phase": "promote", "opp_type": opportunity.opp_type},
             ))
         return actions
+
+    def _execute_live(self, action: Action, context: dict) -> ExecutionResult:
+        """Live path. The BUILD phase creates a real Stripe Payment Link to
+        collect money — this never risks capital. Revenue arrives later via the
+        Stripe webhook when a customer actually pays. The PROMOTE phase needs a
+        real ad-platform API; absent one, it does NOT spend (capital-safe), it
+        just reports that paid promo is not wired."""
+        stripe = context.get("stripe")
+        phase = action.meta.get("phase", "build")
+        if phase == "build" and stripe is not None:
+            try:
+                fields = self.assets.product_listing(action.description, self.name).fields
+                price = float(str(fields.get("price", "19")).replace("$", "") or 19)
+                link = stripe.create_payment_link(
+                    amount=price, product_name=action.description[:120],
+                    idem=stripe.idempotency_key("dp", action.description))
+                return ExecutionResult(True, cost=0.0, revenue=0.0,
+                                       external_ref=link.id, reversible=True,
+                                       detail=f"listed; pay link {link.url}")
+            except Exception as e:
+                return ExecutionResult(False, detail=f"stripe link failed: {e}")
+        if phase == "promote":
+            return ExecutionResult(False, cost=0.0,
+                                   detail="no ad-platform API configured; skipping paid "
+                                          "promo (capital-safe)")
+        return ExecutionResult(False, detail="no live integration for this action")

@@ -46,6 +46,15 @@ def cmd_run(args):
         print("Not initialized. Run: python main.py --init")
         sys.exit(1)
     o.sim = not args.live
+    if args.live:
+        # Real money: refuse to start unless every critical preflight check passes.
+        import preflight
+        checks = preflight.run_checks(o.config, o.ledger, o.risk, o.language, live=True)
+        print(preflight.report(checks))
+        if not preflight.is_go(checks):
+            print("\nAborting live start. Run `python main.py doctor --live` after fixing.")
+            sys.exit(1)
+        print("\n*** LIVE MODE: Centurion will operate with REAL money. ***")
     sup = Supervisor(o.ledger, o.cfg)
     reporter = Reporter(o.ledger, o.cfg, memory=o.memory, risk=o.risk)
     print(f"Starting Centurion daemon (sim={o.sim}, autonomy={o.autonomy.level.value}). "
@@ -110,6 +119,21 @@ def cmd_set_autonomy(args):
     print(f"Autonomy level set to: {args.level}")
 
 
+def cmd_doctor(args):
+    import preflight
+    o = _orch(args)
+    checks = preflight.run_checks(o.config, o.ledger, o.risk, o.language,
+                                  live=getattr(args, "live", False))
+    print(preflight.report(checks))
+
+
+def cmd_confirm_card(args):
+    o = _orch(args)
+    o.ledger.set_state("funded_card_ack", "1")
+    print("Confirmed: funded card loaded with only the funded amount. This is the "
+          "belt-and-suspenders hard cap at the card level, on top of the software floor.")
+
+
 def cmd_approvals(args):
     o = _orch(args)
     if args.approve is not None:
@@ -146,6 +170,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status", help="print status").set_defaults(func=cmd_status)
     sub.add_parser("report", help="write + print daily report").set_defaults(func=cmd_report)
+
+    pd = sub.add_parser("doctor", help="run preflight readiness checks")
+    pd.add_argument("--live", action="store_true", help="check live-mode requirements")
+    pd.set_defaults(func=cmd_doctor)
+
+    sub.add_parser("confirm-card", help="confirm the funded card cap (live onboarding)"
+                   ).set_defaults(func=cmd_confirm_card)
 
     pp = sub.add_parser("pause", help="kill switch")
     pp.add_argument("--reason", default=None)

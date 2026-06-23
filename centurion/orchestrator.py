@@ -82,6 +82,12 @@ class Orchestrator:
         self.language = get_provider(self.cfg)
         self.research = ResearchEngine(self.language, seed=self.seed)
         self.assets = AssetFactory(self.language)
+
+        # Revenue rail. Mock mode (no key) lets dry runs work; a real key makes
+        # the live path collect actual money. Creating payment links never risks
+        # capital, so the live revenue path is safe by construction.
+        from integrations.stripe_client import StripeClient
+        self.stripe = StripeClient()
         self.scorer = ScoringModel(self.cfg.get("scoring_weights"))
         self.allocator = Allocator()
 
@@ -277,7 +283,9 @@ class Orchestrator:
         self.ledger.update_action_status(action_id, "in_progress")
 
         strat = self.strategies[strategy]
-        result = strat.execute(action, sim=self.sim, context={"rng": rng})
+        result = strat.execute(action, sim=self.sim,
+                               context={"rng": rng, "stripe": self.stripe,
+                                        "live": not self.sim})
 
         net = 0.0
         try:
