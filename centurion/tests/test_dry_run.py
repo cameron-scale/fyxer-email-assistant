@@ -106,6 +106,32 @@ def test_prohibited_and_obligation_actions_refused_all_levels(tmp_path):
         assert not eng.check(obligation).allowed
 
 
+def test_brand_gate_queues_brand_posts_in_live_mode(tmp_path):
+    # In live mode with the brand gate on and no sandbox identity, anything that
+    # publishes under the real brand is queued for human review, not auto-posted.
+    o = Orchestrator(make_config(tmp_path, brand_human_gate=True,
+                                 sandbox_identity=None,
+                                 focus_strategy="digital_products"))
+    o.ledger.seed(100.0)
+    o.sim = False  # live mode (Stripe in mock since no key)
+    o.run_cycle()
+    queued = o.ledger.actions_by_status("queued")
+    assert any("digital_products" == a["strategy"] for a in queued)
+
+
+def test_sandbox_identity_lets_brand_posts_flow(tmp_path):
+    o = Orchestrator(make_config(tmp_path, brand_human_gate=True,
+                                 sandbox_identity="sandbox-store",
+                                 focus_strategy="digital_products"))
+    o.ledger.seed(100.0)
+    o.sim = False
+    o.run_cycle()
+    # with a sandbox identity, brand posts are not forced into the queue
+    queued = [a for a in o.ledger.actions_by_status("queued")
+              if a["strategy"] == "digital_products"]
+    assert queued == []
+
+
 def test_no_third_party_ai_api_in_codebase():
     """Grep the whole codebase for hosted-AI endpoints/keys. Must find none in
     real call sites. Allowed: refusal lists / comments that NAME them to block."""

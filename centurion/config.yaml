@@ -47,6 +47,27 @@ language_provider: template         # default for dry runs; set 'local' for the 
 model_name: "llama3.1:8b-instruct-q4_K_M"
 monthly_compute_budget: 20.0        # USD-equivalent ceiling on inference spend
 
+# --- Edge & discipline (upstream of the code, this is what decides win/lose) ---
+# Force the unit economics to clear AFTER Stripe fees before deploying capital.
+# A $5 product loses ~6% to the fixed fee alone — favor higher-ticket or
+# zero-marginal-cost plays. If nothing clears, HOLD is a first-class move.
+min_net_ev: 1.0          # min expected profit (after fees) to deploy capital
+min_margin: 0.5          # min return-on-spend (50% over cost) for paid actions
+
+# Cheapest de-risking: prove $1 of REAL organic revenue before any budget is
+# spent. Off by default (so dry runs aren't blocked); turn ON for live.
+require_organic_proof: false
+
+# Brand safety: spend can be autonomous; your NAME should not be. Anything
+# published under the real brand is human-gated unless a sandbox identity is set.
+brand_human_gate: true
+brand_identity: "ScaleMBS"
+sandbox_identity: null    # e.g. a separate storefront/handle to publish under
+
+# Focus beats spread on a $100 bankroll. Set to one strategy name to concentrate
+# (e.g. "digital_products"); null spreads across all enabled strategies.
+focus_strategy: null
+
 # --- Strategies (enable/disable individually) ---
 strategies:
   digital_products:    {enabled: true}

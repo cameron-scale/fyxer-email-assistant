@@ -58,6 +58,19 @@ class RiskManager:
         self.reinvest_earnings = bool(config.get("reinvest_earnings", True))
         # Bound runaway single bets even at very large balances (sane variance).
         self.max_cap_multiple = float(config.get("per_action_cap_multiple", 1000.0))
+        # Prove $1 of real organic revenue before any budget may be spent — the
+        # cheapest possible de-risking. Off by default so dry runs aren't blocked;
+        # recommended ON for live (see GO_LIVE.md).
+        self.require_organic_proof = bool(config.get("require_organic_proof", False))
+
+    def organic_dollar_proven(self) -> bool:
+        """True once a real (non-seed, non-passive) credit of >= $1 has landed."""
+        for t in self.ledger.transactions(5000):
+            if t["type"] == "credit" and t["amount"] >= 1.0 \
+                    and (t["description"] or "") != "seed capital" \
+                    and "passive" not in (t["description"] or ""):
+                return True
+        return False
 
     # --- funded capital reference ---
     def funded_capital(self) -> float:
@@ -134,6 +147,12 @@ class RiskManager:
 
         if amount < 0:
             return RiskDecision(False, "negative spend rejected", cap)
+
+        # Prove $1 organic before any budget is touched (when enabled).
+        if amount > 0 and self.require_organic_proof and not self.organic_dollar_proven():
+            return RiskDecision(False,
+                                "organic-proof gate: must earn $1 of real revenue "
+                                "before spending any budget", cap)
 
         balance = self.ledger.balance()
 

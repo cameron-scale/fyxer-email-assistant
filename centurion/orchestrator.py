@@ -91,6 +91,19 @@ class Orchestrator:
         self.scorer = ScoringModel(self.cfg.get("scoring_weights"))
         self.allocator = Allocator()
 
+        # Unit-economics gate + decision-quality logging.
+        from economics import Economics
+        from calibration import CalibrationLog
+        self.economics = Economics(self.cfg)
+        self.calibration = CalibrationLog(self.ledger)
+        # Brand safety: spend can be autonomous; your NAME shouldn't be. Anything
+        # published under the real brand routes to a human gate unless a separate
+        # sandbox identity is configured.
+        self.brand_human_gate = bool(self.cfg.get("brand_human_gate", True))
+        self.sandbox_identity = self.cfg.get("sandbox_identity") or None
+        # Focus: optionally concentrate on one strategy instead of spreading thin.
+        self.focus_strategy = self.cfg.get("focus_strategy") or None
+
         # Decision Core: persist/restore the bandit so learning survives restarts.
         self.bandit = self._load_bandit()
         self.strategies = self._build_strategies()
@@ -177,6 +190,10 @@ class Orchestrator:
         capital = self.ledger.balance()
         funded = self.risk.funded_capital()
         names = list(self.strategies.keys())
+        # Focus mode: concentrate on one strategy where there's an edge, rather
+        # than spreading the bankroll thin across five shallow plays.
+        if self.focus_strategy and self.focus_strategy in self.strategies:
+            names = [self.focus_strategy]
         if not names:
             report.notes.append("no strategies enabled")
             return
@@ -199,9 +216,17 @@ class Orchestrator:
             self.ledger.record_opportunity(name, ev.best.brief, ev.score,
                                            ev.best.est_capital, ev.best.est_return,
                                            status="scored")
+            # Unit-economics gate: only request capital if the math clears AFTER
+            # Stripe fees. If it doesn't, requested capital is 0 — a deliberate
+            # HOLD (we still build the free asset; we just don't spend on it).
+            verdict = self.economics.evaluate(ev.best.est_return, ev.best.est_capital)
+            req_capital = ev.best.est_capital if verdict.clears else 0.0
+            if not verdict.clears and ev.best.est_capital > 0:
+                report.notes.append(f"[{name}] HOLD (no good spend): {verdict.reason}")
+                self.memory.note(f"hold {name}: {verdict.reason}", strategy=name, weight=2)
             requests.append(AllocationRequest(
                 id=name, strategy=name,
-                requested_capital=ev.best.est_capital,
+                requested_capital=req_capital,
                 expected_return=ev.best.est_return, score=ev.score))
 
         # Allocate capital under all caps.
@@ -249,6 +274,18 @@ class Orchestrator:
                                       status="rejected")
             return
 
+        # 1b. Brand-safety gate: anything published under the REAL brand routes
+        # to a human approval queue regardless of autonomy level, unless a
+        # separate sandbox identity is configured. Spend is autonomous; the
+        # operator's name is not put at risk unattended.
+        if action.meta.get("publishes_under_brand") and self.brand_human_gate \
+                and not self.sandbox_identity and not self.sim:
+            self.approvals.enqueue(action, expected_return)
+            report.actions_queued += 1
+            report.notes.append(f"[{strategy}] brand-safety gate: queued for human "
+                                 f"review (publishes under real brand): {action.description}")
+            return
+
         # 2. Autonomy dial — queue or execute.
         dec = self.autonomy.decide(action)
         if not dec.execute_now:
@@ -271,10 +308,10 @@ class Orchestrator:
                 return
 
         # 4. Durable, crash-safe execution.
-        self._execute_durably(strategy, action, rng, report)
+        self._execute_durably(strategy, action, rng, report, expected_return)
 
     def _execute_durably(self, strategy: str, action: Action, rng: random.Random,
-                         report: CycleReport) -> None:
+                         report: CycleReport, expected_return: float = 0.0) -> None:
         idem = f"c{self.cycle_count}-{strategy}-{action.meta.get('phase','x')}-{rng.randint(100000,999999)}"
         action_id = self.ledger.record_action(
             strategy=strategy, description=action.description, cost=action.cost,
@@ -314,6 +351,10 @@ class Orchestrator:
             return
 
         report.net += net
+        # Decision-quality logging: predicted net-EV (after fees) vs realized net.
+        if action.cost > 0 or result.revenue > 0:
+            predicted_net = self.economics.evaluate(expected_return, action.cost).net_ev
+            self.calibration.record(strategy, predicted_net, net, action.cost)
         self._learn_from_outcome(strategy, action, result, net)
 
     def _learn_from_outcome(self, strategy: str, action: Action, result, net: float) -> None:

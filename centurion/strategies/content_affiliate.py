@@ -25,5 +25,6 @@ class ContentAffiliateStrategy(Strategy):
             cost=0.0, reversible=True, legality="clear", tos_compliant=True,
             rationale="Compounding asset; must follow each affiliate program's rules.",
             meta={"phase": "promote", "opp_type": opportunity.opp_type,
+                  "publishes_under_brand": True,
                   "affiliate_rules": "must disclose, no incentivized clicks"},
         )]

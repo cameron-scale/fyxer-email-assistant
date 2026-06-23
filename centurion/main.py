@@ -56,7 +56,7 @@ def cmd_run(args):
             sys.exit(1)
         print("\n*** LIVE MODE: Centurion will operate with REAL money. ***")
     sup = Supervisor(o.ledger, o.cfg)
-    reporter = Reporter(o.ledger, o.cfg, memory=o.memory, risk=o.risk)
+    reporter = Reporter(o.ledger, o.cfg, memory=o.memory, risk=o.risk, calibration=o.calibration)
     print(f"Starting Centurion daemon (sim={o.sim}, autonomy={o.autonomy.level.value}). "
           f"Ctrl-C to stop.")
 
@@ -85,7 +85,7 @@ def cmd_cycle(args):
 
 def cmd_status(args):
     o = _orch(args)
-    reporter = Reporter(o.ledger, o.cfg, memory=o.memory, risk=o.risk)
+    reporter = Reporter(o.ledger, o.cfg, memory=o.memory, risk=o.risk, calibration=o.calibration)
     print(reporter.cli_summary())
     print(f"Autonomy: {o.autonomy.level.value} | Paused: {o.risk.is_paused()} "
           f"| Provider: {o.language.name} | Cycles: {o.cycle_count}")
@@ -94,7 +94,7 @@ def cmd_status(args):
 
 def cmd_report(args):
     o = _orch(args)
-    reporter = Reporter(o.ledger, o.cfg, memory=o.memory, risk=o.risk)
+    reporter = Reporter(o.ledger, o.cfg, memory=o.memory, risk=o.risk, calibration=o.calibration)
     path = reporter.write_daily()
     print(reporter.build())
     print(f"\n(written to {path})")

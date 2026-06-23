@@ -15,11 +15,13 @@ from ledger import Ledger
 
 
 class Reporter:
-    def __init__(self, ledger: Ledger, config: dict, memory=None, risk=None):
+    def __init__(self, ledger: Ledger, config: dict, memory=None, risk=None,
+                 calibration=None):
         self.ledger = ledger
         self.cfg = config
         self.memory = memory
         self.risk = risk
+        self.calibration = calibration
         self.target = float(config.get("target_capital", 1000.0))
         self.ultimate = float(config.get("ultimate_target", 0) or 0)
         self.funded = float(config.get("funded_capital", 100.0))
@@ -103,6 +105,14 @@ class Reporter:
                              "the agent is iterating to find an edge.")
         else:
             lines.append("- Not enough realized data yet for an honest projection.")
+
+        # decision quality (calibration) — are predictions tracking reality?
+        if self.calibration is not None:
+            cs = self.calibration.stats()
+            lines.append("")
+            lines.append("## Decision quality (predicted vs realized)")
+            lines.append(f"- {cs.n} bets logged · MAE ${cs.mae} · bias ${cs.bias} "
+                         f"→ {cs.verdict}")
 
         # strategy performance
         lines.append("")

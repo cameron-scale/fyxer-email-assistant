@@ -24,7 +24,8 @@ class DigitalProductsStrategy(Strategy):
             description=f"Generate product + landing page and list it: {topic}",
             cost=0.0, reversible=True, legality="clear", tos_compliant=True,
             rationale="Create a sellable digital asset before any spend.",
-            meta={"phase": "build", "opp_type": opportunity.opp_type},
+            meta={"phase": "build", "opp_type": opportunity.opp_type,
+                  "publishes_under_brand": True},
         )]
         if opportunity.est_capital > 0:
             actions.append(Action(
