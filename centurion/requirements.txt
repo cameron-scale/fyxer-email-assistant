@@ -1,0 +1,14 @@
+# Centurion - dependency-light by design.
+# Core runtime
+numpy>=1.24
+PyYAML>=6.0
+Flask>=3.0
+requests>=2.31
+
+# Optional, used only if present / enabled in config:
+#   scikit-learn   -> optional EV regressor in the Decision Core (offline)
+#   stripe         -> real revenue collection (mock mode needs no key)
+#   twilio         -> optional SMS alerts / remote approval
+# These are intentionally not hard requirements so the full simulated
+# dry run can pass on the stub provider with no external services.
+scikit-learn>=1.3 ; python_version >= "3.11"

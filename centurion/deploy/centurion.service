@@ -1,0 +1,23 @@
+# Sample systemd unit for running Centurion on an always-on host (e.g. your PC
+# or a VPS) without Docker. Install to /etc/systemd/system/centurion.service,
+# then: sudo systemctl daemon-reload && sudo systemctl enable --now centurion
+[Unit]
+Description=Centurion autonomous capital growth agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust User and paths to your environment.
+User=centurion
+WorkingDirectory=/opt/centurion
+EnvironmentFile=/opt/centurion/.env
+ExecStartPre=/usr/bin/env python3 main.py --init
+ExecStart=/usr/bin/env python3 main.py run
+Restart=always
+RestartSec=5
+# Hard memory ceiling so a runaway model load can't take the box down.
+MemoryMax=8G
+
+[Install]
+WantedBy=multi-user.target
