@@ -2,7 +2,7 @@
 // search pill, scrollable filter chips, and day-grouped white cards driven by
 // Brisk's priority engine. Doubles as the Starred tab via the `starred` prop.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, SectionList, Pressable, RefreshControl, TextInput, ScrollView, ActivityIndicator,
 } from 'react-native';
@@ -33,6 +33,17 @@ const CATEGORY_FILTERS = ['Action Needed', 'Meeting', 'Client', 'Newsletter', 'F
 
 const SECTION_ORDER = ['Today', 'Last 7 days', 'Earlier'];
 
+// Sender classifications offered by the Classify button (multi-select).
+const CLASSIFY_LABELS = [
+  { key: 'important', name: 'Important', icon: 'star', color: '#FFB454' },
+  { key: 'client', name: 'Client', icon: 'briefcase', color: '#1D4ED8' },
+  { key: 'vendor', name: 'Vendor', icon: 'cube', color: '#0891B2' },
+  { key: 'coworker', name: 'Coworker', icon: 'people', color: '#4338CA' },
+  { key: 'employee', name: 'Employee', icon: 'person', color: '#059669' },
+  { key: 'newsletter', name: 'Newsletter', icon: 'newspaper', color: '#475569' },
+  { key: 'junk', name: 'Junk', icon: 'ban', color: '#FF453A' },
+];
+
 export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const {
     emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
@@ -48,8 +59,20 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const [sortOpen, setSortOpen] = useState(false);
   const [aiMode, setAiMode] = useState(false); // search bar becomes an AI chat
 
-  // Multi-select for bulk actions (archive / delete / mark read).
-  const { trashEmail, bulkAction, summarizeBatch } = useStore();
+  // Multi-select for bulk actions (archive / delete / mark read / classify).
+  const { trashEmail, bulkAction, summarizeBatch, classifySenders } = useStore();
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [flash, setFlash] = useState('');
+  const flashTimer = useRef(null);
+  const showFlash = (msg) => { setFlash(msg); clearTimeout(flashTimer.current); flashTimer.current = setTimeout(() => setFlash(''), 1900); };
+  const applyClassify = (label) => {
+    const ids = Array.from(selected);
+    const n = classifySenders(ids, label);
+    setClassifyOpen(false);
+    exitSelect();
+    const name = CLASSIFY_LABELS.find((l) => l.key === label)?.name || label;
+    showFlash(`Marked ${n} sender${n === 1 ? '' : 's'} as ${name}`);
+  };
 
   // Lazy summaries: show 50 per box; reveal + summarize 50 more when you scroll past.
   const PAGE = 50;
@@ -433,10 +456,38 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
           <View style={styles.selBar}>
             <SelAction icon="mail-open-outline" label="Read" onPress={() => applyBulk('read')} disabled={!selected.size} />
             <SelAction icon="mail-unread-outline" label="Unread" onPress={() => applyBulk('unread')} disabled={!selected.size} />
+            <SelAction icon="pricetag-outline" label="Classify" onPress={() => setClassifyOpen(true)} disabled={!selected.size} />
             <SelAction icon="archive-outline" label="Archive" onPress={() => applyBulk('archive')} disabled={!selected.size} />
             <SelAction icon="trash-outline" label="Delete" color="#FF453A" onPress={() => applyBulk('trash')} disabled={!selected.size} />
           </View>
         </>
+      )}
+
+      {/* Classification sheet — teach ScaleMail how to treat the selected sender(s). */}
+      {classifyOpen && (
+        <View style={styles.classifyWrap}>
+          <Pressable style={styles.classifyBackdrop} onPress={() => setClassifyOpen(false)} />
+          <View style={styles.classifySheet}>
+            <View style={styles.classifyGrab} />
+            <Text style={styles.classifyTitle}>Classify sender{selected.size === 1 ? '' : 's'}</Text>
+            <Text style={styles.classifySub}>ScaleMail will treat current and future mail from {selected.size === 1 ? 'this sender' : `these ${selected.size} senders`} this way.</Text>
+            {CLASSIFY_LABELS.map((l) => (
+              <Pressable key={l.key} style={styles.classifyRow} onPress={() => applyClassify(l.key)}>
+                <View style={[styles.classifyIcon, { backgroundColor: `${l.color}22` }]}>
+                  <Ionicons name={l.icon} size={18} color={l.color} />
+                </View>
+                <Text style={styles.classifyLabel}>{l.name}</Text>
+                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.35)" />
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {!!flash && (
+        <View style={styles.flashWrap} pointerEvents="none">
+          <View style={styles.flash}><Text style={styles.flashText}>{flash}</Text></View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -463,8 +514,22 @@ const styles = StyleSheet.create({
   selCount: { color: '#fff', fontSize: 16, fontWeight: '800' },
   selAll: { color: colors.blue, fontSize: 15, fontWeight: '600' },
   selBar: { position: 'absolute', bottom: 96, left: 16, right: 16, zIndex: 30, flexDirection: 'row', justifyContent: 'space-around', backgroundColor: 'rgba(20,22,34,0.98)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', paddingVertical: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
-  selActionBtn: { alignItems: 'center', gap: 4, paddingHorizontal: 18 },
+  selActionBtn: { alignItems: 'center', gap: 4, paddingHorizontal: 10 },
   selActionLabel: { color: '#fff', fontSize: 11, fontWeight: '600' },
+
+  classifyWrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 60, justifyContent: 'flex-end' },
+  classifyBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  classifySheet: { backgroundColor: '#13182a', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 18, paddingBottom: 34, paddingTop: 8 },
+  classifyGrab: { width: 38, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.25)', alignSelf: 'center', marginBottom: 10 },
+  classifyTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  classifySub: { color: 'rgba(255,255,255,0.55)', fontSize: 13, lineHeight: 18, marginTop: 4, marginBottom: 10 },
+  classifyRow: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)' },
+  classifyIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  classifyLabel: { flex: 1, color: '#fff', fontSize: 15.5, fontWeight: '600' },
+
+  flashWrap: { position: 'absolute', left: 0, right: 0, bottom: 150, alignItems: 'center', zIndex: 70 },
+  flash: { backgroundColor: 'rgba(20,24,40,0.97)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 14, paddingVertical: 11, paddingHorizontal: 18 },
+  flashText: { color: '#fff', fontSize: 13.5, fontWeight: '600' },
   list: { paddingHorizontal: 0, paddingBottom: 100 },
   header: { paddingHorizontal: 16, paddingTop: 4 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },

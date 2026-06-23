@@ -28,7 +28,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, autoArchive: true, archiveNoticeSeen: false };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, autoArchive: true, archiveNoticeSeen: false };
 
 const StoreContext = createContext(null);
 
@@ -200,6 +200,10 @@ export function StoreProvider({ children }) {
     return ki[activeAccountId] || [];
   }, [prefs.knownImportant, activeAccountId]);
 
+  // Sender classifications from the Classify button: { email -> important|junk|
+  // newsletter|client|vendor|coworker|employee } — feeds the priority engine.
+  const senderLabels = useMemo(() => prefs.senderLabels || {}, [prefs.senderLabels]);
+
   // Build the prioritized, filtered, sorted list the UI shows. We split this into
   // two passes so AI summaries arriving (which happens constantly) don't re-run the
   // expensive regex scoring over the whole mailbox:
@@ -227,8 +231,8 @@ export function StoreProvider({ children }) {
     // twice, which showed up as a repeated card (notably in Triage).
     const seen = new Set();
     const deduped = visible.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
-    return applySort(prioritize(deduped, vips, prefs.categories, knownImportantList));
-  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, demoMode, activeAccountId, applySort]); // eslint-disable-line
+    return applySort(prioritize(deduped, vips, prefs.categories, knownImportantList, senderLabels));
+  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, prefs.senderLabels, demoMode, activeAccountId, applySort]); // eslint-disable-line
 
   const emails = useMemo(() => {
     if (demoMode) return rankedBase;
@@ -247,8 +251,8 @@ export function StoreProvider({ children }) {
       .filter((e) => e.folder === currentFolder.id)
       .map((e) => ({ ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id] }))
       .filter((e) => e.status !== 'archived' && e.status !== 'done' && !(e.snoozedUntil && e.snoozedUntil > now));
-    return applySort(prioritize(visible, vips, prefs.categories, knownImportantList));
-  }, [raw, overrides, vips, summaries, prefs.categories, prefs.knownImportant, currentFolder, applySort]);
+    return applySort(prioritize(visible, vips, prefs.categories, knownImportantList, senderLabels));
+  }, [raw, overrides, vips, summaries, prefs.categories, prefs.knownImportant, prefs.senderLabels, currentFolder, applySort]);
 
   // Prioritized view of whole-mailbox search results (null when not searching).
   const searchEmails = useMemo(() => {
@@ -256,12 +260,12 @@ export function StoreProvider({ children }) {
     const merged = searchResults.map((e) => ({
       ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id],
     }));
-    return prioritize(merged, vips, prefs.categories, knownImportantList);
-  }, [searchResults, overrides, summaries, vips, prefs.categories, prefs.knownImportant]);
+    return prioritize(merged, vips, prefs.categories, knownImportantList, senderLabels);
+  }, [searchResults, overrides, summaries, vips, prefs.categories, prefs.knownImportant, prefs.senderLabels]);
 
   // Prioritized Sent / Drafts lists (loaded on demand for those tabs).
-  const sentRanked = useMemo(() => prioritize((folders.sent || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories), [folders.sent, overrides, vips, prefs.categories]);
-  const draftRanked = useMemo(() => prioritize((folders.drafts || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories), [folders.drafts, overrides, vips, prefs.categories]);
+  const sentRanked = useMemo(() => prioritize((folders.sent || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories, knownImportantList, senderLabels), [folders.sent, overrides, vips, prefs.categories, knownImportantList, senderLabels]);
+  const draftRanked = useMemo(() => prioritize((folders.drafts || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories, knownImportantList, senderLabels), [folders.drafts, overrides, vips, prefs.categories, knownImportantList, senderLabels]);
 
   // Find a prioritized email by id across EVERY loaded list (inbox, folders,
   // Sent, Drafts, search) so the reader works no matter which box it was opened from.
@@ -752,6 +756,25 @@ export function StoreProvider({ children }) {
     });
   }, []);
 
+  // Classify the senders of the given emails (important | junk | newsletter |
+  // client | vendor | coworker | employee). This teaches the priority engine how to
+  // treat current AND future mail from them. 'junk' also moves the selected mail to
+  // Junk right now. Returns the number of distinct senders labeled.
+  const classifySenders = useCallback((ids, label) => {
+    const picked = (ids || []).map((id) => findEmail(id)).filter(Boolean);
+    const addrs = Array.from(new Set(picked.map((e) => (e.priority?.senderEmail || '').toLowerCase()).filter(Boolean)));
+    if (addrs.length) {
+      setPrefsState((p) => {
+        const next = { ...p, senderLabels: { ...(p.senderLabels || {}) } };
+        addrs.forEach((a) => { next.senderLabels[a] = label; });
+        saveToken('prefs', JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    }
+    if (label === 'junk' && ids?.length) bulkAction(ids, 'junk');
+    return addrs.length;
+  }, [findEmail, bulkAction]);
+
   // Rename / tag a linked mailbox (custom display name + accent color).
   const updateMailAccount = useCallback((id, patch) => {
     setMailAccounts((prev) => { const next = prev.map((a) => (a.id === id ? { ...a, ...patch } : a)); persistAccounts(next); mailAccountsRef.current = next; return next; });
@@ -986,6 +1009,7 @@ export function StoreProvider({ children }) {
     openLearn,
     closeLearn,
     addKnownImportant,
+    classifySenders,
     mailFolders,
     foldersLoading,
     loadMailFolders,

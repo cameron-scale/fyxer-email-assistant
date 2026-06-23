@@ -95,6 +95,29 @@ describe('VIP boosting', () => {
   });
 });
 
+describe('sender classification (Classify button)', () => {
+  it('sends a junk-labeled sender to Newsletter/noise', () => {
+    const email = make({ from: 'Bob <bob@acme.com>', subject: 'Important update', body: 'Please review.' });
+    const labeled = scoreEmail(email, { senderLabels: { 'bob@acme.com': 'junk' } });
+    expect(labeled.category).toBe('Newsletter');
+    expect(labeled.bucket).toBe('noise');
+  });
+
+  it('lifts an important-labeled sender out of noise', () => {
+    const email = make({ from: 'Newsy <news@blast.com>', subject: 'weekly digest', body: 'unsubscribe' });
+    const normal = scoreEmail(email);
+    const labeled = scoreEmail(email, { senderLabels: { 'news@blast.com': 'important' } });
+    expect(labeled.score).toBeGreaterThan(normal.score);
+    expect(['urgent', 'important']).toContain(labeled.bucket);
+  });
+
+  it('tags a client-labeled sender as Client', () => {
+    const email = make({ from: 'Pat <pat@co.com>', subject: 'hi', body: 'checking in' });
+    const labeled = scoreEmail(email, { senderLabels: { 'pat@co.com': 'client' } });
+    expect(labeled.category).toBe('Client');
+  });
+});
+
 describe('prioritize', () => {
   it('sorts urgent above noise and is stable', () => {
     const list = prioritize([

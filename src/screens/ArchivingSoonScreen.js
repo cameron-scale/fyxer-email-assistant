@@ -2,16 +2,23 @@
 // low-priority bulk emails staged to archive in 7 days. Keep the ones you want to
 // hold onto, or archive the whole batch now.
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, SafeAreaView, FlatList, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { useStore } from '../store';
 import { timeAgo, nightlyArchiveEta } from '../lib/time';
+import { bandFor } from '../lib/bands';
 import SenderAvatar from '../components/SenderAvatar';
 
 export default function ArchivingSoonScreen({ goBack, navigate }) {
   const { archivingSoon, archivingSoonCount, keepFromArchive, archiveStagedNow } = useStore();
+
+  // Always show this queue most-important first, with the 1–10 score on each row.
+  const sorted = useMemo(
+    () => [...archivingSoon].sort((a, b) => (b.priority?.rank ?? b.priority?.score ?? 0) - (a.priority?.rank ?? a.priority?.score ?? 0)),
+    [archivingSoon],
+  );
 
   const archiveAll = () => {
     if (!archivingSoon.length) return;
@@ -38,26 +45,36 @@ export default function ArchivingSoonScreen({ goBack, navigate }) {
       </View>
 
       <FlatList
-        data={archivingSoon}
+        data={sorted}
         keyExtractor={(e) => `${e.account}-${e.id}`}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <Pressable style={styles.row} onPress={() => navigate('Thread', { id: item.id })}>
-            <SenderAvatar name={item.priority.senderName} email={item.priority.senderEmail} size={36} textStyle={styles.initial} />
-            <View style={styles.main}>
-              <View style={styles.topLine}>
-                <Text style={styles.sender} numberOfLines={1}>{item.priority.senderName}</Text>
-                <Text style={styles.time}>{timeAgo(item.date)}</Text>
+        renderItem={({ item }) => {
+          const strip = bandFor(item).grad?.[0] || colors.blue;
+          const rank = item.priority?.rank;
+          return (
+            <Pressable style={styles.row} onPress={() => navigate('Thread', { id: item.id })}>
+              <View style={[styles.strip, { backgroundColor: strip }]} />
+              <SenderAvatar name={item.priority.senderName} email={item.priority.senderEmail} size={36} textStyle={styles.initial} />
+              <View style={styles.main}>
+                <View style={styles.topLine}>
+                  <Text style={styles.sender} numberOfLines={1}>{item.priority.senderName}</Text>
+                  {rank != null && (
+                    <View style={[styles.rankPill, { backgroundColor: `${strip}26` }]}>
+                      <Text style={[styles.rankText, { color: strip }]}>{Number(rank).toFixed(1)}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.time}>{timeAgo(item.date)}</Text>
+                </View>
+                <Text style={styles.subject} numberOfLines={1}>{item.subject}</Text>
               </View>
-              <Text style={styles.subject} numberOfLines={1}>{item.subject}</Text>
-            </View>
-            <Pressable hitSlop={8} style={styles.keepBtn} onPress={() => keepFromArchive(item.id)}>
-              <Ionicons name="checkmark" size={14} color="#34D399" />
-              <Text style={styles.keepText}>Keep</Text>
+              <Pressable hitSlop={8} style={styles.keepBtn} onPress={() => keepFromArchive(item.id)}>
+                <Ionicons name="checkmark" size={14} color="#34D399" />
+                <Text style={styles.keepText}>Keep</Text>
+              </Pressable>
             </Pressable>
-          </Pressable>
-        )}
+          );
+        }}
         ListEmptyComponent={(
           <View style={styles.empty}>
             <Ionicons name="checkmark-circle-outline" size={44} color="rgba(255,255,255,0.4)" />
@@ -88,10 +105,13 @@ const styles = StyleSheet.create({
   bannerText: { flex: 1, color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 18 },
   list: { paddingHorizontal: 16, paddingBottom: 110 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)' },
+  strip: { width: 3, height: 30, borderRadius: 2, marginRight: -4 },
   initial: { color: '#fff', fontWeight: '700', fontSize: 12 },
   main: { flex: 1, minWidth: 0 },
   topLine: { flexDirection: 'row', alignItems: 'center' },
   sender: { flex: 1, color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600' },
+  rankPill: { borderRadius: 7, paddingHorizontal: 6, height: 17, alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
+  rankText: { fontSize: 11, fontWeight: '800' },
   time: { color: 'rgba(255,255,255,0.45)', fontSize: 11, marginLeft: 6 },
   subject: { color: 'rgba(255,255,255,0.55)', fontSize: 12.5, marginTop: 2 },
   keepBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(16,185,129,0.16)', borderRadius: 14, paddingVertical: 7, paddingHorizontal: 11 },

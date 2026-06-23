@@ -258,6 +258,23 @@ export function scoreEmail(email, options = {}) {
   // ...but a genuinely urgent message always shows as Urgent (highest priority).
   if (bucket === 'urgent') category = 'Urgent';
 
+  // --- Explicit sender classification (the Classify button) — highest user intent.
+  // Lets you teach the app how to treat a sender: a wanted contact, or junk/news.
+  const senderLabel = (options.senderLabels || {})[sender.email] || null;
+  if (senderLabel === 'junk') {
+    category = 'Newsletter'; bucket = 'noise'; score -= 60; reasons.unshift('Marked junk');
+  } else if (senderLabel === 'newsletter') {
+    category = 'Newsletter'; bucket = 'noise'; score -= 25; reasons.unshift('Marked newsletter');
+  } else if (senderLabel) {
+    // Person/relationship labels: important, client, vendor, coworker, employee — a
+    // real, wanted contact. Boost it, never bury it, and tag it sensibly.
+    score += senderLabel === 'important' ? 50 : 25;
+    if (bucket === 'noise' || bucket === 'fyi') bucket = 'important';
+    if (senderLabel === 'client' || senderLabel === 'vendor') category = 'Client';
+    if (bucket === 'urgent') category = 'Urgent';
+    reasons.unshift(`Marked ${senderLabel}`);
+  }
+
   // --- User-defined custom categories (sender maps + keyword rules) ---
   // A sender match is an explicit user choice and wins over everything; a keyword
   // match wins over the default tag but not over Urgent. We keep up to 3 tags.
@@ -322,9 +339,9 @@ export const BUCKETS = {
 // vips = array of lowercased sender emails the user marked important.
 // categories = optional user-defined custom categories.
 // knownImportant = lowercased sender emails the AI learned are important to you.
-export function prioritize(rawEmails, vips = [], categories = [], knownImportant = []) {
+export function prioritize(rawEmails, vips = [], categories = [], knownImportant = [], senderLabels = {}) {
   return rawEmails
-    .map((e) => ({ ...e, priority: scoreEmail(e, { vips, categories, knownImportant }) }))
+    .map((e) => ({ ...e, priority: scoreEmail(e, { vips, categories, knownImportant, senderLabels }) }))
     .sort((a, b) => {
       const ord =
         BUCKETS[a.priority.bucket].order - BUCKETS[b.priority.bucket].order;
