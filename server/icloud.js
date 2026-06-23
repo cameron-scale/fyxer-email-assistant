@@ -96,7 +96,8 @@ export async function icloudMessage(refreshToken, uid, folder = 'inbox') {
       const attachments = (parsed.attachments || [])
         .filter((a) => a.filename && (a.contentDisposition || 'attachment') !== 'inline')
         .map((a, i) => ({ id: String(i), name: a.filename, size: a.size || 0, contentType: a.contentType || '' }));
-      return { body: text, bodyHtml: html || '', meeting: detectMeeting(html || text), invite: null, attachments };
+      const parties = (addr) => (!addr ? [] : (addr.value || []).map((v) => (v.name && v.name !== v.address ? `${v.name} <${v.address || ''}>` : (v.address || ''))).filter(Boolean));
+      return { body: text, bodyHtml: html || '', to: parties(parsed.to), cc: parties(parsed.cc), meeting: detectMeeting(html || text), invite: null, attachments };
     } finally { lock.release(); }
   });
 }

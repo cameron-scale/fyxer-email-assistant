@@ -118,6 +118,12 @@ export function askMail(serverUrl, refreshToken, q) {
   return post(serverUrl, '/ask', { refreshToken, q });
 }
 
+// Learn from an email the user KEEPS (rescued from auto-archive). The AI reads it
+// and infers why it matters. Returns { reason, label } (label may be null).
+export function learnFromKeep(serverUrl, email) {
+  return post(serverUrl, '/learn-keep', { email }).catch(() => null);
+}
+
 // Save a draft to the Outlook Drafts folder. Returns { id }.
 export function saveDraft(serverUrl, payload) {
   return post(serverUrl, '/draft-save', payload);

@@ -17,6 +17,7 @@ import ProfileAvatar from '../components/ProfileAvatar';
 import LearnInboxCard from '../components/LearnInboxCard';
 import { dayBucket, longToday, nightlyArchiveEta } from '../lib/time';
 import { useTourTarget } from '../lib/tour';
+import { CLASSIFY_LABELS } from '../lib/labels';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -32,17 +33,6 @@ const FILTERS = [
 const CATEGORY_FILTERS = ['Action Needed', 'Meeting', 'Client', 'Newsletter', 'FYI'];
 
 const SECTION_ORDER = ['Today', 'Last 7 days', 'Earlier'];
-
-// Sender classifications offered by the Classify button (multi-select).
-const CLASSIFY_LABELS = [
-  { key: 'important', name: 'Important', icon: 'star', color: '#FFB454' },
-  { key: 'client', name: 'Client', icon: 'briefcase', color: '#1D4ED8' },
-  { key: 'vendor', name: 'Vendor', icon: 'cube', color: '#0891B2' },
-  { key: 'coworker', name: 'Coworker', icon: 'people', color: '#4338CA' },
-  { key: 'employee', name: 'Employee', icon: 'person', color: '#059669' },
-  { key: 'newsletter', name: 'Newsletter', icon: 'newspaper', color: '#475569' },
-  { key: 'junk', name: 'Junk', icon: 'ban', color: '#FF453A' },
-];
 
 export default function InboxScreen({ navigate, starred, openSheet, params }) {
   const {

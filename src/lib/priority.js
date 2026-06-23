@@ -275,6 +275,17 @@ export function scoreEmail(email, options = {}) {
     reasons.unshift(`Marked ${senderLabel}`);
   }
 
+  // --- Learned from what you KEEP. When you rescue mail from the auto-archive
+  // queue, we remember the sender and stop burying similar mail (and nudge it up).
+  // The more you keep from someone, the stronger the signal. An explicit junk/
+  // newsletter classification still wins.
+  const keptCount = (options.keptSenders || {})[sender.email] || 0;
+  if (keptCount > 0 && senderLabel !== 'junk' && senderLabel !== 'newsletter') {
+    score += Math.min(24, keptCount * 12);
+    if (bucket === 'noise') bucket = 'fyi'; // keep it out of the auto-archive sweep
+    reasons.unshift('You usually keep mail like this');
+  }
+
   // --- User-defined custom categories (sender maps + keyword rules) ---
   // A sender match is an explicit user choice and wins over everything; a keyword
   // match wins over the default tag but not over Urgent. We keep up to 3 tags.
@@ -339,9 +350,9 @@ export const BUCKETS = {
 // vips = array of lowercased sender emails the user marked important.
 // categories = optional user-defined custom categories.
 // knownImportant = lowercased sender emails the AI learned are important to you.
-export function prioritize(rawEmails, vips = [], categories = [], knownImportant = [], senderLabels = {}) {
+export function prioritize(rawEmails, vips = [], categories = [], knownImportant = [], senderLabels = {}, keptSenders = {}) {
   return rawEmails
-    .map((e) => ({ ...e, priority: scoreEmail(e, { vips, categories, knownImportant, senderLabels }) }))
+    .map((e) => ({ ...e, priority: scoreEmail(e, { vips, categories, knownImportant, senderLabels, keptSenders }) }))
     .sort((a, b) => {
       const ord =
         BUCKETS[a.priority.bucket].order - BUCKETS[b.priority.bucket].order;

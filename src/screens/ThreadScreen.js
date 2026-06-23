@@ -10,6 +10,7 @@ import { colors } from '../theme';
 import { useStore } from '../store';
 import { fetchThread, isBackendConfigured, rsvpEvent, fetchAttachment } from '../lib/backend';
 import { parseSender } from '../lib/priority';
+import { CLASSIFY_LABELS, labelName } from '../lib/labels';
 import { timeAgo } from '../lib/time';
 import NextStepsCard from '../components/NextStepsCard';
 
@@ -42,10 +43,20 @@ const FIT_JS = `(function(){
   setTimeout(fit,60); setTimeout(fit,450);
 })(); true;`;
 
-function Message({ msg, defaultOpen }) {
+function partyName(s, me) {
+  const p = parseSender(s || '');
+  if (me && p.email && me.has(p.email)) return 'me';
+  return p.name || p.email || s;
+}
+function Message({ msg, defaultOpen, me }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [recipOpen, setRecipOpen] = useState(false);
   const [h, setH] = useState(120);
   const sender = parseSender(msg.from || '');
+  const to = msg.to || [];
+  const cc = msg.cc || [];
+  const hasRecip = to.length > 0 || cc.length > 0;
+  const namesLine = `To: ${to.map((x) => partyName(x, me)).join(', ') || '—'}${cc.length ? `\nCc: ${cc.map((x) => partyName(x, me)).join(', ')}` : ''}`;
   return (
     <View style={styles.msg}>
       <Pressable style={styles.msgHead} onPress={() => setOpen((v) => !v)}>
@@ -57,6 +68,15 @@ function Message({ msg, defaultOpen }) {
         </View>
         <Text style={styles.time}>{msg.date ? timeAgo(msg.date) : ''}</Text>
       </Pressable>
+      {open && hasRecip && (
+        <Pressable style={styles.recipRow} onPress={() => setRecipOpen((v) => !v)}>
+          <Ionicons name="people-outline" size={13} color="rgba(255,255,255,0.5)" style={{ marginTop: 1 }} />
+          <Text style={styles.recipText} numberOfLines={recipOpen ? undefined : 1}>
+            {recipOpen ? namesLine : `To: ${to.map((x) => partyName(x, me)).join(', ') || '—'}${cc.length ? `  +${cc.length} Cc` : ''}`}
+          </Text>
+          <Ionicons name={recipOpen ? 'chevron-up' : 'chevron-down'} size={13} color="rgba(255,255,255,0.4)" />
+        </Pressable>
+      )}
       {open && (
         msg.bodyHtml ? (
           <WebView
@@ -77,14 +97,17 @@ function Message({ msg, defaultOpen }) {
 }
 
 export default function ThreadScreen({ goBack, navigate, params }) {
-  const { emails, searchEmails, folderEmails, findEmail, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk, snooze, toggleVip, vips } = useStore();
+  const { emails, searchEmails, folderEmails, findEmail, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk, snooze, toggleVip, vips, classifySenders } = useStore();
   const seed = findEmail(params.id);
+  const myEmails = useMemo(() => new Set((mailAccounts || []).map((a) => (a.email || '').toLowerCase()).filter(Boolean)), [mailAccounts]);
   const [messages, setMessages] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rsvpDone, setRsvpDone] = useState(null);
   const [attBusy, setAttBusy] = useState(null);
   const [attView, setAttView] = useState(null); // { uri, name, type }
   const [moreOpen, setMoreOpen] = useState(false);
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const currentLabel = (prefs?.senderLabels || {})[(seed?.priority?.senderEmail || parseSender(seed?.from || '').email || '').toLowerCase()] || null;
 
   const { token, provider } = useMemo(() => {
     const acc = (mailAccounts || []).find((a) => a.id === seed?.accountId);
@@ -194,11 +217,35 @@ export default function ThreadScreen({ goBack, navigate, params }) {
       <Modal visible={moreOpen} transparent animationType="fade" onRequestClose={() => setMoreOpen(false)}>
         <Pressable style={styles.moreBackdrop} onPress={() => setMoreOpen(false)}>
           <View style={styles.moreSheet}>
+            <MoreItem icon="pricetag-outline" label={currentLabel ? `Classify sender (now: ${labelName(currentLabel)})` : 'Classify sender'} onPress={() => { setMoreOpen(false); setClassifyOpen(true); }} />
             <MoreItem icon="bulb-outline" label="Teach AI about this sender" onPress={() => { setMoreOpen(false); teachAI(); }} />
             <MoreItem icon="time-outline" label="Snooze 4 hours" onPress={() => { setMoreOpen(false); if (seed) advance((id) => snooze(id, 4)); }} />
             <MoreItem icon={isVipSender ? 'star' : 'star-outline'} label={isVipSender ? 'Remove from VIPs' : 'Add sender to VIPs'} onPress={() => { setMoreOpen(false); if (senderEmail) toggleVip(senderEmail); }} />
             <MoreItem icon="mail-open-outline" label="Mark as read" onPress={() => { setMoreOpen(false); if (seed) { markRead(seed.id); goBack(); } }} />
             <MoreItem icon="close" label="Cancel" onPress={() => setMoreOpen(false)} muted />
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Classify this sender */}
+      <Modal visible={classifyOpen} transparent animationType="fade" onRequestClose={() => setClassifyOpen(false)}>
+        <Pressable style={styles.moreBackdrop} onPress={() => setClassifyOpen(false)}>
+          <View style={styles.moreSheet}>
+            <Text style={styles.classifyHead}>Classify {seed?.priority?.senderName || 'this sender'}</Text>
+            {CLASSIFY_LABELS.map((l) => (
+              <MoreItem
+                key={l.key}
+                icon={l.icon}
+                iconColor={l.color}
+                label={currentLabel === l.key ? `${l.name}  ✓` : l.name}
+                onPress={() => {
+                  setClassifyOpen(false);
+                  if (seed) classifySenders([seed.id], l.key);
+                  if (l.key === 'junk') goBack();
+                }}
+              />
+            ))}
+            <MoreItem icon="close" label="Cancel" onPress={() => setClassifyOpen(false)} muted />
           </View>
         </Pressable>
       </Modal>
@@ -211,7 +258,7 @@ export default function ThreadScreen({ goBack, navigate, params }) {
               <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} note={senderNote} />
             </View>
           )}
-          {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === 0} />)}
+          {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === 0} me={myEmails} />)}
 
           {/* Join meeting */}
           {!!seed?.meeting?.url && (
@@ -287,10 +334,10 @@ export default function ThreadScreen({ goBack, navigate, params }) {
   );
 }
 
-function MoreItem({ icon, label, onPress, muted }) {
+function MoreItem({ icon, label, onPress, muted, iconColor }) {
   return (
     <Pressable style={styles.moreItem} onPress={onPress}>
-      <Ionicons name={icon} size={20} color={muted ? 'rgba(255,255,255,0.5)' : '#fff'} />
+      <Ionicons name={icon} size={20} color={iconColor || (muted ? 'rgba(255,255,255,0.5)' : '#fff')} />
       <Text style={[styles.moreItemText, muted && { color: 'rgba(255,255,255,0.5)' }]}>{label}</Text>
     </Pressable>
   );
@@ -311,6 +358,7 @@ const styles = StyleSheet.create({
   moreSheet: { backgroundColor: '#161B26', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 8, paddingBottom: 36 },
   moreItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 15, paddingHorizontal: 22 },
   moreItemText: { color: '#fff', fontSize: 16, fontWeight: '500' },
+  classifyHead: { color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '700', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 6 },
   attViewer: { flex: 1, backgroundColor: '#0B0E14' },
   attViewerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
   attViewerName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '700' },
@@ -325,6 +373,8 @@ const styles = StyleSheet.create({
   body2: { paddingHorizontal: 14 },
   msg: { backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 10 },
   msgHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  recipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
+  recipText: { flex: 1, color: 'rgba(255,255,255,0.6)', fontSize: 12.5, lineHeight: 18 },
   avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   from: { fontSize: 14, fontWeight: '700', color: colors.ink },

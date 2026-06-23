@@ -120,7 +120,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-41',
+    version: 'debug-42',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -341,7 +341,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-41', recentCallbacks }));
+app.get('/debug/log', (_req, res) => res.json({ version: 'debug-42', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -355,7 +355,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', (_req, res) => {
   res.json({
-    version: 'debug-41',
+    version: 'debug-42',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -899,6 +899,20 @@ app.post('/folders', async (req, res) => {
   }
 });
 
+// Split a raw header ("A <a@x>, B <b@y>") into ["A <a@x>", "B <b@y>"] for display.
+function splitAddrs(s) {
+  return String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
+}
+
+// Graph recipient arrays → ["Name <email>"] for the reader's To/Cc display.
+function graphParties(list) {
+  return (list || [])
+    .map((r) => r?.emailAddress)
+    .filter(Boolean)
+    .map((a) => (a.name && a.name !== a.address ? `${a.name} <${a.address || ''}>` : (a.address || a.name || '')))
+    .filter(Boolean);
+}
+
 // Strip the genuinely dangerous bits but keep formatting + links so the email
 // renders like a real message (scripts/iframes/handlers/js: are the XSS risk).
 function sanitizeHtml(html = '') {
@@ -981,7 +995,7 @@ app.post('/message', async (req, res) => {
     // Message — selecting it here errors ("no property named meetingMessageType")
     // and takes the whole body with it. Fetch the body plainly; detect invites in
     // a separate best-effort cast query below.
-    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,body,bodyPreview,receivedDateTime,hasAttachments`, {
+    const r = await fetch(`${GRAPH}/me/messages/${id}?$select=subject,from,toRecipients,ccRecipients,body,bodyPreview,receivedDateTime,hasAttachments`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const m = await r.json();
@@ -1032,6 +1046,8 @@ app.post('/message', async (req, res) => {
     res.json({
       body: text,
       bodyHtml: outHtml,
+      to: graphParties(m.toRecipients),
+      cc: graphParties(m.ccRecipients),
       meeting: detectMeeting(`${content} ${text}`),
       invite,
       attachments,
@@ -1087,6 +1103,8 @@ app.post('/thread', async (req, res) => {
         return {
           id: m.id,
           from: gmailHeader(m.payload, 'From'),
+          to: splitAddrs(gmailHeader(m.payload, 'To')),
+          cc: splitAddrs(gmailHeader(m.payload, 'Cc')),
           subject: gmailHeader(m.payload, 'Subject'),
           date: m.internalDate ? new Date(parseInt(m.internalDate, 10)).toISOString() : null,
           read: !labels.includes('UNREAD'),
@@ -1101,7 +1119,7 @@ app.post('/thread', async (req, res) => {
     // Graph rejects $filter on conversationId combined with $orderby ("restriction
     // or sort order is too complex"), so we drop $orderby and sort in JS below.
     const url = `${GRAPH}/me/messages?$filter=${encodeURIComponent(`conversationId eq '${threadKey}'`)}` +
-      `&$select=subject,from,body,bodyPreview,receivedDateTime,isRead&$top=30`;
+      `&$select=subject,from,toRecipients,ccRecipients,body,bodyPreview,receivedDateTime,isRead&$top=30`;
     const r = await graphGet(url, accessToken);
     const d = await r.json();
     if (!r.ok) throw new Error(d.error?.message || 'thread fetch failed');
@@ -1113,6 +1131,8 @@ app.post('/thread', async (req, res) => {
       return {
         id: m.id,
         from: m.from?.emailAddress ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>` : '',
+        to: graphParties(m.toRecipients),
+        cc: graphParties(m.ccRecipients),
         subject: m.subject || '',
         date: m.receivedDateTime || null,
         read: !!m.isRead,
@@ -1804,6 +1824,41 @@ app.post('/next-steps', async (req, res) => {
   } catch (e) {
     record({ stage: 'next_steps_error', message: e.message });
     res.json({ recommendation: '', steps: [] }); // non-blocking
+  }
+});
+
+// AI learns from an email the user KEPT (rescued from auto-archive): read it,
+// infer why it matters, and (when it reads as a real contact) suggest a sender
+// classification so future actions adjust. Returns { reason, label }.
+app.post('/learn-keep', async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    const e = email || {};
+    if (!ANTHROPIC_API_KEY) return res.json({ reason: '', label: null });
+    if (!underDailyBudget()) return res.json({ reason: '', label: null });
+    const msg = await anthropic().messages.create({
+      model: AI_MODEL,
+      max_tokens: 200,
+      system:
+        'The user just RESCUED this email from auto-archiving — they want to keep mail like ' +
+        'it. Infer WHY in a few words, and classify the sender so the app can stop burying ' +
+        'similar mail. Reply ONLY JSON: {"reason":"≤10 words on why they likely keep this",' +
+        '"label":"important|client|vendor|coworker|employee|keep"}. Use a relationship label ' +
+        'only when it clearly fits (a real person/company they deal with); otherwise use ' +
+        '"keep" (a newsletter/receipt/notification they simply want to retain). No code fences.',
+      messages: [{ role: 'user', content: `From: ${e.from || ''}\nSubject: ${e.subject || ''}\nCurrent category: ${e.category || ''}\n\n${String(e.preview || '').slice(0, 1200)}` }],
+    });
+    let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
+    text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
+    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    const allow = ['important', 'client', 'vendor', 'coworker', 'employee'];
+    const label = allow.includes(parsed.label) ? parsed.label : null; // 'keep' → null
+    bumpUsage('suggests'); countAi();
+    record({ stage: 'learn_keep_ok', label });
+    res.json({ reason: String(parsed.reason || '').slice(0, 80), label });
+  } catch (e) {
+    record({ stage: 'learn_keep_error', message: e.message });
+    res.json({ reason: '', label: null }); // non-blocking
   }
 });
 

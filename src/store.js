@@ -12,7 +12,7 @@ import { DEFAULT_TABS } from './lib/tabs';
 import { fetchGmail } from './api/gmail';
 import {
   fetchInbox, fetchMessageBody, summarizeEmails, searchMail, askMail, setMyPhoto,
-  listFolders, mailAction, DEFAULT_SERVER_URL,
+  listFolders, mailAction, learnFromKeep, isBackendConfigured, DEFAULT_SERVER_URL,
 } from './lib/backend';
 import { saveToken, getToken, clearToken } from './lib/storage';
 import { Alert } from 'react-native';
@@ -28,7 +28,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, autoArchive: true, archiveNoticeSeen: false };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, autoArchive: true, archiveNoticeSeen: false };
 
 const StoreContext = createContext(null);
 
@@ -204,6 +204,9 @@ export function StoreProvider({ children }) {
   // newsletter|client|vendor|coworker|employee } — feeds the priority engine.
   const senderLabels = useMemo(() => prefs.senderLabels || {}, [prefs.senderLabels]);
 
+  // Learned from "Keep": senders whose mail you've rescued from auto-archive.
+  const keptSenders = useMemo(() => prefs.keptSenders || {}, [prefs.keptSenders]);
+
   // Build the prioritized, filtered, sorted list the UI shows. We split this into
   // two passes so AI summaries arriving (which happens constantly) don't re-run the
   // expensive regex scoring over the whole mailbox:
@@ -231,8 +234,8 @@ export function StoreProvider({ children }) {
     // twice, which showed up as a repeated card (notably in Triage).
     const seen = new Set();
     const deduped = visible.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
-    return applySort(prioritize(deduped, vips, prefs.categories, knownImportantList, senderLabels));
-  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, prefs.senderLabels, demoMode, activeAccountId, applySort]); // eslint-disable-line
+    return applySort(prioritize(deduped, vips, prefs.categories, knownImportantList, senderLabels, keptSenders));
+  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, prefs.senderLabels, prefs.keptSenders, demoMode, activeAccountId, applySort]); // eslint-disable-line
 
   const emails = useMemo(() => {
     if (demoMode) return rankedBase;
@@ -251,8 +254,8 @@ export function StoreProvider({ children }) {
       .filter((e) => e.folder === currentFolder.id)
       .map((e) => ({ ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id] }))
       .filter((e) => e.status !== 'archived' && e.status !== 'done' && !(e.snoozedUntil && e.snoozedUntil > now));
-    return applySort(prioritize(visible, vips, prefs.categories, knownImportantList, senderLabels));
-  }, [raw, overrides, vips, summaries, prefs.categories, prefs.knownImportant, prefs.senderLabels, currentFolder, applySort]);
+    return applySort(prioritize(visible, vips, prefs.categories, knownImportantList, senderLabels, keptSenders));
+  }, [raw, overrides, vips, summaries, prefs.categories, prefs.knownImportant, prefs.senderLabels, prefs.keptSenders, currentFolder, applySort]);
 
   // Prioritized view of whole-mailbox search results (null when not searching).
   const searchEmails = useMemo(() => {
@@ -260,12 +263,12 @@ export function StoreProvider({ children }) {
     const merged = searchResults.map((e) => ({
       ...e, ...(overrides[e.id] || {}), aiSummary: e.aiSummary || summaries[e.id],
     }));
-    return prioritize(merged, vips, prefs.categories, knownImportantList, senderLabels);
-  }, [searchResults, overrides, summaries, vips, prefs.categories, prefs.knownImportant, prefs.senderLabels]);
+    return prioritize(merged, vips, prefs.categories, knownImportantList, senderLabels, keptSenders);
+  }, [searchResults, overrides, summaries, vips, prefs.categories, prefs.knownImportant, prefs.senderLabels, prefs.keptSenders]);
 
   // Prioritized Sent / Drafts lists (loaded on demand for those tabs).
-  const sentRanked = useMemo(() => prioritize((folders.sent || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories, knownImportantList, senderLabels), [folders.sent, overrides, vips, prefs.categories, knownImportantList, senderLabels]);
-  const draftRanked = useMemo(() => prioritize((folders.drafts || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories, knownImportantList, senderLabels), [folders.drafts, overrides, vips, prefs.categories, knownImportantList, senderLabels]);
+  const sentRanked = useMemo(() => prioritize((folders.sent || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories, knownImportantList, senderLabels, keptSenders), [folders.sent, overrides, vips, prefs.categories, knownImportantList, senderLabels]);
+  const draftRanked = useMemo(() => prioritize((folders.drafts || []).map((e) => ({ ...e, ...(overrides[e.id] || {}) })), vips, prefs.categories, knownImportantList, senderLabels, keptSenders), [folders.drafts, overrides, vips, prefs.categories, knownImportantList, senderLabels]);
 
   // Find a prioritized email by id across EVERY loaded list (inbox, folders,
   // Sent, Drafts, search) so the reader works no matter which box it was opened from.
@@ -440,13 +443,50 @@ export function StoreProvider({ children }) {
     return () => clearInterval(t);
   }, [archivingSoon, prefs.archiveLastRun, prefs.autoArchive]); // eslint-disable-line
 
+  // Keeping an email teaches the engine: never archive THIS one (archiveKept), and
+  // remember the SENDER so similar mail stops getting auto-archived and ranks up
+  // (keptSenders, +1 each time). We also ask the AI to read it and infer WHY you
+  // kept it; if it reads as a real relationship/important sender, we apply that
+  // classification so future actions adjust automatically. Best-effort.
   const keepFromArchive = useCallback((id) => {
+    const e = findEmail(id);
+    const addr = (e?.priority?.senderEmail || '').toLowerCase();
     setPrefsState((p) => {
-      const next = { ...p, archiveKept: Array.from(new Set([...(p.archiveKept || []), id])) };
+      const kept = { ...(p.keptSenders || {}) };
+      if (addr) kept[addr] = (kept[addr] || 0) + 1;
+      const next = {
+        ...p,
+        archiveKept: Array.from(new Set([...(p.archiveKept || []), id])),
+        keptSenders: kept,
+      };
       saveToken('prefs', JSON.stringify(next)).catch(() => {});
       return next;
     });
-  }, []);
+    // AI: read the kept email and learn why (best-effort, never blocks the UI).
+    if (e && addr && isBackendConfigured(prefs.serverUrl)) {
+      learnFromKeep(prefs.serverUrl, {
+        from: e.from, subject: e.subject,
+        preview: e.aiSummary || e.priority?.tldr || e.preview || e.body || '',
+        category: e.priority?.category,
+      }).then((r) => {
+        if (!r) return;
+        setPrefsState((p) => {
+          const next = { ...p };
+          let changed = false;
+          if (r.reason) { next.senderNotes = { ...(p.senderNotes || {}), [addr]: r.reason }; changed = true; }
+          // Only auto-apply a relationship/important label, and never overwrite a
+          // label you set yourself.
+          const ok = ['important', 'client', 'vendor', 'coworker', 'employee'];
+          if (r.label && ok.includes(r.label) && !(p.senderLabels || {})[addr]) {
+            next.senderLabels = { ...(p.senderLabels || {}), [addr]: r.label }; changed = true;
+          }
+          if (!changed) return p;
+          saveToken('prefs', JSON.stringify(next)).catch(() => {});
+          return next;
+        });
+      }).catch(() => {});
+    }
+  }, [findEmail, prefs.serverUrl]);
   const archiveStagedNow = useCallback((ids) => {
     const list = ids || archivingSoon.map((e) => e.id);
     bulkAction(list, 'archive');
