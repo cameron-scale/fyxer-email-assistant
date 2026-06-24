@@ -13,22 +13,28 @@ No account, no deploy. Good for showing the interface around.
 This runs the actual Flask dashboard with the decision loop ticking in-process,
 at a public HTTPS URL. Free tier, **no credit card**.
 
-> **Simulation only.** Free hosts sleep when idle and have throwaway disk, and
-> you should never put a real Stripe key on a shared host. This deploy runs in
-> simulation mode (no real money). For live/real-money, run it on your own
-> always-on machine (see GO_LIVE.md).
+> **Simulation only (no real money).** On the free host the agent runs in
+> simulation: the **$10 seed is simulated**, no Stripe key is used, and no real
+> money can move. It behaves exactly like the real thing so you can watch and
+> control it from anywhere — but real-money operation belongs on your own
+> always-on machine (see GO_LIVE.md), never a free shared host.
 
-### Steps (~5 minutes)
-1. Go to <https://render.com> and sign up (GitHub login is easiest) — no card.
-2. **New → Blueprint**.
-3. Connect the repo `cameron-scale/fyxer-email-assistant`.
-4. When asked for the branch, pick **`claude/centurion-agent-build-xyo5h1`**
-   (Render reads `render.yaml` from the repo root).
-5. Click **Apply / Create**. Render builds and gives you a URL like
-   `https://centurion-dashboard.onrender.com`.
-6. Open that URL on your phone or anywhere. To use the control buttons, you need
-   the token: in Render → your service → **Environment**, copy
-   `CENTURION_DASHBOARD_TOKEN`. The dashboard prompts for it on first action.
+### Steps from your phone (~5 minutes, all in the browser)
+1. Go to <https://render.com> → **Get Started** → **Sign in with GitHub** (no card).
+2. Tap **New +** → **Blueprint**.
+3. Connect/select the repo **`cameron-scale/fyxer-email-assistant`**
+   (authorize Render to see it if asked).
+4. Choose the branch **`claude/centurion-agent-build-xyo5h1`**. Render finds
+   `render.yaml` automatically.
+5. It will prompt you to enter **CENTURION_DASHBOARD_TOKEN** — type any password
+   you'll remember (this unlocks the control buttons). The simulated seed is
+   already set to **$10**.
+6. Tap **Apply** / **Create**. First build takes ~2–4 min. You get a public URL
+   like `https://centurion-dashboard.onrender.com`.
+7. Open that URL on your phone — from anywhere in the world. Tap a control
+   (Pause / dial) and it asks for the token you set in step 5.
+
+That's it: a live dashboard you can reach from any phone, browser, or network.
 
 ### Notes
 - **First load after idle is slow** (~30–60s): the free service spins down after

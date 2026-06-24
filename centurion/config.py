@@ -55,12 +55,38 @@ class Config:
         return float(self.raw.get("target_capital", 1000.0))
 
 
+# Config keys overridable via environment (CENTURION_<UPPER>), e.g.
+# CENTURION_FUNDED_CAPITAL=10. Lets a host (Render) set values without editing
+# config.yaml. Type is coerced from the literal.
+_ENV_OVERRIDES = {
+    "CENTURION_FUNDED_CAPITAL": ("funded_capital", float),
+    "CENTURION_TARGET_CAPITAL": ("target_capital", float),
+    "CENTURION_AUTONOMY_LEVEL": ("autonomy_level", str),
+    "CENTURION_LANGUAGE_PROVIDER": ("language_provider", str),
+    "CENTURION_FOCUS_STRATEGY": ("focus_strategy", str),
+    "CENTURION_REQUIRE_ORGANIC_PROOF": ("require_organic_proof",
+                                        lambda v: str(v).lower() in ("1", "true", "yes")),
+    "CENTURION_CYCLE_INTERVAL_MINUTES": ("cycle_interval_minutes", float),
+}
+
+
+def _apply_env_overrides(data: Dict[str, Any]) -> None:
+    for env_key, (cfg_key, cast) in _ENV_OVERRIDES.items():
+        raw = os.environ.get(env_key)
+        if raw is not None and raw != "":
+            try:
+                data[cfg_key] = cast(raw)
+            except Exception:
+                pass
+
+
 def load_config(path: str | os.PathLike | None = None) -> Config:
     cfg_path = Path(path) if path else ROOT / "config.yaml"
     _load_dotenv(ROOT / ".env")
     data: Dict[str, Any] = {}
     if cfg_path.exists():
         data = yaml.safe_load(cfg_path.read_text()) or {}
+    _apply_env_overrides(data)
     return Config(raw=data, root=cfg_path.resolve().parent)
 
 

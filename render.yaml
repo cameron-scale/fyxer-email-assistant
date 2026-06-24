@@ -17,5 +17,7 @@ services:
         value: "3.11.9"
       - key: CENTURION_RUN_AGENT
         value: "1"
+      - key: CENTURION_FUNDED_CAPITAL
+        value: "10"          # simulated $10 seed for testing on the free host
       - key: CENTURION_DASHBOARD_TOKEN
-        generateValue: true   # Render generates a random token; see it in the dashboard
+        sync: false          # Render prompts you to set this password at deploy time
