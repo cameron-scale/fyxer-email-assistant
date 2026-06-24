@@ -14,7 +14,9 @@ per_action_cap_multiple: 1000.0  # bound a single bet even at huge balances
 # full   -> every guardrail-and-capital-cleared action executes immediately
 # guarded-> spends <= guarded_auto_approve_cap execute, larger spends queue
 # review -> every spend / external action queues for approval
-autonomy_level: full
+# Shipped default is `guarded` for the first live runs (watch its judgment for a
+# few cycles); switch to full with one command: `python main.py set-autonomy full`.
+autonomy_level: guarded
 guarded_auto_approve_cap: 5.0
 
 # --- Risk Manager limits ---
@@ -55,8 +57,9 @@ min_net_ev: 1.0          # min expected profit (after fees) to deploy capital
 min_margin: 0.5          # min return-on-spend (50% over cost) for paid actions
 
 # Cheapest de-risking: prove $1 of REAL organic revenue before any budget is
-# spent. Off by default (so dry runs aren't blocked); turn ON for live.
-require_organic_proof: false
+# spent. ON by default for the cold-start plan (no audience yet) — earn the
+# first organic dollar before risking the bankroll on paid promotion.
+require_organic_proof: true
 
 # Brand safety: spend can be autonomous; your NAME should not be. Anything
 # published under the real brand is human-gated unless a sandbox identity is set.
@@ -64,9 +67,11 @@ brand_human_gate: true
 brand_identity: "ScaleMBS"
 sandbox_identity: null    # e.g. a separate storefront/handle to publish under
 
-# Focus beats spread on a $100 bankroll. Set to one strategy name to concentrate
-# (e.g. "digital_products"); null spreads across all enabled strategies.
-focus_strategy: null
+# Focus beats spread on a $100 bankroll. Cold-start recommendation: concentrate
+# on productized service arbitrage — service marketplaces ARE the distribution
+# (buyers already search there), capital ~0, ticket high enough to clear fees.
+# Set to null to spread across all enabled strategies, or another name to switch.
+focus_strategy: service_arbitrage
 
 # --- Strategies (enable/disable individually) ---
 strategies:
