@@ -4,6 +4,7 @@ numpy>=1.24
 PyYAML>=6.0
 Flask>=3.0
 requests>=2.31
+gunicorn>=21.2   ; sys_platform != "win32"   # production WSGI server for hosting
 
 # Optional, used only if present / enabled in config:
 #   scikit-learn   -> optional EV regressor in the Decision Core (offline)

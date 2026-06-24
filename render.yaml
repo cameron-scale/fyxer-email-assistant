@@ -1,0 +1,21 @@
+# Render.com free-tier blueprint for the Centurion dashboard + agent.
+# One free web service runs the Flask dashboard AND the decision loop in-process
+# (CENTURION_RUN_AGENT=1), in SIMULATION mode (no real money on a shared host).
+#
+# Deploy: Render dashboard -> New -> Blueprint -> connect this repo -> pick
+# branch claude/centurion-agent-build-xyo5h1. Render reads this file.
+services:
+  - type: web
+    name: centurion-dashboard
+    runtime: python
+    rootDir: centurion
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py --init || true; gunicorn -b 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 dashboard.app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: CENTURION_RUN_AGENT
+        value: "1"
+      - key: CENTURION_DASHBOARD_TOKEN
+        generateValue: true   # Render generates a random token; see it in the dashboard

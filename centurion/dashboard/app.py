@@ -32,6 +32,31 @@ from supervisor import Supervisor        # noqa: E402
 
 WEB_DIST = Path(__file__).resolve().parent / "web" / "dist"
 
+# Background agent (used when hosting one free web service that should also run
+# the decision loop in-process). Guarded so it starts at most once per process.
+_AGENT_STARTED = False
+
+
+def _start_background_agent(cfg) -> None:
+    global _AGENT_STARTED
+    if _AGENT_STARTED:
+        return
+    _AGENT_STARTED = True
+    import threading
+
+    def _loop():
+        o = Orchestrator(cfg)
+        if not o.ledger.is_seeded():
+            o.ledger.seed(cfg.funded_capital)
+        o.sim = True  # never run real money on a shared/free host
+        interval = float(cfg.get("cycle_interval_minutes", 45)) * 60
+        # On a free host a tight-ish cadence keeps the dashboard lively.
+        interval = min(interval, 120.0)
+        o.run_forever(sleep_seconds=interval)
+
+    t = threading.Thread(target=_loop, name="centurion-agent", daemon=True)
+    t.start()
+
 # Pretty names + stable ids for the five strategies, in display order.
 STRAT_META = [
     ("digital_products", "dp", "Digital products"),
@@ -199,6 +224,11 @@ def create_app(config_path: str | None = None) -> Flask:
 
     def orch() -> Orchestrator:
         return Orchestrator(cfg)
+
+    # Optionally run the agent loop in this same process (free single-service
+    # hosting). Enabled with CENTURION_RUN_AGENT=1. Always simulation on a host.
+    if os.environ.get("CENTURION_RUN_AGENT") == "1":
+        _start_background_agent(cfg)
 
     def authed() -> bool:
         supplied = request.args.get("token") or request.headers.get("X-Centurion-Token")
