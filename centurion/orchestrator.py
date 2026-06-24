@@ -116,11 +116,26 @@ class Orchestrator:
     def _build_strategies(self) -> Dict[str, object]:
         out = {}
         enabled = self.cfg.get("strategies", {})
+        disabled = self.disabled_strategies()
         for name, cls in STRATEGY_CLASSES.items():
-            if enabled.get(name, {}).get("enabled", True):
+            if enabled.get(name, {}).get("enabled", True) and name not in disabled:
                 out[name] = cls(self.ledger, self.language, self.research,
                                 self.assets, self.cfg, seed=self.seed)
         return out
+
+    def disabled_strategies(self) -> set:
+        """Runtime on/off overrides set from the dashboard, persisted in state."""
+        raw = self.ledger.get_state("disabled_strategies", "") or ""
+        return {s for s in raw.split(",") if s}
+
+    def set_strategy_enabled(self, name: str, enabled: bool) -> None:
+        disabled = self.disabled_strategies()
+        if enabled:
+            disabled.discard(name)
+        else:
+            disabled.add(name)
+        self.ledger.set_state("disabled_strategies", ",".join(sorted(disabled)))
+        self.strategies = self._build_strategies()
 
     def _load_bandit(self) -> ThompsonBandit:
         blob = self.ledger.get_state("bandit")

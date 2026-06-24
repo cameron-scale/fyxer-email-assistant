@@ -31,7 +31,7 @@ third-party AI API anywhere in the loop**.
 | `autodebug.py` | Live error log + self-healing + performance diagnosis. |
 | `supervisor.py` | Heartbeat, watchdog, stale-alerting. |
 | `reporter.py` | Daily plain-language report + ETA projection. |
-| `dashboard/app.py` | Remote management UI: balance, activity, results, errors, **pause/kill**, autonomy dial. |
+| `dashboard/app.py` + `dashboard/web/` | Live JSON API + polished React (Vite) operator UI: balance, mission progress, capital split, per-strategy performance, live activity, spend velocity, system health, approval queue, **pause/kill**, autonomy dial. |
 | `integrations/` | Stripe (revenue, mock mode keyless), Stripe webhook, Twilio/SMTP alerts. |
 
 ---
@@ -51,8 +51,11 @@ python main.py report            # writes data/reports/report_YYYY-MM-DD.md
 Run the dashboard (separate terminal):
 
 ```bash
+# Build the polished React UI once:
+cd dashboard/web && npm install && npm run build && cd ../..
+# Serve it (token secures the remote pause/kill + controls):
 CENTURION_DASHBOARD_TOKEN=yourtoken python dashboard/app.py
-# open http://localhost:8000  (token-protected pause/kill + autonomy dial)
+# open http://localhost:8000   (falls back to a simple page if the UI isn't built)
 ```
 
 Run the tests:
