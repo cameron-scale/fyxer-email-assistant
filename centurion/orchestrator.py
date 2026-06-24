@@ -65,6 +65,12 @@ class Orchestrator:
         self.sim = True  # simulation by default; live wiring is opt-in per integration
 
         self.ledger = Ledger(config.database_path)
+        # Apply any integration keys set from the dashboard before clients init.
+        try:
+            from settings import load_into_env
+            load_into_env(self.ledger)
+        except Exception:
+            pass
         self.risk = RiskManager(self.ledger, self.cfg)
         self.guardrails = GuardrailEngine(self.cfg)
         self.autonomy = AutonomyController(

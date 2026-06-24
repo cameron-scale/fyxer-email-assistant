@@ -299,6 +299,20 @@ def create_app(config_path: str | None = None) -> Flask:
         orch().set_strategy_enabled(full, enabled)
         return jsonify(ok=True)
 
+    @app.get("/api/settings")
+    def api_settings_get():
+        import settings as S
+        return jsonify(groups=S.status(orch().ledger))
+
+    @app.post("/api/settings")
+    def api_settings_set():
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        import settings as S
+        values = (request.get_json(silent=True) or {}).get("values", {})
+        changed = S.apply(orch().ledger, values)
+        return jsonify(ok=True, changed=changed)
+
     @app.post("/webhook/stripe")
     def stripe_webhook():
         from integrations.stripe_webhook import verify_and_parse, handle_event

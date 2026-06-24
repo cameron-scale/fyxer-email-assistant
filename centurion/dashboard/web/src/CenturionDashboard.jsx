@@ -5,9 +5,9 @@ import {
 } from "recharts";
 import {
   Activity, Pause, Play, Power, ShieldCheck, Cpu, Zap, Check, X,
-  TrendingUp, TrendingDown, Gauge, Server, Radio,
+  TrendingUp, TrendingDown, Gauge, Server, Radio, Settings as SettingsIcon, KeyRound,
 } from "lucide-react";
-import { fetchState, control } from "./api.js";
+import { fetchState, control, getSettings, saveSettings } from "./api.js";
 
 // ---- ScaleMBS / Centurion theme tokens ---------------------------------
 const T = {
@@ -106,6 +106,7 @@ export default function CenturionDashboard() {
   const [busy, setBusy] = useState(false);
   const [killArmed, setKillArmed] = useState(false);
   const [range, setRange] = useState("all");
+  const [showSettings, setShowSettings] = useState(false);
 
   async function refresh() {
     try { setData(await fetchState()); setErr(null); }
@@ -225,8 +226,15 @@ export default function CenturionDashboard() {
               style={{ background: killArmed ? T.loss : "transparent", border: `1px solid ${T.loss}`, color: killArmed ? T.bg : T.loss }}>
               <Power size={14} />{killArmed ? "Confirm stop" : "Emergency stop"}
             </button>
+            <button onClick={() => setShowSettings(true)} title="Integrations & API keys"
+              className="flex items-center justify-center rounded-lg transition"
+              style={{ width: 36, height: 36, background: T.raised, border: `1px solid ${T.border}`, color: T.muted }}>
+              <SettingsIcon size={16} />
+            </button>
           </div>
         </div>
+
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
         {/* KPI row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
@@ -475,6 +483,79 @@ function Row({ k, v }) {
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm" style={{ color: T.muted }}>{k}</span>
       <span className="text-sm font-bold" style={{ color: T.text }}>{v}</span>
+    </div>
+  );
+}
+
+function SettingsModal({ onClose }) {
+  const [groups, setGroups] = useState(null);
+  const [draft, setDraft] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    getSettings().then(d => setGroups(d.groups)).catch(e => setErr(e.message));
+  }, []);
+
+  async function save() {
+    setSaving(true); setErr(null); setMsg(null);
+    try {
+      const values = {};
+      Object.entries(draft).forEach(([k, v]) => { if (v !== undefined) values[k] = v; });
+      if (Object.keys(values).length === 0) { setMsg("Nothing changed."); setSaving(false); return; }
+      const r = await saveSettings(values);
+      setMsg(`Saved ${r.changed.length} setting(s).`);
+      setDraft({});
+      const d = await getSettings(); setGroups(d.groups);
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)",
+      zIndex: 50, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, overflowY: "auto" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.panel, border: `1px solid ${T.borderLit}`,
+        borderRadius: 16, maxWidth: 560, width: "100%", marginTop: 24 }}>
+        <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+          <div className="flex items-center gap-2"><KeyRound size={16} color={T.cyan} />
+            <span className="font-bold">Integrations & API keys</span></div>
+          <button onClick={onClose} style={{ color: T.muted }}><X size={18} /></button>
+        </div>
+        <div className="px-5 py-4">
+          <div className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: `${T.warn}14`, border: `1px solid ${T.warn}40`, color: T.warn }}>
+            Keys are stored locally on this host and feed the agent's integrations. Don't enter real production keys on a free/shared server.
+          </div>
+          {err && <div className="text-sm mb-3" style={{ color: T.loss }}>{err}</div>}
+          {!groups && !err && <div className="text-sm" style={{ color: T.dim }}>Loading…</div>}
+          {groups && groups.map(g => (
+            <div key={g.group} className="mb-4">
+              <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: T.muted }}>{g.group}</div>
+              {g.fields.map(f => (
+                <div key={f.env} className="mb-2">
+                  <label className="text-xs" style={{ color: T.dim }}>{f.label}{" "}
+                    {f.isSet && <span style={{ color: T.gain }}>· set{f.secret && f.hint ? ` (${f.hint})` : ""}</span>}
+                  </label>
+                  <input
+                    type={f.secret ? "password" : "text"}
+                    defaultValue={f.secret ? "" : (f.value || "")}
+                    placeholder={f.secret ? (f.isSet ? "•••••••• (leave blank to keep)" : "not set") : ""}
+                    onChange={e => setDraft(d => ({ ...d, [f.env]: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 rounded-md text-sm"
+                    style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.text }} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between px-5 py-3" style={{ borderTop: `1px solid ${T.border}` }}>
+          <span className="text-xs" style={{ color: msg ? T.gain : T.dim }}>{msg || "Changes apply to new operations."}</span>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="text-xs font-bold px-3 py-2 rounded-md" style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted }}>Close</button>
+            <button onClick={save} disabled={saving} className="text-xs font-bold px-3 py-2 rounded-md" style={{ background: T.cyan, color: T.bg }}>{saving ? "Saving…" : "Save"}</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

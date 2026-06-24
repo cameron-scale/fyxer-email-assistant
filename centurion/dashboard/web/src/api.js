@@ -17,6 +17,28 @@ export async function fetchState() {
   return r.json();
 }
 
+export async function getSettings() {
+  const r = await fetch("/api/settings", { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error(`settings ${r.status}`);
+  return r.json();
+}
+
+export async function saveSettings(values) {
+  let token = getToken();
+  if (!token) {
+    token = window.prompt("Enter your CENTURION_DASHBOARD_TOKEN to save settings:") || "";
+    if (token) setToken(token);
+  }
+  const r = await fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Centurion-Token": token },
+    body: JSON.stringify({ values, token }),
+  });
+  if (r.status === 401) { localStorage.removeItem(TOKEN_KEY); throw new Error("Unauthorized — check your dashboard token."); }
+  if (!r.ok) throw new Error(`save settings ${r.status}`);
+  return r.json();
+}
+
 export async function control(path, body = {}) {
   let token = getToken();
   if (!token) {
