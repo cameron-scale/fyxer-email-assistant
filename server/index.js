@@ -21,8 +21,56 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { icloudVerify, icloudInbox, icloudMessage, icloudAttachment, icloudAction, icloudFolders, icloudSend, icloudCalendar } from './icloud.js';
+
+// ── At-rest encryption (NDA hardening) ───────────────────────────────────────
+// Anything sensitive we persist to disk (OAuth handoffs, AI summaries / next-steps
+// derived from email content) is encrypted with AES-256-GCM under SERVER_ENC_KEY.
+// If no key is configured, we DO NOT write that data to disk at all (in-memory
+// only) — so plaintext email-derived content never lands on the server's disk.
+const ENC_KEY = (() => {
+  const raw = (process.env.SERVER_ENC_KEY || '').trim();
+  if (!raw) return null;
+  if (/^[0-9a-f]{64}$/i.test(raw)) return Buffer.from(raw, 'hex');
+  return crypto.createHash('sha256').update(raw).digest(); // accept any passphrase
+})();
+function encStr(obj) {
+  if (!ENC_KEY) return null;
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
+  const data = Buffer.concat([c.update(JSON.stringify(obj), 'utf8'), c.final()]);
+  return `v1:${iv.toString('base64')}:${c.getAuthTag().toString('base64')}:${data.toString('base64')}`;
+}
+function decStr(str) {
+  try {
+    if (!ENC_KEY || typeof str !== 'string' || !str.startsWith('v1:')) return null;
+    const [, ivB, tagB, dataB] = str.split(':');
+    const d = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivB, 'base64'));
+    d.setAuthTag(Buffer.from(tagB, 'base64'));
+    return JSON.parse(Buffer.concat([d.update(Buffer.from(dataB, 'base64')), d.final()]).toString('utf8'));
+  } catch (e) { return null; }
+}
+// Encrypted-or-skip JSON file persistence (never writes plaintext sensitive data).
+function writeSecure(file, obj) {
+  if (!ENC_KEY) return; // no key → don't persist sensitive data in plaintext
+  try { fs.writeFileSync(file, encStr(obj)); } catch (e) { /* best-effort */ }
+}
+function readSecure(file) {
+  try { const v = decStr(fs.readFileSync(file, 'utf8')); return v || {}; } catch (e) { return {}; }
+}
+
+// Debug/observability endpoints expose operational metadata — gate them behind a
+// secret so they're never publicly readable. Disabled entirely unless DEBUG_TOKEN
+// is set.
+const DEBUG_TOKEN = (process.env.DEBUG_TOKEN || '').trim();
+function debugAuth(req, res, next) {
+  if (!DEBUG_TOKEN) return res.status(404).send('not found');
+  const t = req.get('x-debug-token') || req.query.token || '';
+  if (t !== DEBUG_TOKEN) return res.status(404).send('not found');
+  next();
+}
 
 const app = express();
 app.use(cors());
@@ -120,7 +168,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-42',
+    version: 'debug-43',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -131,7 +179,7 @@ app.get('/health', (_req, res) =>
 
 // No-login config check: shows the exact redirect URI the server computes, so we
 // can compare it character-for-character with what's registered in Azure.
-app.get('/debug', (req, res) =>
+app.get('/debug', debugAuth, (req, res) =>
   res.json({
     version: 'debug-2',
     computedRedirectUri: redirectUri(req),
@@ -172,21 +220,10 @@ app.post('/upload', async (req, res) => {
     const buf = Buffer.from(m[2], 'base64');
     if (buf.length > MAX_IMG_BYTES) return res.status(413).json({ error: 'Image too large.' });
 
-    // Host durably on catbox.moe (free, anonymous, permanent) so the URL survives
-    // Render redeploys — the local disk is wiped on every deploy. Fall back to the
-    // local /img store if catbox is unreachable.
-    try {
-      const form = new FormData();
-      form.append('reqtype', 'fileupload');
-      form.append('fileToUpload', new Blob([buf], { type }), `photo.${ext}`);
-      const cr = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form });
-      const url = (await cr.text()).trim();
-      if (cr.ok && /^https?:\/\/\S+$/.test(url)) {
-        record({ stage: 'upload_ok', host: 'catbox' });
-        return res.json({ url });
-      }
-    } catch (e) { record({ stage: 'upload_catbox_failed', message: e.message }); }
-
+    // Host on OUR OWN backend only — never a public/anonymous third-party host.
+    // (Signature photos are the only thing that flows here; email content never
+    // does. For production, point UPLOAD_DIR at a private object store / signed
+    // URLs — the API contract stays the same.)
     const id = newId();
     fs.writeFileSync(path.join(UPLOAD_DIR, `${id}.${ext}`), buf);
     record({ stage: 'upload_ok', host: 'local' });
@@ -314,23 +351,23 @@ function makeHandoff(refreshToken, presetId) {
   const id = presetId && String(presetId).length >= 16 ? String(presetId) : newId();
   const entry = { refreshToken, at: Date.now(), instance: INSTANCE_ID };
   handoffs.set(id, entry);
-  try { fs.writeFileSync(path.join(HANDOFF_DIR, `${id}.json`), JSON.stringify(entry)); } catch (e) {}
-  setTimeout(() => { handoffs.delete(id); try { fs.unlinkSync(path.join(HANDOFF_DIR, `${id}.json`)); } catch (e) {} }, HANDOFF_TTL).unref?.();
+  // Refresh tokens grant full mailbox access — only persist them ENCRYPTED (and
+  // only if a key is configured); otherwise keep them in memory for the 5-min TTL.
+  writeSecure(path.join(HANDOFF_DIR, `${id}.enc`), entry);
+  setTimeout(() => { handoffs.delete(id); try { fs.unlinkSync(path.join(HANDOFF_DIR, `${id}.enc`)); } catch (e) {} }, HANDOFF_TTL).unref?.();
   return id;
 }
-// Consume a handoff (single use): try memory, then disk. Returns entry or null.
+// Consume a handoff (single use): try memory, then encrypted disk. Returns entry or null.
 function takeHandoff(rawId) {
   const id = path.basename(String(rawId || '')); // guard against path traversal
   let entry = handoffs.get(id);
-  if (!entry) {
-    try {
-      const raw = fs.readFileSync(path.join(HANDOFF_DIR, `${id}.json`), 'utf8');
-      entry = JSON.parse(raw);
-    } catch (e) { entry = null; }
+  if (!entry && ENC_KEY) {
+    const v = decStr((() => { try { return fs.readFileSync(path.join(HANDOFF_DIR, `${id}.enc`), 'utf8'); } catch (e) { return ''; } })());
+    entry = v || null;
   }
   if (!entry) return null;
   handoffs.delete(id);
-  try { fs.unlinkSync(path.join(HANDOFF_DIR, `${id}.json`)); } catch (e) {}
+  try { fs.unlinkSync(path.join(HANDOFF_DIR, `${id}.enc`)); } catch (e) {}
   if (Date.now() - (entry.at || 0) > HANDOFF_TTL) return null;
   return entry;
 }
@@ -341,7 +378,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', (_req, res) => res.json({ version: 'debug-42', recentCallbacks }));
+app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-43', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -353,9 +390,9 @@ app.post('/debug/client-log', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/debug/status', (_req, res) => {
+app.get('/debug/status', debugAuth, (_req, res) => {
   res.json({
-    version: 'debug-42',
+    version: 'debug-43',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -367,7 +404,7 @@ app.get('/debug/status', (_req, res) => {
 });
 
 // A tiny human-readable dashboard for glancing at health from a browser.
-app.get('/debug/dashboard', (_req, res) => {
+app.get('/debug/dashboard', debugAuth, (_req, res) => {
   const rows = Object.entries(metrics).map(([r, m]) =>
     `<tr><td>${r}</td><td>${m.calls}</td><td style="color:${m.errors ? '#c0392b' : '#0a7d33'}">${m.errors}</td><td>${m.lastMs}ms</td><td>${Math.round(m.totalMs / m.calls)}ms</td><td>${m.lastAt || ''}</td></tr>`).join('');
   const ev = recentCallbacks.slice(0, 10).map((c) => `<li><code>${c.at}</code> — <b>${c.stage}</b> ${c.message ? `— ${String(c.message).slice(0, 90)}` : ''}</li>`).join('');
@@ -602,21 +639,19 @@ const WELL_KNOWN_FOLDER = { inbox: 'inbox', sent: 'sentitems', drafts: 'drafts',
 // Summaries are attached to the inbox response so the cards show them
 // immediately. Cache by Graph message id so a re-load never re-bills the AI.
 const SUMMARY_CACHE_FILE = path.join(process.cwd(), 'summary-cache.json');
-let summaryCache = {};
-try { summaryCache = JSON.parse(fs.readFileSync(SUMMARY_CACHE_FILE, 'utf8')) || {}; } catch (e) { summaryCache = {}; }
+let summaryCache = readSecure(SUMMARY_CACHE_FILE); // encrypted at rest; {} if no key
 
 // ── Generic AI cache (key -> value) for per-email AI like next-steps / quick
 // replies, so opening the same email again never re-bills the AI. Disk-backed.
 const AUX_CACHE_FILE = path.join(process.cwd(), 'aux-cache.json');
-let auxCache = {};
-try { auxCache = JSON.parse(fs.readFileSync(AUX_CACHE_FILE, 'utf8')) || {}; } catch (e) { auxCache = {}; }
+let auxCache = readSecure(AUX_CACHE_FILE); // encrypted at rest; {} if no key
 function auxGet(key) { return key ? auxCache[key] : undefined; }
 function auxSet(key, value) {
   if (!key) return;
   auxCache[key] = value;
   const keys = Object.keys(auxCache);
   if (keys.length > 5000) for (const k of keys.slice(0, keys.length - 5000)) delete auxCache[k];
-  try { fs.writeFileSync(AUX_CACHE_FILE, JSON.stringify(auxCache)); } catch (e) {}
+  writeSecure(AUX_CACHE_FILE, auxCache);
 }
 
 // ── Daily AI budget guard ────────────────────────────────────────────────────
@@ -641,7 +676,7 @@ function countAi(n = 1) { aiDayCount += n; }
 let summaryCacheDirty = false;
 function persistSummaryCache() {
   if (!summaryCacheDirty) return;
-  try { fs.writeFileSync(SUMMARY_CACHE_FILE, JSON.stringify(summaryCache)); summaryCacheDirty = false; } catch (e) {}
+  writeSecure(SUMMARY_CACHE_FILE, summaryCache); summaryCacheDirty = false;
 }
 // Keep the cache from growing without bound (oldest-inserted dropped first).
 function trimSummaryCache(max = 4000) {
