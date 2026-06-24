@@ -167,6 +167,20 @@ export function StoreProvider({ children }) {
           setOutlookRefresh(rt);
           setAccounts((a) => ({ ...a, outlook: true }));
         }
+        // Hydrate the inbox from the on-device snapshot so mail shows INSTANTLY,
+        // before the (possibly cold) server responds. The live fetch replaces it.
+        try {
+          const cache = await getToken('inbox_cache');
+          if (cache) {
+            const arr = JSON.parse(cache);
+            if (Array.isArray(arr) && arr.length) {
+              const knownIds = new Set(list.map((a) => a.id));
+              if (rt) knownIds.add('legacy');
+              const keep = arr.filter((e) => !e.accountId || knownIds.has(e.accountId));
+              if (keep.length) { setRaw(keep); rawRef.current = keep; }
+            }
+          }
+        } catch (e) { /* no cache yet */ }
         // First-ever launch → run the tutorial with demo data (only once the new
         // onboarding flow has been completed, so they don't overlap on a fresh install).
         const seen = await getToken('hasSeenTutorial');
@@ -656,6 +670,25 @@ export function StoreProvider({ children }) {
 
   // Core loader: fetch each given account's inbox (page 1), tag by account, and
   // merge into raw — replacing only the loaded accounts' mail so others survive.
+  // Persist a small snapshot of the inbox so it appears INSTANTLY on the next
+  // launch (stale-while-revalidate) instead of waiting on the server's cold start.
+  // Envelope-only (no bodies) and capped, to stay tiny in the keychain.
+  const cacheInbox = useCallback(() => {
+    try {
+      const snap = (rawRef.current || [])
+        .filter((e) => (!e.folder || e.folder === 'inbox') && e.account !== 'demo')
+        .slice(0, 30)
+        .map((e) => ({
+          id: e.id, account: e.account, accountId: e.accountId, accountEmail: e.accountEmail,
+          from: e.from, subject: e.subject, preview: e.preview, date: e.date,
+          read: e.read, flagged: e.flagged, threadKey: e.threadKey, threadCount: e.threadCount,
+          inferred: e.inferred,
+          aiSummary: e.aiSummary || summariesRef.current[e.id] || undefined,
+        }));
+      saveToken('inbox_cache', JSON.stringify(snap)).catch(() => {});
+    } catch (e) { /* cache is best-effort */ }
+  }, []);
+
   const loadAccountsList = useCallback(async (targets) => {
     if (!targets || !targets.length) throw new Error('Outlook not connected');
     // Load every account IN PARALLEL and append each one's mail the moment it
@@ -679,7 +712,11 @@ export function StoreProvider({ children }) {
     }));
     // Only Outlook supports deep skip-based background pagination today.
     targets.filter((a) => (a.type || 'outlook') === 'outlook').forEach((acc) => syncAllOutlook(acc));
-  }, [prefs.serverUrl, summarizeBatch, persistAccounts]); // eslint-disable-line
+    // Snapshot the freshly-loaded inbox for an instant cold start next time (and
+    // again shortly after, once AI summaries have filled in).
+    cacheInbox();
+    setTimeout(cacheInbox, 4000);
+  }, [prefs.serverUrl, summarizeBatch, persistAccounts, cacheInbox]); // eslint-disable-line
 
   // Pull the latest Outlook inbox(es) for the active scope.
   const loadOutlook = useCallback(async () => {
