@@ -25,10 +25,21 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import threading                          # noqa: E402
 from config import load_config           # noqa: E402
 from orchestrator import Orchestrator    # noqa: E402
 from reporter import Reporter            # noqa: E402
 from supervisor import Supervisor        # noqa: E402
+# Eagerly load every module that is otherwise imported lazily during Orchestrator
+# construction, so the whole graph is loaded ONCE here (single-threaded at import)
+# and concurrent constructions can never trigger a partial-import race.
+import assistant                              # noqa: E402,F401
+import intelligence.language.templates        # noqa: E402,F401
+import intelligence.language.stub             # noqa: E402,F401
+import intelligence.language.local_llm        # noqa: E402,F401
+
+# Belt-and-suspenders: serialize Orchestrator construction across threads.
+_ORCH_LOCK = threading.Lock()
 
 WEB_DIST = Path(__file__).resolve().parent / "web" / "dist"
 
@@ -45,7 +56,8 @@ def _start_background_agent(cfg) -> None:
     import threading
 
     def _loop():
-        o = Orchestrator(cfg)
+        with _ORCH_LOCK:
+            o = Orchestrator(cfg)
         if not o.ledger.is_seeded():
             o.ledger.seed(cfg.funded_capital)
         # Collect-only LIVE revenue mode: create real Stripe payment links to take
@@ -277,7 +289,8 @@ def create_app(config_path: str | None = None) -> Flask:
     token = os.environ.get("CENTURION_DASHBOARD_TOKEN", "change-me")
 
     def orch() -> Orchestrator:
-        return Orchestrator(cfg)
+        with _ORCH_LOCK:
+            return Orchestrator(cfg)
 
     # Optionally run the agent loop in this same process (free single-service
     # hosting). Enabled with CENTURION_RUN_AGENT=1. Always simulation on a host.
