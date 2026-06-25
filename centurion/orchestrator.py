@@ -35,6 +35,7 @@ from economics import Economics
 from calibration import CalibrationLog
 from settings import load_into_env
 from integrations.stripe_client import StripeClient
+from growth.engine import GrowthEngine
 
 from strategies.digital_products import DigitalProductsStrategy
 from strategies.service_arbitrage import ServiceArbitrageStrategy
@@ -115,6 +116,10 @@ class Orchestrator:
 
         # Decision Core: persist/restore the bandit so learning survives restarts.
         self.bandit = self._load_bandit()
+        # Growth module: SEO (Lane A autonomous) + draft-and-approve (Lane B).
+        from integrations.twilio_client import AlertClient
+        self.growth = GrowthEngine(self.ledger, self.language, self.bandit,
+                                   self.approvals, alerter=AlertClient())
         self.strategies = self._build_strategies()
         self.cycle_count = int(self.ledger.get_state("cycle_count", "0") or 0)
 
@@ -295,6 +300,18 @@ class Orchestrator:
                 if action.meta.get("phase") == "promote":
                     action.cost = min(action.cost, granted)
                 self._handle_action(name, action, ev.best.est_return, rng, report)
+
+        # Growth module: drive organic distribution to live products. Lane A (SEO
+        # on owned infra) publishes autonomously; Lane B (community/video/outreach)
+        # is queued for one-tap approval, never auto-posted.
+        try:
+            recs = self.growth.run(self.ledger.products(), paused=self.risk.is_paused())
+            pub = sum(1 for r in recs if r["status"] == "published")
+            q = sum(1 for r in recs if r["status"] == "queued")
+            if pub or q:
+                report.notes.append(f"growth: published {pub} SEO page(s), queued {q} Lane-B draft(s)")
+        except Exception as e:
+            report.notes.append(f"growth error: {e}")
 
     def _handle_action(self, strategy: str, action: Action, expected_return: float,
                         rng: random.Random, report: CycleReport) -> None:

@@ -343,6 +343,25 @@ def build_state(o: Orchestrator) -> dict:
         "live": os.environ.get("CENTURION_LIVE_REVENUE") == "1",
         "liveSpendArmed": led.get_state("live_spend_enabled", "0") == "1",
         "collectOnly": bool(o.risk.block_all_spend),
+        "growth": _growth_summary(led),
+    }
+
+
+def _growth_summary(led) -> dict:
+    pages = led.content_pages()
+    laneB = [{"id": a["id"], "title": a["description"], "draft": a["rationale"]}
+             for a in led.actions_by_status("queued") if a.get("strategy") == "growth"][:12]
+    import json
+    try:
+        recs = json.loads(led.get_state("growth_records") or "[]")[:12]
+    except Exception:
+        recs = []
+    return {
+        "pages": len(pages),
+        "views": sum(int(p.get("views", 0)) for p in pages),
+        "clicks": sum(int(p.get("clicks", 0)) for p in pages),
+        "laneB": laneB,
+        "records": recs,
     }
 
 
@@ -525,6 +544,44 @@ def create_app(config_path: str | None = None) -> Flask:
             f"<a class='buy' href='{p['pay_url']}'>Buy now</a>"
             "</body></html>"
         )
+
+    @app.get("/c/<slug>")
+    def content_page(slug):
+        o = orch()
+        p = o.ledger.get_content_page(slug)
+        if not p:
+            return "Not found", 404
+        o.ledger.incr_page_metric(slug, "views")
+        f = Path(p["file"])
+        return f.read_text(encoding="utf-8") if f.exists() else "Page missing", 404 if not f.exists() else 200
+
+    @app.get("/go/<slug>")
+    def go(slug):
+        from flask import redirect
+        o = orch()
+        p = o.ledger.get_content_page(slug)
+        if not p:
+            return redirect("/")
+        o.ledger.incr_page_metric(slug, "clicks")
+        prod = o.ledger.get_product(p.get("product_slug", ""))
+        return redirect(prod["pay_url"] if prod else f"/product/{p.get('product_slug','')}")
+
+    @app.get("/sitemap.xml")
+    def sitemap():
+        o = orch()
+        base = request.host_url.rstrip("/")
+        urls = [f"{base}/product/{p['slug']}" for p in o.ledger.products()]
+        urls += [f"{base}/c/{p['slug']}" for p in o.ledger.content_pages()]
+        body = ("<?xml version='1.0' encoding='UTF-8'?>"
+                "<urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>"
+                + "".join(f"<url><loc>{u}</loc></url>" for u in urls) + "</urlset>")
+        return app.response_class(body, mimetype="application/xml")
+
+    @app.get("/robots.txt")
+    def robots():
+        base = request.host_url.rstrip("/")
+        return app.response_class(
+            f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n", mimetype="text/plain")
 
     @app.get("/deliver/<token>")
     def deliver(token):

@@ -143,7 +143,9 @@ export default function CenturionDashboard() {
     systemState, mode, balance, funded, target, today, multiple, missionPct,
     inflight, vel, history, strategies, activity, pending, system, uptimeDays,
     host, cycleMins, links = [], collectOnly, live, liveSpendArmed, products = [],
+    growth = {},
   } = data;
+  const laneB = growth.laneB || [];
 
   const updateCode = () => {
     if (!window.confirm("Pull the latest code from GitHub and restart into it? "
@@ -465,6 +467,36 @@ export default function CenturionDashboard() {
                   <a href={l.url} target="_blank" rel="noreferrer" className="text-xs font-bold px-2.5 py-1.5 rounded-md shrink-0" style={{ background: T.cyan, color: T.bg }}>Open</a>
                 </div>
               ))}
+            </Panel>
+          </div>
+        )}
+
+        {/* growth: SEO (Lane A) + Lane B approvals */}
+        {(growth.pages > 0 || laneB.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+            <Panel title="Growth · organic SEO (Lane A)" icon={<TrendingUp size={15} color={T.cyan} />}>
+              <div className="flex gap-4">
+                <div><div className="text-2xl font-black" style={num}>{growth.pages || 0}</div><div className="text-xs" style={{ color: T.dim }}>pages live</div></div>
+                <div><div className="text-2xl font-black" style={num}>{growth.views || 0}</div><div className="text-xs" style={{ color: T.dim }}>views</div></div>
+                <div><div className="text-2xl font-black" style={num}>{growth.clicks || 0}</div><div className="text-xs" style={{ color: T.dim }}>→ product</div></div>
+              </div>
+              <div className="text-xs mt-3" style={{ color: T.dim }}>
+                Auto-published to owned pages (sitemap + schema). Ranking compounds over weeks — needs a real domain pointed here.</div>
+            </Panel>
+            <Panel span="lg:col-span-2" title={`Lane B · awaiting your approval (${laneB.length})`} icon={<ShieldCheck size={15} color={T.warn} />}>
+              {laneB.length === 0 && <div className="text-sm" style={{ color: T.dim }}>No drafts waiting. Centurion queues community/video/outreach drafts here — nothing posts without your tap.</div>}
+              <div className="overflow-y-auto" style={{ maxHeight: 300 }}>
+                {laneB.map((d) => (
+                  <div key={d.id} className="px-3 py-2 rounded-lg mb-2" style={{ background: T.raised }}>
+                    <div className="text-xs font-bold mb-1" style={{ color: T.warn }}>{d.title}</div>
+                    <div className="text-xs mb-2" style={{ color: T.muted, whiteSpace: "pre-wrap", maxHeight: 90, overflow: "hidden" }}>{d.draft}</div>
+                    <div className="flex gap-2">
+                      <button onClick={() => approve({ id: d.id }, true)} disabled={busy} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: T.gain, color: T.bg }}><Check size={13} />Approve</button>
+                      <button onClick={() => approve({ id: d.id }, false)} disabled={busy} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted }}><X size={13} />Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </Panel>
           </div>
         )}

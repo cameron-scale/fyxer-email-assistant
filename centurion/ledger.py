@@ -315,6 +315,33 @@ class Ledger:
     def get_product_by_token(self, token: str) -> Optional[dict]:
         return next((p for p in self.products() if p.get("deliver_token") == token), None)
 
+    # --- growth: SEO content pages (Lane A, owned infra) ---
+    def record_content_page(self, page: dict) -> None:
+        import json
+        items = [p for p in self.content_pages() if p.get("slug") != page.get("slug")]
+        items.insert(0, page)
+        self.set_state("content_pages", json.dumps(items[:500]))
+
+    def content_pages(self) -> list[dict]:
+        import json
+        raw = self.get_state("content_pages")
+        try:
+            return json.loads(raw) if raw else []
+        except Exception:
+            return []
+
+    def get_content_page(self, slug: str) -> Optional[dict]:
+        return next((p for p in self.content_pages() if p.get("slug") == slug), None)
+
+    def incr_page_metric(self, slug: str, field: str) -> None:
+        import json
+        items = self.content_pages()
+        for p in items:
+            if p.get("slug") == slug:
+                p[field] = int(p.get(field, 0)) + 1
+                self.set_state("content_pages", json.dumps(items[:500]))
+                return
+
     def get_state(self, key: str, default: Any = None) -> Any:
         row = self._conn().execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
         return row["value"] if row else default
