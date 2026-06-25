@@ -52,6 +52,18 @@ python main.py --init || true; gunicorn -b 0.0.0.0:$PORT --workers 1 --threads 8
 with env `CENTURION_RUN_AGENT=1` and `CENTURION_DASHBOARD_TOKEN=<something>`,
 working directory = the `centurion/` folder.
 
+## Live revenue on Render (collect-only, $0 spend risk)
+The blueprint runs in **live-revenue** mode: with your `STRIPE_API_KEY` set in
+Render's Environment, Centurion creates **real Stripe payment links** (shown in
+the dashboard's Storefront panel). Spending stays **OFF** behind the dashboard's
+red danger switch, so it can take money but cannot spend any.
+
+For sales to auto-credit in real time, add a Stripe webhook:
+1. Stripe Dashboard → Developers → Webhooks → **Add endpoint**.
+2. URL: `https://<your-service>.onrender.com/webhook/stripe`
+3. Events: `checkout.session.completed` (and optionally `charge.refunded`).
+4. Copy the signing secret → set it as `STRIPE_WEBHOOK_SECRET` in Render env.
+
 ## When you're ready for real money
 Hosting the *live* agent belongs on an always-on box you control (a cheap VPS or
 your PC), not a free shared host — see **GO_LIVE.md** and `deploy/` (Dockerfile,

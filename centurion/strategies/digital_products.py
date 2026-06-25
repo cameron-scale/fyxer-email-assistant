@@ -15,8 +15,9 @@ class DigitalProductsStrategy(Strategy):
     typical_sale = 19.0
 
     def plan(self, opportunity: Opportunity) -> List[Action]:
-        topic = opportunity.brief
-        # Build the actual product + landing page (free, value-first).
+        # A clean, customer-facing topic from the raw idea (strip lens tag + the
+        # demand/competition annotation), used for the asset and the Stripe product.
+        topic = opportunity.brief.split("|")[0].split("]")[-1].strip() or opportunity.brief
         self.assets.product_listing(topic, self.name)
         self.assets.landing_page(topic, self.name)
         actions = [Action(
@@ -25,7 +26,7 @@ class DigitalProductsStrategy(Strategy):
             cost=0.0, reversible=True, legality="clear", tos_compliant=True,
             rationale="Create a sellable digital asset before any spend.",
             meta={"phase": "build", "opp_type": opportunity.opp_type,
-                  "publishes_under_brand": True},
+                  "publishes_under_brand": True, "topic": topic},
         )]
         if opportunity.est_capital > 0:
             actions.append(Action(
@@ -48,14 +49,17 @@ class DigitalProductsStrategy(Strategy):
         phase = action.meta.get("phase", "build")
         if phase == "build" and stripe is not None:
             try:
-                fields = self.assets.product_listing(action.description, self.name).fields
-                price = float(str(fields.get("price", "19")).replace("$", "") or 19)
+                topic = action.meta.get("topic") or action.description
+                asset = self.assets.product_listing(topic, self.name)
+                product_name = (asset.title or topic)[:120]
+                price = float(str(asset.fields.get("price", "19")).replace("$", "") or 19)
+                price = max(price, 5.0)  # keep tickets above Stripe's fixed-fee floor
                 link = stripe.create_payment_link(
-                    amount=price, product_name=action.description[:120],
-                    idem=stripe.idempotency_key("dp", action.description))
+                    amount=price, product_name=product_name,
+                    idem=stripe.idempotency_key("dp", product_name))
                 # Surface the link on the dashboard so the operator can open/share
                 # it and actually receive money.
-                self.ledger.add_payment_link(link.url, action.description[:80])
+                self.ledger.add_payment_link(link.url, product_name[:80])
                 return ExecutionResult(True, cost=0.0, revenue=0.0,
                                        external_ref=link.id, reversible=True,
                                        detail=f"listed; pay link {link.url}")
