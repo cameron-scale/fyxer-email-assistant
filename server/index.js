@@ -77,6 +77,58 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.set('trust proxy', true);
 
+// ── Security middleware (NDA hardening) ──────────────────────────────────────
+// 1) Baseline response headers.
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'DENY');
+  res.set('Referrer-Policy', 'no-referrer');
+  next();
+});
+
+// 2) Per-IP rate limiting (always on) so the backend can't be scraped / DoS'd and
+// nobody can burn the AI budget. AI endpoints get a tighter ceiling. In-memory
+// sliding window — fine for a single instance; swap for Redis when you scale out.
+const AI_PATHS = new Set(['/summarize', '/ask', '/next-steps', '/suggest', '/learn-keep', '/quick-replies', '/draft', '/signature', '/learn/profile', '/snooze-suggest', '/relationship', '/digest', '/voice', '/profile']);
+const rlBuckets = new Map(); // ip -> { count, resetAt }
+const RL_WINDOW_MS = 60 * 1000;
+const RL_MAX = parseInt(process.env.RATE_LIMIT_PER_MIN || '240', 10);
+const RL_AI_MAX = parseInt(process.env.RATE_LIMIT_AI_PER_MIN || '50', 10);
+setInterval(() => { const now = Date.now(); for (const [ip, e] of rlBuckets) if (now > e.resetAt) rlBuckets.delete(ip); }, 5 * 60 * 1000).unref?.();
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
+  const ip = req.ip || req.socket?.remoteAddress || 'x';
+  const key = `${ip}:${AI_PATHS.has(req.path) ? 'ai' : 'all'}`;
+  const max = AI_PATHS.has(req.path) ? RL_AI_MAX : RL_MAX;
+  const now = Date.now();
+  let e = rlBuckets.get(key);
+  if (!e || now > e.resetAt) { e = { count: 0, resetAt: now + RL_WINDOW_MS }; rlBuckets.set(key, e); }
+  e.count += 1;
+  if (e.count > max) { res.set('Retry-After', Math.ceil((e.resetAt - now) / 1000)); return res.status(429).json({ error: 'Too many requests' }); }
+  next();
+});
+
+// 3) App-to-backend key. Enforced ONLY when APP_API_KEY is set on the server, so
+// the live app keeps working until you opt in (set APP_API_KEY here + the matching
+// EXPO_PUBLIC_APP_KEY in the app build). Public/browser/mail-client routes are
+// exempt: health, OAuth, image GETs, and the (separately token-gated) debug pages.
+const APP_API_KEY = (process.env.APP_API_KEY || '').trim();
+function isPublicPath(p, method) {
+  if (p === '/' || p === '/health' || p === '/usage') return true;
+  if (p.startsWith('/auth/')) return true;             // OAuth happens in a browser
+  if (p.startsWith('/debug')) return true;             // already behind DEBUG_TOKEN
+  if (p.startsWith('/img/') && method === 'GET') return true; // mail clients fetch signature images
+  if (p.startsWith('/calendar/ics')) return true;      // calendar feed URLs
+  return false;
+}
+app.use((req, res, next) => {
+  if (!APP_API_KEY) return next();          // not configured → don't enforce yet
+  if (req.method === 'OPTIONS') return next();
+  if (isPublicPath(req.path, req.method)) return next();
+  if ((req.get('x-app-key') || '') !== APP_API_KEY) return res.status(401).json({ error: 'unauthorized' });
+  next();
+});
+
 // ── Live monitoring: time + tally every request (errors, latency) ─────────────
 const SERVER_STARTED = Date.now();
 const metrics = {}; // route -> { calls, errors, lastMs, totalMs, lastAt }
@@ -168,7 +220,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-43',
+    version: 'debug-44',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -378,7 +430,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-43', recentCallbacks }));
+app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-44', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -392,7 +444,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', debugAuth, (_req, res) => {
   res.json({
-    version: 'debug-43',
+    version: 'debug-44',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,

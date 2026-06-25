@@ -13,6 +13,15 @@ export function isBackendConfigured(serverUrl) {
   return base(serverUrl).length > 0;
 }
 
+// Optional app-to-backend key. Set EXPO_PUBLIC_APP_KEY at build time (and the
+// matching APP_API_KEY on the server) to require it — until both are set, it's
+// absent and the server doesn't enforce, so nothing breaks. Never put a real
+// secret in the repo; it's injected from the build environment.
+const APP_KEY = (typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_APP_KEY) || '';
+function jsonHeaders(extra) {
+  return { 'Content-Type': 'application/json', ...(APP_KEY ? { 'x-app-key': APP_KEY } : {}), ...(extra || {}) };
+}
+
 // The URL the app opens in a browser to start Microsoft login. `appRedirect` is
 // where the server bounces the user back to (this app's deep link).
 export function microsoftLoginUrl(serverUrl, appRedirect, claim) {
@@ -35,7 +44,7 @@ export function googleLoginUrl(serverUrl, appRedirect, claim) {
 async function post(serverUrl, path, body) {
   const res = await fetch(`${base(serverUrl)}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(body || {}),
   });
   const data = await res.json().catch(() => ({}));
@@ -53,7 +62,7 @@ export function uploadSignatureImage(serverUrl, dataUri) {
 export async function deleteSignatureImage(serverUrl, url) {
   const file = String(url || '').split('/img/')[1];
   if (!file) return { ok: false };
-  const res = await fetch(`${base(serverUrl)}/img/${file}`, { method: 'DELETE' });
+  const res = await fetch(`${base(serverUrl)}/img/${file}`, { method: 'DELETE', headers: jsonHeaders() });
   return res.json().catch(() => ({ ok: res.ok }));
 }
 
@@ -201,7 +210,7 @@ export function getMyPhoto(serverUrl, refreshToken) {
 
 // Current month's AI usage vs cap. Returns { total, cap, ... }.
 export async function fetchUsage(serverUrl) {
-  const res = await fetch(`${base(serverUrl)}/usage`);
+  const res = await fetch(`${base(serverUrl)}/usage`, { headers: jsonHeaders() });
   if (!res.ok) throw new Error('usage unavailable');
   return res.json();
 }
@@ -226,7 +235,7 @@ export function aiGenerateSignature(serverUrl, style, details) {
 export function reportClientEvent(serverUrl, level, event, detail) {
   try {
     fetch(`${base(serverUrl)}/debug/client-log`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: jsonHeaders(),
       body: JSON.stringify({ level, event, detail, at: new Date().toISOString() }),
     }).catch(() => {});
   } catch (e) {}
