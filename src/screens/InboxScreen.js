@@ -170,15 +170,27 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
     exitSelect();
   };
 
-  // Group into Today / Yesterday / Earlier sections (only the visible slice).
+  // "Keep an eye on" — watched conversations with NEW activity (today, or unread)
+  // float to their own pinned section at the very top, regardless of timestamp.
+  const watchingOn = !starred && !usingSearch && filter === 'all';
+  const watchedActive = watchingOn
+    ? visible.filter((e) => e.watched && (dayBucket(e.date) === 'Today' || e.read === false))
+    : [];
+  const watchedIds = new Set(watchedActive.map((e) => e.id));
+  const rest = watchedActive.length ? visible.filter((e) => !watchedIds.has(e.id)) : visible;
+
+  // Group the remainder into Today / Last 7 days / Earlier.
   const grouped = {};
-  visible.forEach((e) => {
+  rest.forEach((e) => {
     const key = dayBucket(e.date);
     (grouped[key] = grouped[key] || []).push(e);
   });
-  const sections = SECTION_ORDER
+  const dateSections = SECTION_ORDER
     .filter((k) => grouped[k]?.length)
     .map((k) => ({ title: k === 'Today' ? `Today — ${longToday()}` : k, data: grouped[k] }));
+  const sections = watchedActive.length
+    ? [{ title: '👁  Keep an eye on', data: watchedActive }, ...dateSections]
+    : dateSections;
 
   // The wordmark badge shows the mailbox's true unread count (matches Outlook);
   // the per-filter "Unread" chip uses the same number once known.

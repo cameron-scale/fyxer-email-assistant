@@ -27,6 +27,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import ProfilingScreen from './src/screens/ProfilingScreen';
 import BulkTriageScreen from './src/screens/BulkTriageScreen';
 import ArchivingSoonScreen from './src/screens/ArchivingSoonScreen';
+import PinnedScreen from './src/screens/PinnedScreen';
 import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
 import OnboardingTour from './src/components/OnboardingTour';
@@ -62,12 +63,13 @@ const SCREENS = {
   Profiling: ProfilingScreen,
   BulkTriage: BulkTriageScreen,
   ArchivingSoon: ArchivingSoonScreen,
+  Pinned: PinnedScreen,
 };
 
 // Screens that show the bottom tab bar and can be switched between as tabs.
 // Settings now lives behind the profile avatar, not the tab bar.
 const TAB_SCREENS = ['Inbox', 'Starred', 'Sent', 'Drafts'];
-const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDrawer', 'Folder', 'Calendar', 'Thread', 'Onboarding', 'Profiling', 'BulkTriage', 'Digest', 'ArchivingSoon'];
+const DARK_SCREENS = ['Inbox', 'Starred', 'Triage', 'Sent', 'Drafts', 'MailboxDrawer', 'Folder', 'Calendar', 'Thread', 'Onboarding', 'Profiling', 'BulkTriage', 'Digest', 'ArchivingSoon', 'Pinned'];
 
 // Which aurora palette a top-level screen uses (Detail sets its own per-email).
 const SCREEN_PALETTE = { Starred: 'starred', Sent: 'sent', Drafts: 'drafts' };
@@ -167,6 +169,7 @@ function AppShell() {
           onOpenDigest={() => navigate('Digest')}
           onOpenHealth={() => navigate('Health')}
           onOpenCalendar={() => navigate('Calendar')}
+          onOpenPinned={() => navigate('Pinned')}
         />
       </BottomSheet>
 

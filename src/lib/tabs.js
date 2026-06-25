@@ -21,10 +21,11 @@ export const TAB_DEFS = {
   // ── VIP ──────────────────────────────────────────────────────────────────────
   VIPSenders: { key: 'VIPSenders', label: 'VIP',   icon: 'ribbon',            color: '#C77D00', desc: 'Mail from your VIP people',  nav: { filter: 'starred' } },
   Digest:   { key: 'Digest',   label: 'Digest',    icon: 'sunny',             color: '#B45309', desc: 'Your daily summary',         nav: { push: 'Digest' } },
+  Pinned:   { key: 'Pinned',   label: 'Pinned',    icon: 'bookmark',          color: '#F59E0B', desc: 'Emails you pinned',          nav: { push: 'Pinned' } },
 };
 
 export const PICKER_SECTIONS = [
-  { title: 'Mailboxes', keys: ['Inbox', 'Starred', 'Sent', 'Drafts', 'Triage', 'Archive', 'Junk'] },
+  { title: 'Mailboxes', keys: ['Inbox', 'Starred', 'Sent', 'Drafts', 'Triage', 'Archive', 'Junk', 'Pinned'] },
   { title: 'Smart Folders', keys: ['Urgent', 'Action', 'Meetings', 'Clients', 'BeAware', 'Irrelevant'] },
   { title: 'VIP', keys: ['VIPSenders', 'Digest'] },
 ];

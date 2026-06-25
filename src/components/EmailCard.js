@@ -39,6 +39,8 @@ function EmailCard({ email, onPress, onLongPress, tagRef, selectMode, selected }
       <View style={styles.main}>
         <View style={styles.topLine}>
           <Text style={[styles.sender, !unread && styles.senderRead]} numberOfLines={1}>{p.senderName}</Text>
+          {email.watched && <Ionicons name="eye" size={12} color="#7DD3FC" style={styles.vip} />}
+          {email.pinned && <Ionicons name="bookmark" size={11} color="#F59E0B" style={styles.vip} />}
           {p.isVip && <Ionicons name="star" size={12} color={colors.star} style={styles.vip} />}
           {threadCount > 1 && (
             <View style={styles.threadChip}>

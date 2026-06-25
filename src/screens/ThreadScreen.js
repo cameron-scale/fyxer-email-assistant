@@ -97,7 +97,7 @@ function Message({ msg, defaultOpen, me }) {
 }
 
 export default function ThreadScreen({ goBack, navigate, params }) {
-  const { emails, searchEmails, folderEmails, findEmail, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk, snooze, toggleVip, vips, classifySenders } = useStore();
+  const { emails, searchEmails, folderEmails, findEmail, prefs, setPrefs, mailAccounts, outlookRefresh, loadFullBody, markRead, markUnread, archive, trashEmail, reportJunk, snooze, toggleVip, vips, classifySenders, isWatched, toggleWatch, isPinned, togglePin } = useStore();
   const seed = findEmail(params.id);
   const myEmails = useMemo(() => new Set((mailAccounts || []).map((a) => (a.email || '').toLowerCase()).filter(Boolean)), [mailAccounts]);
   const [messages, setMessages] = useState(null);
@@ -107,6 +107,8 @@ export default function ThreadScreen({ goBack, navigate, params }) {
   const [attView, setAttView] = useState(null); // { uri, name, type }
   const [moreOpen, setMoreOpen] = useState(false);
   const [classifyOpen, setClassifyOpen] = useState(false);
+  const watching = seed ? isWatched(seed) : false;
+  const pinned = seed ? isPinned(seed.id) : false;
   const currentLabel = (prefs?.senderLabels || {})[(seed?.priority?.senderEmail || parseSender(seed?.from || '').email || '').toLowerCase()] || null;
 
   const { token, provider } = useMemo(() => {
@@ -217,6 +219,8 @@ export default function ThreadScreen({ goBack, navigate, params }) {
       <Modal visible={moreOpen} transparent animationType="fade" onRequestClose={() => setMoreOpen(false)}>
         <Pressable style={styles.moreBackdrop} onPress={() => setMoreOpen(false)}>
           <View style={styles.moreSheet}>
+            <MoreItem icon={watching ? 'eye' : 'eye-outline'} iconColor={watching ? '#7DD3FC' : undefined} label={watching ? 'Stop keeping an eye on this' : 'Keep an eye on this'} onPress={() => { setMoreOpen(false); if (seed) toggleWatch(seed.id); }} />
+            <MoreItem icon={pinned ? 'bookmark' : 'bookmark-outline'} iconColor={pinned ? '#F59E0B' : undefined} label={pinned ? 'Unpin' : 'Pin to Pinned page'} onPress={() => { setMoreOpen(false); if (seed) togglePin(seed.id); }} />
             <MoreItem icon="pricetag-outline" label={currentLabel ? `Classify sender (now: ${labelName(currentLabel)})` : 'Classify sender'} onPress={() => { setMoreOpen(false); setClassifyOpen(true); }} />
             <MoreItem icon="bulb-outline" label="Teach AI about this sender" onPress={() => { setMoreOpen(false); teachAI(); }} />
             <MoreItem icon="time-outline" label="Snooze 4 hours" onPress={() => { setMoreOpen(false); if (seed) advance((id) => snooze(id, 4)); }} />

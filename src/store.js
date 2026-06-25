@@ -28,7 +28,24 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, hiddenIds: {}, autoArchive: true, archiveNoticeSeen: false };
+const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, hiddenIds: {}, watched: [], pinnedIds: {}, autoArchive: true, archiveNoticeSeen: false };
+
+// Normalize a subject for "same conversation" matching (drop Re:/Fwd:, lowercase).
+const watchSubjectNorm = (s) => String(s || '').toLowerCase()
+  .replace(/^\s*(re|fwd|fw|aw|wg)\s*:\s*/i, '').replace(/^\s*(re|fwd|fw|aw|wg)\s*:\s*/i, '').trim();
+const senderOf = (e) => (e?.priority?.senderEmail || '').toLowerCase()
+  || (String(e?.from || '').match(/[^\s<>]+@[^\s<>]+/) || [''])[0].toLowerCase();
+// Does this email belong to a watched conversation/person?
+function matchWatch(email, watched) {
+  if (!watched || !watched.length) return false;
+  const tk = email.threadKey;
+  const subj = watchSubjectNorm(email.subject);
+  const from = senderOf(email);
+  return watched.some((w) => (
+    (w.threadKey && tk && w.threadKey === tk) ||
+    (w.subjectNorm && w.subjectNorm === subj && (w.participants || []).includes(from))
+  ));
+}
 
 const StoreContext = createContext(null);
 
@@ -250,8 +267,17 @@ export function StoreProvider({ children }) {
     // twice, which showed up as a repeated card (notably in Triage).
     const seen = new Set();
     const deduped = visible.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
-    return applySort(prioritize(deduped, vips, prefs.categories, knownImportantList, senderLabels, keptSenders));
-  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, prefs.senderLabels, prefs.keptSenders, prefs.hiddenIds, demoMode, activeAccountId, applySort]); // eslint-disable-line
+    const ranked = applySort(prioritize(deduped, vips, prefs.categories, knownImportantList, senderLabels, keptSenders));
+    // Tag watched conversations + pinned emails (cheap; keeps refs stable otherwise).
+    const watched = prefs.watched || [];
+    const pins = prefs.pinnedIds || {};
+    if (!watched.length && !Object.keys(pins).length) return ranked;
+    return ranked.map((e) => {
+      const w = watched.length ? matchWatch(e, watched) : false;
+      const p = !!pins[e.id];
+      return (w || p) ? { ...e, watched: w, pinned: p } : e;
+    });
+  }, [raw, overrides, vips, sortBy, prefs.categories, prefs.knownImportant, prefs.senderLabels, prefs.keptSenders, prefs.hiddenIds, prefs.watched, prefs.pinnedIds, demoMode, activeAccountId, applySort]); // eslint-disable-line
 
   const emails = useMemo(() => {
     if (demoMode) return rankedBase;
@@ -891,6 +917,66 @@ export function StoreProvider({ children }) {
     return addrs.length;
   }, [findEmail, bulkAction]);
 
+  // ── "Keep an eye out" — watch a conversation/person so new activity floats to
+  // the very top of the inbox (its own pinned section), regardless of timestamp.
+  const watchedList = useMemo(() => prefs.watched || [], [prefs.watched]);
+  const isWatched = useCallback((email) => matchWatch(email, prefs.watched || []), [prefs.watched]);
+  const toggleWatch = useCallback((id) => {
+    const e = findEmail(id);
+    if (!e) return false;
+    const watch = {
+      threadKey: e.threadKey || null,
+      subjectNorm: watchSubjectNorm(e.subject),
+      participants: [senderOf(e)].filter(Boolean),
+      at: Date.now(),
+    };
+    let nowWatching = false;
+    setPrefsState((p) => {
+      const list = p.watched || [];
+      const already = matchWatch(e, list);
+      let next;
+      if (already) {
+        // Unwatch: drop any watch this email matches.
+        next = list.filter((w) => !(
+          (w.threadKey && e.threadKey && w.threadKey === e.threadKey) ||
+          (w.subjectNorm && w.subjectNorm === watch.subjectNorm && (w.participants || []).includes(watch.participants[0]))
+        ));
+        nowWatching = false;
+      } else {
+        next = [...list, watch];
+        nowWatching = true;
+      }
+      const out = { ...p, watched: next };
+      saveToken('prefs', JSON.stringify(out)).catch(() => {});
+      return out;
+    });
+    return nowWatching;
+  }, [findEmail]);
+
+  // ── Pin (Outlook-style), but pinned mail lives on its own page ───────────────
+  const isPinned = useCallback((id) => !!(prefs.pinnedIds || {})[id], [prefs.pinnedIds]);
+  const togglePin = useCallback((id) => {
+    let pinned = false;
+    setPrefsState((p) => {
+      const pins = { ...(p.pinnedIds || {}) };
+      if (pins[id]) { delete pins[id]; pinned = false; } else { pins[id] = Date.now(); pinned = true; }
+      const out = { ...p, pinnedIds: pins };
+      saveToken('prefs', JSON.stringify(out)).catch(() => {});
+      return out;
+    });
+    return pinned;
+  }, []);
+  // The pinned-page list: every loaded email that's pinned, newest-pinned first.
+  const pinnedEmails = useMemo(() => {
+    const pins = prefs.pinnedIds || {};
+    const ids = Object.keys(pins);
+    if (!ids.length) return [];
+    const pool = [...emails, ...(folderEmails || []), ...sentRanked, ...draftRanked];
+    const byId = new Map();
+    for (const e of pool) if (pins[e.id] && !byId.has(e.id)) byId.set(e.id, e);
+    return Array.from(byId.values()).sort((a, b) => (pins[b.id] || 0) - (pins[a.id] || 0));
+  }, [prefs.pinnedIds, emails, folderEmails, sentRanked, draftRanked]);
+
   // Rename / tag a linked mailbox (custom display name + accent color).
   const updateMailAccount = useCallback((id, patch) => {
     setMailAccounts((prev) => { const next = prev.map((a) => (a.id === id ? { ...a, ...patch } : a)); persistAccounts(next); mailAccountsRef.current = next; return next; });
@@ -1126,6 +1212,12 @@ export function StoreProvider({ children }) {
     closeLearn,
     addKnownImportant,
     classifySenders,
+    watchedList,
+    isWatched,
+    toggleWatch,
+    isPinned,
+    togglePin,
+    pinnedEmails,
     mailFolders,
     foldersLoading,
     loadMailFolders,
