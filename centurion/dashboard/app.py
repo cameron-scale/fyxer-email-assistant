@@ -313,6 +313,28 @@ def create_app(config_path: str | None = None) -> Flask:
         changed = S.apply(orch().ledger, values)
         return jsonify(ok=True, changed=changed)
 
+    @app.post("/api/chat")
+    def api_chat():
+        import assistant
+        msg = (request.get_json(silent=True) or {}).get("message", "")
+        try:
+            reply = assistant.answer(orch(), msg)
+        except Exception as e:
+            reply = f"(couldn't read state: {e})"
+        return jsonify(reply=reply)
+
+    @app.errorhandler(Exception)
+    def on_error(e):
+        # Surface the real cause as JSON instead of a blank 500 — helps debug
+        # hosted deploys and lets the dashboard show what went wrong.
+        import traceback
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return e
+        tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+        return jsonify(error=type(e).__name__, message=str(e),
+                       path=request.path, trace=tb[-1800:]), 500
+
     @app.post("/webhook/stripe")
     def stripe_webhook():
         from integrations.stripe_webhook import verify_and_parse, handle_event

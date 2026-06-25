@@ -39,6 +39,16 @@ export async function saveSettings(values) {
   return r.json();
 }
 
+export async function chat(message) {
+  const r = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  if (!r.ok) throw new Error(`chat ${r.status}`);
+  return r.json();
+}
+
 export async function control(path, body = {}) {
   let token = getToken();
   if (!token) {

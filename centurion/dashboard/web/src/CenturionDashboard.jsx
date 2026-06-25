@@ -6,8 +6,9 @@ import {
 import {
   Activity, Pause, Play, Power, ShieldCheck, Cpu, Zap, Check, X,
   TrendingUp, TrendingDown, Gauge, Server, Radio, Settings as SettingsIcon, KeyRound,
+  MessageSquare, Send,
 } from "lucide-react";
-import { fetchState, control, getSettings, saveSettings } from "./api.js";
+import { fetchState, control, getSettings, saveSettings, chat } from "./api.js";
 
 // ---- ScaleMBS / Centurion theme tokens ---------------------------------
 const T = {
@@ -235,6 +236,7 @@ export default function CenturionDashboard() {
         </div>
 
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+        <ChatWidget />
 
         {/* KPI row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
@@ -483,6 +485,78 @@ function Row({ k, v }) {
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm" style={{ color: T.muted }}>{k}</span>
       <span className="text-sm font-bold" style={{ color: T.text }}>{v}</span>
+    </div>
+  );
+}
+
+function ChatWidget() {
+  const [open, setOpen] = useState(false);
+  const [msgs, setMsgs] = useState([
+    { who: "ai", text: "Hi — I'm Centurion. Ask me what I'm doing, the balance, why I held, the odds, or if your money's safe." },
+  ]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const endRef = React.useRef(null);
+
+  useEffect(() => { if (open && endRef.current) endRef.current.scrollIntoView({ behavior: "smooth" }); }, [msgs, open]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || sending) return;
+    setInput("");
+    setMsgs(m => [...m, { who: "you", text }]);
+    setSending(true);
+    try {
+      const r = await chat(text);
+      setMsgs(m => [...m, { who: "ai", text: r.reply }]);
+    } catch (e) {
+      setMsgs(m => [...m, { who: "ai", text: `(error: ${e.message})` }]);
+    } finally { setSending(false); }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} aria-label="Chat with Centurion"
+        style={{ position: "fixed", right: 18, bottom: 18, zIndex: 60, width: 54, height: 54,
+          borderRadius: 999, background: T.cyan, color: T.bg, boxShadow: `0 6px 20px ${T.cyan}55`,
+          display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <MessageSquare size={24} />
+      </button>
+    );
+  }
+  return (
+    <div style={{ position: "fixed", right: 16, bottom: 16, zIndex: 60, width: "min(380px, calc(100vw - 32px))",
+      height: "min(540px, 75vh)", background: T.panel, border: `1px solid ${T.borderLit}`, borderRadius: 16,
+      display: "flex", flexDirection: "column", boxShadow: "0 12px 40px rgba(0,0,0,.5)" }}>
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+        <div className="flex items-center gap-2"><Activity size={16} color={T.cyan} />
+          <span className="font-bold text-sm">Ask Centurion</span></div>
+        <button onClick={() => setOpen(false)} style={{ color: T.muted }}><X size={18} /></button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+        {msgs.map((m, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: m.who === "you" ? "flex-end" : "flex-start" }}>
+            <div style={{ maxWidth: "84%", padding: "8px 11px", borderRadius: 12, fontSize: 13.5, lineHeight: 1.4,
+              background: m.who === "you" ? T.cyan : T.raised, color: m.who === "you" ? T.bg : T.text }}>
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {sending && <div className="text-xs" style={{ color: T.dim }}>Centurion is thinking…</div>}
+        <div ref={endRef} />
+      </div>
+      <div className="flex items-center gap-2 px-3 py-3" style={{ borderTop: `1px solid ${T.border}` }}>
+        <input value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") send(); }}
+          placeholder="Ask about balance, strategy, risk…"
+          className="flex-1 px-3 py-2 rounded-lg text-sm"
+          style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.text }} />
+        <button onClick={send} disabled={sending}
+          style={{ width: 38, height: 38, borderRadius: 10, background: T.cyan, color: T.bg,
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Send size={16} />
+        </button>
+      </div>
     </div>
   );
 }
