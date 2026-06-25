@@ -104,6 +104,22 @@ def _hhmmss(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
 
 
+def _stripe_diag() -> dict:
+    """Why are links mock vs real? Reports key presence and lib availability."""
+    key = os.environ.get("STRIPE_API_KEY", "")
+    try:
+        import stripe  # noqa: F401
+        lib = True
+    except Exception:
+        lib = False
+    from integrations.stripe_client import StripeClient
+    mode = "live" if not StripeClient().mock else "mock"
+    keytype = ("live" if key.startswith("sk_live") else
+               "test" if key.startswith("sk_test") else
+               ("set" if key else "missing"))
+    return {"mode": mode, "keyType": keytype, "lib": lib}
+
+
 def build_state(o: Orchestrator) -> dict:
     led = o.ledger
     rep = Reporter(led, o.cfg, memory=o.memory, risk=o.risk, calibration=o.calibration)
@@ -223,6 +239,7 @@ def build_state(o: Orchestrator) -> dict:
         "anomalies": o.risk.anomaly_count(),
         "blocks": len(led.actions_by_status("rejected")),
         "calibration": o.calibration.stats().verdict,
+        "stripe": _stripe_diag(),
     }
 
     return {
