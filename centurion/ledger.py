@@ -277,6 +277,23 @@ class Ledger:
         with self._tx() as conn:
             self._set_state(conn, key, str(value))
 
+    # --- storefront payment links (surfaced on the dashboard) ---
+    def add_payment_link(self, url: str, product: str) -> None:
+        import json
+        links = self.payment_links()
+        if any(l.get("url") == url for l in links):
+            return
+        links.insert(0, {"url": url, "product": product, "ts": time.time()})
+        self.set_state("payment_links", json.dumps(links[:12]))
+
+    def payment_links(self) -> list[dict]:
+        import json
+        raw = self.get_state("payment_links")
+        try:
+            return json.loads(raw) if raw else []
+        except Exception:
+            return []
+
     def get_state(self, key: str, default: Any = None) -> Any:
         row = self._conn().execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
         return row["value"] if row else default

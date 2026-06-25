@@ -64,9 +64,12 @@ _ENV_OVERRIDES = {
     "CENTURION_AUTONOMY_LEVEL": ("autonomy_level", str),
     "CENTURION_LANGUAGE_PROVIDER": ("language_provider", str),
     "CENTURION_FOCUS_STRATEGY": ("focus_strategy", str),
+    "CENTURION_SANDBOX_IDENTITY": ("sandbox_identity", str),
     "CENTURION_REQUIRE_ORGANIC_PROOF": ("require_organic_proof",
                                         lambda v: str(v).lower() in ("1", "true", "yes")),
     "CENTURION_CYCLE_INTERVAL_MINUTES": ("cycle_interval_minutes", float),
+    "CENTURION_BLOCK_ALL_SPEND": ("block_all_spend",
+                                  lambda v: str(v).lower() in ("1", "true", "yes")),
 }
 
 

@@ -18,6 +18,18 @@ services:
       - key: CENTURION_RUN_AGENT
         value: "1"
       - key: CENTURION_FUNDED_CAPITAL
-        value: "10"          # simulated $10 seed for testing on the free host
+        value: "10"          # $10 seed
+      - key: CENTURION_LIVE_REVENUE
+        value: "1"           # LIVE: create real Stripe payment links (collect money)
+      - key: CENTURION_FOCUS_STRATEGY
+        value: "digital_products"   # the strategy that creates sellable products + links
+      - key: CENTURION_SANDBOX_IDENTITY
+        value: "centurion-store"    # post under a sandbox identity, not your real brand
+      # Real SPENDING stays OFF by default (danger switch in the dashboard). Until
+      # armed, this collects revenue with $0 spend risk.
       - key: CENTURION_DASHBOARD_TOKEN
-        sync: false          # Render prompts you to set this password at deploy time
+        sync: false          # set your dashboard password at deploy
+      - key: STRIPE_API_KEY
+        sync: false          # your Stripe secret key (set in Render env) to take real money
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false          # optional: for auto-crediting sales in real time

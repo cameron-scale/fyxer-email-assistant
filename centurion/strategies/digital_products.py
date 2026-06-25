@@ -53,6 +53,9 @@ class DigitalProductsStrategy(Strategy):
                 link = stripe.create_payment_link(
                     amount=price, product_name=action.description[:120],
                     idem=stripe.idempotency_key("dp", action.description))
+                # Surface the link on the dashboard so the operator can open/share
+                # it and actually receive money.
+                self.ledger.add_payment_link(link.url, action.description[:80])
                 return ExecutionResult(True, cost=0.0, revenue=0.0,
                                        external_ref=link.id, reversible=True,
                                        detail=f"listed; pay link {link.url}")

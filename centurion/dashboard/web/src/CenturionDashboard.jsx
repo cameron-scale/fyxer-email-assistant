@@ -142,8 +142,16 @@ export default function CenturionDashboard() {
   const {
     systemState, mode, balance, funded, target, today, multiple, missionPct,
     inflight, vel, history, strategies, activity, pending, system, uptimeDays,
-    host, cycleMins,
+    host, cycleMins, links = [], collectOnly, live, liveSpendArmed,
   } = data;
+
+  const armLiveSpend = (on) => {
+    if (on && !window.confirm(
+      "Arm REAL spending?\n\nCenturion will be able to spend real money (within all caps). " +
+      "Only do this with a funded card and on a safe, persistent host. Leave OFF to collect " +
+      "revenue with zero spend risk.")) return;
+    act(() => control("live-spend", { enabled: on }));
+  };
 
   const running = systemState === "live";
   const stateColor = running ? T.gain : systemState === "paused" ? T.warn : T.loss;
@@ -187,6 +195,25 @@ export default function CenturionDashboard() {
         {err && (
           <div className="mb-3 px-4 py-2 rounded-lg text-sm" style={{ background: `${T.loss}22`, border: `1px solid ${T.loss}55`, color: T.loss }}>
             {err}
+          </div>
+        )}
+
+        {live && (
+          <div className="mb-3 flex items-center justify-between gap-3 px-4 py-3" style={{
+            background: liveSpendArmed ? `${T.loss}1a` : `${T.gain}14`,
+            border: `1px solid ${liveSpendArmed ? T.loss : T.gain}55`, borderRadius: 12 }}>
+            <div className="text-sm" style={{ color: liveSpendArmed ? T.loss : T.gain }}>
+              <b>LIVE revenue mode.</b>{" "}
+              {liveSpendArmed
+                ? "⚠️ REAL SPENDING IS ARMED — real money can be spent (within caps)."
+                : "Collect-only — creating real payment links, $0 spend risk."}
+            </div>
+            <button onClick={() => armLiveSpend(!liveSpendArmed)} disabled={busy}
+              className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg shrink-0"
+              style={{ background: liveSpendArmed ? T.raised : "transparent",
+                border: `1px solid ${T.loss}`, color: liveSpendArmed ? T.gain : T.loss }}>
+              {liveSpendArmed ? "Disarm spending" : "⚠ Arm real spending"}
+            </button>
           </div>
         )}
 
@@ -399,6 +426,24 @@ export default function CenturionDashboard() {
             The Decision Core concentrates capital on what's working and throttles what isn't. Toggling a strategy off returns its capital to available.
           </div>
         </Panel>
+
+        {/* storefront payment links (live-revenue mode) */}
+        {(links.length > 0 || collectOnly) && (
+          <div className="mt-3">
+            <Panel title="Storefront · real payment links" icon={<KeyRound size={15} color={T.cyan} />}
+              right={collectOnly ? <span className="text-xs font-bold" style={{ color: T.gain }}>collect-only · $0 at risk</span> : null}>
+              {links.length === 0 && <div className="text-sm" style={{ color: T.dim }}>
+                No links yet. With your Stripe key set, Centurion creates real payment links here — open or share one to receive money.</div>}
+              {links.map((l, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg mb-1" style={{ background: T.raised }}>
+                  <div className="min-w-0"><div className="text-sm font-semibold truncate">{l.product}</div>
+                    <a href={l.url} target="_blank" rel="noreferrer" className="text-xs truncate" style={{ color: T.cyan }}>{l.url}</a></div>
+                  <a href={l.url} target="_blank" rel="noreferrer" className="text-xs font-bold px-2.5 py-1.5 rounded-md shrink-0" style={{ background: T.cyan, color: T.bg }}>Open</a>
+                </div>
+              ))}
+            </Panel>
+          </div>
+        )}
 
         {/* activity + health */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">

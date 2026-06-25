@@ -62,7 +62,7 @@ class Orchestrator:
         self.config = config
         self.cfg = config.raw
         self.seed = int(self.cfg.get("decision_seed", 42))
-        self.sim = True  # simulation by default; live wiring is opt-in per integration
+        self._sim = True  # simulation by default; live wiring is opt-in per integration
 
         self.ledger = Ledger(config.database_path)
         # Apply any integration keys set from the dashboard before clients init.
@@ -72,6 +72,7 @@ class Orchestrator:
         except Exception:
             pass
         self.risk = RiskManager(self.ledger, self.cfg)
+        self.risk.live_mode = not self._sim
         self.guardrails = GuardrailEngine(self.cfg)
         self.autonomy = AutonomyController(
             level=self._autonomy_level(),
@@ -114,6 +115,20 @@ class Orchestrator:
         self.bandit = self._load_bandit()
         self.strategies = self._build_strategies()
         self.cycle_count = int(self.ledger.get_state("cycle_count", "0") or 0)
+
+    # --- simulation vs live (keeps the Risk Manager's live gate in sync) ---
+    @property
+    def sim(self) -> bool:
+        return self._sim
+
+    @sim.setter
+    def sim(self, value) -> None:
+        self._sim = bool(value)
+        if getattr(self, "risk", None) is not None:
+            self.risk.live_mode = not self._sim
+
+    def live_spend_enabled(self) -> bool:
+        return self.ledger.get_state("live_spend_enabled", "0") == "1"
 
     # --- setup helpers ---
     def _autonomy_level(self) -> str:
@@ -341,8 +356,11 @@ class Orchestrator:
         self.ledger.update_action_status(action_id, "in_progress")
 
         strat = self.strategies[strategy]
+        # Fresh Stripe client each action so a key set from the dashboard takes
+        # effect without a restart.
+        from integrations.stripe_client import StripeClient
         result = strat.execute(action, sim=self.sim,
-                               context={"rng": rng, "stripe": self.stripe,
+                               context={"rng": rng, "stripe": StripeClient(),
                                         "live": not self.sim})
 
         net = 0.0

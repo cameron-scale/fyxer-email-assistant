@@ -58,10 +58,21 @@ class RiskManager:
         self.reinvest_earnings = bool(config.get("reinvest_earnings", True))
         # Bound runaway single bets even at very large balances (sane variance).
         self.max_cap_multiple = float(config.get("per_action_cap_multiple", 1000.0))
+        # Collect-only mode: block ALL spending (real-revenue test on a host where
+        # spending wouldn't be safe). Revenue still flows; downside is exactly $0.
+        self.block_all_spend = bool(config.get("block_all_spend", False))
+        # Live mode flag (set by the orchestrator). Real spending in live mode is
+        # gated by a DANGER SWITCH (ledger state 'live_spend_enabled') that
+        # defaults OFF — so a live deploy collects revenue but cannot spend real
+        # money until the operator explicitly arms it.
+        self.live_mode = False
         # Prove $1 of real organic revenue before any budget may be spent — the
         # cheapest possible de-risking. Off by default so dry runs aren't blocked;
         # recommended ON for live (see GO_LIVE.md).
         self.require_organic_proof = bool(config.get("require_organic_proof", False))
+
+    def live_spend_armed(self) -> bool:
+        return self.ledger.get_state("live_spend_enabled", "0") == "1"
 
     def organic_dollar_proven(self) -> bool:
         """True once a real (non-seed, non-passive) credit of >= $1 has landed."""
@@ -147,6 +158,16 @@ class RiskManager:
 
         if amount < 0:
             return RiskDecision(False, "negative spend rejected", cap)
+
+        # Collect-only mode: no spending at all (real-revenue test, $0 at risk).
+        if amount > 0 and self.block_all_spend:
+            return RiskDecision(False, "collect-only mode: spending disabled "
+                                "(real-revenue test, $0 at risk)", cap)
+
+        # DANGER SWITCH: in live mode, real spending is OFF until explicitly armed.
+        if amount > 0 and self.live_mode and not self.live_spend_armed():
+            return RiskDecision(False, "live-spend danger switch is OFF "
+                                "(collect-only; arm it in the dashboard to enable real spending)", cap)
 
         # Prove $1 organic before any budget is touched (when enabled).
         if amount > 0 and self.require_organic_proof and not self.organic_dollar_proven():

@@ -48,7 +48,10 @@ def _start_background_agent(cfg) -> None:
         o = Orchestrator(cfg)
         if not o.ledger.is_seeded():
             o.ledger.seed(cfg.funded_capital)
-        o.sim = True  # never run real money on a shared/free host
+        # Collect-only LIVE revenue mode: create real Stripe payment links to take
+        # money, but spending stays hard-blocked (block_all_spend) so risk is $0.
+        # Anything else stays in simulation on a shared host.
+        o.sim = os.environ.get("CENTURION_LIVE_REVENUE") != "1"
         interval = float(cfg.get("cycle_interval_minutes", 45)) * 60
         # On a free host a tight-ish cadence keeps the dashboard lively.
         interval = min(interval, 120.0)
@@ -214,6 +217,10 @@ def build_state(o: Orchestrator) -> dict:
         "host": os.environ.get("CENTURION_HOST", "local"),
         "cycleMins": o.cfg.get("cycle_interval_minutes", 45),
         "focusStrategy": o.focus_strategy,
+        "links": led.payment_links(),
+        "live": os.environ.get("CENTURION_LIVE_REVENUE") == "1",
+        "liveSpendArmed": led.get_state("live_spend_enabled", "0") == "1",
+        "collectOnly": bool(o.risk.block_all_spend),
     }
 
 
@@ -286,6 +293,14 @@ def create_app(config_path: str | None = None) -> Flask:
         aid = int((request.get_json(silent=True) or {}).get("id"))
         orch().approvals.reject(aid)
         return jsonify(ok=True)
+
+    @app.post("/api/control/live-spend")
+    def api_live_spend():
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        enabled = bool((request.get_json(silent=True) or {}).get("enabled"))
+        orch().ledger.set_state("live_spend_enabled", "1" if enabled else "0")
+        return jsonify(ok=True, enabled=enabled)
 
     @app.post("/api/control/strategy")
     def api_strategy():
