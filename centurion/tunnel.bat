@@ -4,33 +4,35 @@ cd /d "%~dp0"
 title Centurion remote tunnel
 echo ============================================================
 echo   CENTURION  -  public tunnel (reach the dashboard anywhere)
+echo   Auto-restarts if the tunnel drops.
 echo ============================================================
 echo.
-echo Make sure Centurion is already running first (start.bat or
-echo start-live.bat) so the dashboard is up at http://localhost:8000
+echo Make sure Centurion is running (start-live.bat or run.bat) so
+echo the dashboard is up at http://localhost:8000
 echo.
 
-REM Download cloudflared once (free, no account needed for a quick tunnel).
 if not exist cloudflared.exe (
   echo Downloading cloudflared (one-time, ~50MB)...
   curl -L -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
   if errorlevel 1 (
-    echo.
-    echo Download failed. Get cloudflared manually from:
+    echo Download failed. Get it from:
     echo   https://github.com/cloudflare/cloudflared/releases/latest
-    echo Save it as cloudflared.exe in this folder, then run this again.
+    echo save as cloudflared.exe here, then re-run.
     pause
     exit /b
   )
 )
 
 echo.
-echo Opening a public HTTPS tunnel to http://localhost:8000 ...
 echo ============================================================
-echo   LOOK FOR A LINE LIKE:  https://something.trycloudflare.com
-echo   Open THAT url on your phone - it works from anywhere.
-echo   (Keep this window open; closing it closes the tunnel.)
+echo   LOOK FOR:  https://something.trycloudflare.com
+echo   Open THAT on your phone. NOTE: this quick-tunnel URL CHANGES
+echo   each restart. For a stable URL during vacation, set up a named
+echo   tunnel (see VACATION.md).
 echo ============================================================
-echo.
+:loop
 cloudflared.exe tunnel --url http://localhost:8000
+echo [%date% %time%] tunnel dropped - restarting in 5s...
+timeout /t 5 >nul
+goto loop
 endlocal

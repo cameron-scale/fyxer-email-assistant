@@ -5,7 +5,7 @@ title Centurion (LIVE revenue)
 echo ============================================================
 echo   CENTURION  -  LIVE revenue mode (real Stripe links)
 echo   Persistent ledger on this PC. Spending stays OFF until you
-echo   arm the danger switch in the dashboard.
+echo   arm the danger switch in the dashboard. Auto-restarts on crash.
 echo ============================================================
 echo.
 
@@ -20,32 +20,22 @@ if errorlevel 1 (
 
 echo Installing dependencies...
 python -m pip install --quiet --disable-pip-version-check -r requirements.txt
-
 python main.py --init
 
-REM Your dashboard password + live revenue mode (real Stripe payment links).
-set CENTURION_DASHBOARD_TOKEN=centurion
-set CENTURION_RUN_AGENT=1
-set CENTURION_LIVE_REVENUE=1
-set CENTURION_FUNDED_CAPITAL=10
-set CENTURION_FOCUS_STRATEGY=digital_products
-set CENTURION_SANDBOX_IDENTITY=centurion-store
+REM Launch the resilient dashboard runner (auto-restarts if it exits).
+start "Centurion (live)" cmd /k _run-dashboard.bat
 
-start "Centurion (live)" cmd /k "set CENTURION_DASHBOARD_TOKEN=centurion&& set CENTURION_RUN_AGENT=1&& set CENTURION_LIVE_REVENUE=1&& set CENTURION_FUNDED_CAPITAL=10&& set CENTURION_FOCUS_STRATEGY=digital_products&& set CENTURION_SANDBOX_IDENTITY=centurion-store&& python dashboard\app.py"
-
-timeout /t 5 >nul
+timeout /t 6 >nul
 start http://localhost:8000
 
 echo.
 echo ============================================================
 echo   Dashboard: http://localhost:8000   (token: centurion)
-echo   1) Open the gear - Integrations - paste your STRIPE secret
-echo      key and Save (it persists on this PC).
-echo   2) A REAL payment link appears in the Storefront panel.
-echo   3) Spending stays OFF. To allow real spending later, hit the
-echo      red "Arm real spending" switch (asks you to confirm).
+echo   1) gear - Integrations - paste your STRIPE key + Save.
+echo   2) Optional: paste Twilio/SMTP details to get phone alerts.
+echo   3) A REAL payment link appears in the Storefront panel.
+echo   Spending stays OFF until you arm the red danger switch.
 echo.
-echo   To reach this dashboard from your phone anywhere, also run
-echo   tunnel.bat and open the https://...trycloudflare.com URL.
+echo   To reach it from your phone anywhere, also run tunnel.bat.
 echo ============================================================
 endlocal

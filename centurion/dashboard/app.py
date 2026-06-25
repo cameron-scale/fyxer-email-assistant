@@ -41,6 +41,8 @@ try:
     import stripe                             # noqa: E402,F401  (preload to avoid per-request cost)
 except Exception:
     pass
+from supervisor import Supervisor              # noqa: E402,F401  (preload; used by watchdog)
+from integrations.twilio_client import AlertClient  # noqa: E402,F401
 
 # Belt-and-suspenders: serialize Orchestrator construction across threads.
 _ORCH_LOCK = threading.Lock()
@@ -58,6 +60,7 @@ def _start_background_agent(cfg) -> None:
         return
     _AGENT_STARTED = True
     import threading
+    import time as _t
 
     def _loop():
         with _ORCH_LOCK:
@@ -73,7 +76,28 @@ def _start_background_agent(cfg) -> None:
         # the agent itself can cycle slowly. Override with CENTURION_AGENT_SECONDS.
         interval = float(os.environ.get("CENTURION_AGENT_SECONDS",
                                         max(300.0, float(cfg.get("cycle_interval_minutes", 45)) * 60)))
-        o.run_forever(sleep_seconds=interval)
+
+        # Heartbeat + watchdog so you know it's alive while you're away, and get
+        # an alert (SMS/email, configured in the dashboard) if it pauses, goes
+        # stale, or an anomaly trips. Dedup so it doesn't spam your phone.
+        from supervisor import Supervisor
+        from integrations.twilio_client import AlertClient
+        sup = Supervisor(o.ledger, o.cfg, alerter=AlertClient())
+
+        def _watch():
+            last = None
+            while True:
+                _t.sleep(max(120.0, sup.heartbeat_interval))
+                try:
+                    msg = sup.check_and_alert()  # alerts only when stale/paused
+                    if msg != last:
+                        last = msg  # state changed; avoids repeat alerts
+                except Exception:
+                    pass
+
+        threading.Thread(target=_watch, name="centurion-watchdog", daemon=True).start()
+        o.run_forever(sleep_seconds=interval,
+                      heartbeat=lambda: sup.heartbeat(f"cycle {o.cycle_count}"))
 
     t = threading.Thread(target=_loop, name="centurion-agent", daemon=True)
     t.start()
@@ -431,6 +455,12 @@ def create_app(config_path: str | None = None) -> Flask:
         except Exception as e:
             return jsonify(error=str(e)), 400
         res = handle_event(event, orch().ledger)
+        # Ping your phone when real money lands.
+        if res.handled and res.kind and "refund" not in res.kind and res.amount > 0:
+            try:
+                AlertClient().alert(f"Centurion: SALE +${res.amount:.2f} ({res.kind}).")
+            except Exception:
+                pass
         return jsonify(handled=res.handled, detail=res.detail)
 
     # ---- serve the built React app (fallback to simple HTML) ----
