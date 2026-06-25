@@ -48,7 +48,8 @@ class StripeClient:
         return hashlib.sha256("|".join(parts).encode()).hexdigest()[:32]
 
     def create_payment_link(self, *, amount: float, product_name: str,
-                            idem: Optional[str] = None) -> PaymentLink:
+                            idem: Optional[str] = None,
+                            redirect_url: Optional[str] = None) -> PaymentLink:
         idem = idem or self.idempotency_key("plink", product_name, f"{amount:.2f}")
         if self.mock:
             return PaymentLink(id=f"mock_plink_{idem[:12]}",
@@ -57,9 +58,12 @@ class StripeClient:
         price = self._stripe.Price.create(
             unit_amount=int(round(amount * 100)), currency="usd",
             product_data={"name": product_name})
-        link = self._stripe.PaymentLink.create(
-            line_items=[{"price": price.id, "quantity": 1}],
-            idempotency_key=idem)
+        params = {"line_items": [{"price": price.id, "quantity": 1}]}
+        if redirect_url:
+            # Deliver the product immediately after payment.
+            params["after_completion"] = {
+                "type": "redirect", "redirect": {"url": redirect_url}}
+        link = self._stripe.PaymentLink.create(idempotency_key=idem, **params)
         return PaymentLink(id=link.id, url=link.url, amount=amount, mock=False)
 
     def get_charge(self, charge_id: str) -> ChargeRecord:

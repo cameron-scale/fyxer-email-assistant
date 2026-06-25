@@ -49,22 +49,19 @@ class DigitalProductsStrategy(Strategy):
         phase = action.meta.get("phase", "build")
         if phase == "build" and stripe is not None:
             try:
+                import os
+                import storefront
                 topic = action.meta.get("topic") or action.description
-                asset = self.assets.product_listing(topic, self.name)
-                product_name = (asset.title or topic)[:120]
-                price = float(str(asset.fields.get("price", "19")).replace("$", "") or 19)
-                price = max(price, 5.0)  # keep tickets above Stripe's fixed-fee floor
-                link = stripe.create_payment_link(
-                    amount=price, product_name=product_name,
-                    idem=stripe.idempotency_key("dp", product_name))
-                # Surface the link on the dashboard so the operator can open/share
-                # it and actually receive money.
-                self.ledger.add_payment_link(link.url, product_name[:80])
+                public_url = os.environ.get("CENTURION_PUBLIC_URL") \
+                    or os.environ.get("RENDER_EXTERNAL_URL")
+                product = storefront.publish_product(
+                    self.ledger, self.assets, stripe, topic, public_url=public_url)
                 return ExecutionResult(True, cost=0.0, revenue=0.0,
-                                       external_ref=link.id, reversible=True,
-                                       detail=f"listed; pay link {link.url}")
+                                       external_ref=product["pay_url"], reversible=True,
+                                       detail=f"published '{product['title']}' @ ${product['price']:.0f}")
             except Exception as e:
-                return ExecutionResult(False, detail=f"stripe link failed: {e}")
+                self.ledger.set_state("last_stripe_error", str(e)[:300])
+                return ExecutionResult(False, detail=f"product publish failed: {e}")
         if phase == "promote":
             return ExecutionResult(False, cost=0.0,
                                    detail="no ad-platform API configured; skipping paid "

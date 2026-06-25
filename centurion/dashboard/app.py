@@ -132,6 +132,36 @@ def _start_keepalive() -> None:
 
     threading.Thread(target=_ping, name="centurion-keepalive", daemon=True).start()
 
+
+_AUTOUPDATE_STARTED = False
+
+
+def _start_autoupdate() -> None:
+    """Optionally poll GitHub and restart into new code automatically. Enable
+    with CENTURION_AUTO_UPDATE=1. The runner loop relaunches python on exit."""
+    global _AUTOUPDATE_STARTED
+    if _AUTOUPDATE_STARTED or os.environ.get("CENTURION_AUTO_UPDATE") != "1":
+        return
+    _AUTOUPDATE_STARTED = True
+    import threading
+    import time as _t
+    import subprocess
+    interval = float(os.environ.get("CENTURION_UPDATE_SECONDS", "600"))
+
+    def _poll():
+        while True:
+            _t.sleep(max(120.0, interval))
+            try:
+                r = subprocess.run(["git", "pull", "--ff-only"], cwd=str(ROOT),
+                                   capture_output=True, text=True, timeout=120)
+                out = ((r.stdout or "") + (r.stderr or "")).lower()
+                if "up to date" not in out and r.returncode == 0:
+                    os._exit(0)  # restart into new code
+            except Exception:
+                pass
+
+    threading.Thread(target=_poll, name="centurion-autoupdate", daemon=True).start()
+
 # Pretty names + stable ids for the five strategies, in display order.
 STRAT_META = [
     ("digital_products", "dp", "Digital products"),
@@ -307,6 +337,9 @@ def build_state(o: Orchestrator) -> dict:
         "cycleMins": o.cfg.get("cycle_interval_minutes", 45),
         "focusStrategy": o.focus_strategy,
         "links": led.payment_links(),
+        "products": [{"slug": p["slug"], "title": p["title"], "price": p["price"],
+                      "landing": f"/product/{p['slug']}", "pay_url": p["pay_url"],
+                      "mock": p.get("mock", False)} for p in led.products()[:12]],
         "live": os.environ.get("CENTURION_LIVE_REVENUE") == "1",
         "liveSpendArmed": led.get_state("live_spend_enabled", "0") == "1",
         "collectOnly": bool(o.risk.block_all_spend),
@@ -328,6 +361,8 @@ def create_app(config_path: str | None = None) -> Flask:
         _start_background_agent(cfg)
     # Keep a free host awake by self-pinging its public URL (sleeps on HTTP idle).
     _start_keepalive()
+    # Optional: auto-pull new code from GitHub and restart into it.
+    _start_autoupdate()
 
     @app.get("/healthz")
     def healthz():
@@ -398,6 +433,30 @@ def create_app(config_path: str | None = None) -> Flask:
         orch().ledger.set_state("live_spend_enabled", "1" if enabled else "0")
         return jsonify(ok=True, enabled=enabled)
 
+    @app.post("/api/control/update")
+    def api_update():
+        """Pull the latest code from GitHub and restart into it. The PC's runner
+        loop (_run-dashboard.bat) relaunches python, so new code goes live.
+        Token-gated (a token holder can run whatever is on the branch)."""
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        import subprocess
+        import threading as _th
+        try:
+            r = subprocess.run(["git", "pull", "--ff-only"], cwd=str(ROOT),
+                               capture_output=True, text=True, timeout=120)
+            out = ((r.stdout or "") + (r.stderr or "")).strip()[-1500:]
+        except Exception as e:
+            return jsonify(ok=False, error=str(e)), 500
+        changed = ("up to date" not in out.lower())
+        if changed:
+            def _restart():
+                import time as _t2, os as _os2
+                _t2.sleep(1.0)
+                _os2._exit(0)  # runner loop relaunches with the new code
+            _th.Thread(target=_restart, daemon=True).start()
+        return jsonify(ok=True, changed=changed, output=out)
+
     @app.post("/api/control/strategy")
     def api_strategy():
         if not authed():
@@ -445,6 +504,37 @@ def create_app(config_path: str | None = None) -> Flask:
         tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))
         return jsonify(error=type(e).__name__, message=str(e),
                        path=request.path, trace=tb[-1800:]), 500
+
+    @app.get("/product/<slug>")
+    def product_landing(slug):
+        p = orch().ledger.get_product(slug)
+        if not p:
+            return "Product not found", 404
+        return (
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            f"<title>{p['title']}</title>"
+            "<style>body{font-family:system-ui,Arial,sans-serif;max-width:620px;margin:0 auto;"
+            "padding:40px;line-height:1.6;color:#13202c;text-align:center}"
+            ".buy{display:inline-block;margin-top:18px;background:#0b6;color:#fff;padding:14px 28px;"
+            "border-radius:10px;text-decoration:none;font-weight:700;font-size:18px}"
+            ".p{font-size:34px;font-weight:800;margin:8px 0}</style></head><body>"
+            f"<h1>{p['title']}</h1>"
+            "<p>A focused, ready-to-use digital toolkit. Instant download after purchase.</p>"
+            f"<div class='p'>${p['price']:.0f}</div>"
+            f"<a class='buy' href='{p['pay_url']}'>Buy now</a>"
+            "</body></html>"
+        )
+
+    @app.get("/deliver/<token>")
+    def deliver(token):
+        p = orch().ledger.get_product_by_token(token)
+        if not p:
+            return "Invalid or expired delivery link.", 404
+        f = Path(p["file"])
+        if not f.exists():
+            return "Product file missing.", 404
+        return f.read_text(encoding="utf-8")
 
     @app.post("/webhook/stripe")
     def stripe_webhook():

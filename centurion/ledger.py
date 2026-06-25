@@ -294,6 +294,27 @@ class Ledger:
         except Exception:
             return []
 
+    # --- real products (sellable + deliverable) ---
+    def record_product(self, product: dict) -> None:
+        import json
+        items = [p for p in self.products() if p.get("slug") != product.get("slug")]
+        items.insert(0, product)
+        self.set_state("products", json.dumps(items[:50]))
+
+    def products(self) -> list[dict]:
+        import json
+        raw = self.get_state("products")
+        try:
+            return json.loads(raw) if raw else []
+        except Exception:
+            return []
+
+    def get_product(self, slug: str) -> Optional[dict]:
+        return next((p for p in self.products() if p.get("slug") == slug), None)
+
+    def get_product_by_token(self, token: str) -> Optional[dict]:
+        return next((p for p in self.products() if p.get("deliver_token") == token), None)
+
     def get_state(self, key: str, default: Any = None) -> Any:
         row = self._conn().execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
         return row["value"] if row else default

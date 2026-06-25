@@ -8,8 +8,11 @@ set CENTURION_FUNDED_CAPITAL=10
 set CENTURION_FOCUS_STRATEGY=digital_products
 set CENTURION_SANDBOX_IDENTITY=centurion-store
 :loop
+echo [%date% %time%] syncing latest code from GitHub...
+git pull --ff-only 2>nul
+python -m pip install --quiet --disable-pip-version-check -r requirements.txt 2>nul
 echo [%date% %time%] starting Centurion dashboard...
 python dashboard\app.py
-echo [%date% %time%] dashboard exited - restarting in 5s (close this window to stop).
+echo [%date% %time%] dashboard exited - pulling latest + restarting in 5s (close window to stop).
 timeout /t 5 >nul
 goto loop

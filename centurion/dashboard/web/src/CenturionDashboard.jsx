@@ -142,8 +142,18 @@ export default function CenturionDashboard() {
   const {
     systemState, mode, balance, funded, target, today, multiple, missionPct,
     inflight, vel, history, strategies, activity, pending, system, uptimeDays,
-    host, cycleMins, links = [], collectOnly, live, liveSpendArmed,
+    host, cycleMins, links = [], collectOnly, live, liveSpendArmed, products = [],
   } = data;
+
+  const updateCode = () => {
+    if (!window.confirm("Pull the latest code from GitHub and restart into it? "
+      + "The dashboard will blink for ~10s, then reconnect.")) return;
+    act(async () => {
+      const r = await control("update");
+      window.alert(r.changed ? "Updating — restarting into new code. Reconnecting…"
+        : "Already up to date.");
+    });
+  };
 
   const armLiveSpend = (on) => {
     if (on && !window.confirm(
@@ -252,6 +262,11 @@ export default function CenturionDashboard() {
               className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg transition"
               style={{ background: killArmed ? T.loss : "transparent", border: `1px solid ${T.loss}`, color: killArmed ? T.bg : T.loss }}>
               <Power size={14} />{killArmed ? "Confirm stop" : "Emergency stop"}
+            </button>
+            <button onClick={updateCode} disabled={busy} title="Pull latest code from GitHub & restart"
+              className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"
+              style={{ background: T.raised, border: `1px solid ${T.border}`, color: T.muted }}>
+              ⟳ Update
             </button>
             <button onClick={() => setShowSettings(true)} title="Integrations & API keys"
               className="flex items-center justify-center rounded-lg transition"
@@ -427,14 +442,23 @@ export default function CenturionDashboard() {
           </div>
         </Panel>
 
-        {/* storefront payment links (live-revenue mode) */}
-        {(links.length > 0 || collectOnly) && (
+        {/* storefront: real, deliverable products */}
+        {(products.length > 0 || links.length > 0 || collectOnly) && (
           <div className="mt-3">
-            <Panel title="Storefront · real payment links" icon={<KeyRound size={15} color={T.cyan} />}
+            <Panel title="Storefront · real products" icon={<KeyRound size={15} color={T.cyan} />}
               right={collectOnly ? <span className="text-xs font-bold" style={{ color: T.gain }}>collect-only · $0 at risk</span> : null}>
-              {links.length === 0 && <div className="text-sm" style={{ color: T.dim }}>
-                No links yet. With your Stripe key set, Centurion creates real payment links here — open or share one to receive money.</div>}
-              {links.map((l, i) => (
+              {products.length === 0 && links.length === 0 && <div className="text-sm" style={{ color: T.dim }}>
+                Nothing listed yet. With your Stripe key set, Centurion publishes real products here — each with a sales page and a buy link that delivers the product on payment.</div>}
+              {products.map((p, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg mb-1" style={{ background: T.raised }}>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{p.title} · ${Number(p.price).toFixed(0)}{p.mock ? " (test)" : ""}</div>
+                    <a href={p.landing} target="_blank" rel="noreferrer" className="text-xs" style={{ color: T.muted }}>sales page ↗</a>
+                  </div>
+                  <a href={p.pay_url} target="_blank" rel="noreferrer" className="text-xs font-bold px-2.5 py-1.5 rounded-md shrink-0" style={{ background: T.cyan, color: T.bg }}>Buy link</a>
+                </div>
+              ))}
+              {products.length === 0 && links.map((l, i) => (
                 <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg mb-1" style={{ background: T.raised }}>
                   <div className="min-w-0"><div className="text-sm font-semibold truncate">{l.product}</div>
                     <a href={l.url} target="_blank" rel="noreferrer" className="text-xs truncate" style={{ color: T.cyan }}>{l.url}</a></div>

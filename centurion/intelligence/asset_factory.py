@@ -83,6 +83,37 @@ class AssetFactory:
         return Asset(kind="content", title=f"Content: {topic}",
                      body=out if isinstance(out, str) else str(out))
 
+    def product_document(self, topic: str, strategy: str = "digital_products") -> Asset:
+        """Generate the actual DELIVERABLE the buyer receives — a real multi-
+        section guide/toolkit as a self-contained HTML document."""
+        listing = self.product_listing(topic, strategy)
+        title = listing.title
+        sections = []
+        for heading in ["What this solves", "Quick start (5 steps)",
+                        "The core system", "Templates & checklist", "Next steps"]:
+            out = self.language.generate(
+                f"Write a concise, genuinely useful section titled '{heading}' for a "
+                f"product about {topic}. 2-4 short paragraphs or a tight list.")
+            body = out if isinstance(out, str) else str(out)
+            sections.append((heading, body))
+        html = self._render_product_html(title, listing.body, sections)
+        return Asset(kind="product", title=title, body=html,
+                     fields={"price": listing.fields.get("price", "19")})
+
+    def _render_product_html(self, title, intro, sections) -> str:
+        secs = "".join(
+            f"<h2>{h}</h2><div>{(b or '').replace(chr(10), '<br>')}</div>" for h, b in sections)
+        return (
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            f"<title>{title}</title>"
+            "<style>body{font-family:system-ui,Arial,sans-serif;max-width:760px;margin:0 auto;"
+            "padding:28px;line-height:1.6;color:#16202b}h1{font-size:30px}h2{margin-top:28px;"
+            "color:#0b6}div{color:#2a3a4a}.tag{color:#7a8699;font-size:13px}</style></head><body>"
+            f"<h1>{title}</h1><p class='tag'>Your purchased copy — thank you!</p>"
+            f"<p>{intro}</p>{secs}</body></html>"
+        )
+
     def _render_landing_html(self, fields: Dict[str, Any], topic: str) -> str:
         return (
             "<!doctype html><html><head><meta charset='utf-8'>"
