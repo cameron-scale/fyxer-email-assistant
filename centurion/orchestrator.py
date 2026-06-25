@@ -28,6 +28,13 @@ from intelligence.research import ResearchEngine
 from ledger import InsufficientCapital, Ledger
 from risk import RiskManager
 from approvals import ApprovalQueue
+# Imported at module level (not lazily inside __init__) so concurrent Orchestrator
+# construction from multiple threads can't trigger partial-import races.
+from autodebug import AutoDebugger, ErrorLog, PerformanceMonitor
+from economics import Economics
+from calibration import CalibrationLog
+from settings import load_into_env
+from integrations.stripe_client import StripeClient
 
 from strategies.digital_products import DigitalProductsStrategy
 from strategies.service_arbitrage import ServiceArbitrageStrategy
@@ -67,7 +74,6 @@ class Orchestrator:
         self.ledger = Ledger(config.database_path)
         # Apply any integration keys set from the dashboard before clients init.
         try:
-            from settings import load_into_env
             load_into_env(self.ledger)
         except Exception:
             pass
@@ -81,7 +87,6 @@ class Orchestrator:
         self.memory = LearningMemory(self.ledger)
 
         # Auto-debugger + live error log + performance diagnosis (self-healing).
-        from autodebug import AutoDebugger, ErrorLog, PerformanceMonitor
         self.error_log = ErrorLog(self.ledger)
         self.autodebugger = AutoDebugger(self, self.error_log)
         self.perf_monitor = PerformanceMonitor(self, self.error_log)
@@ -93,14 +98,11 @@ class Orchestrator:
         # Revenue rail. Mock mode (no key) lets dry runs work; a real key makes
         # the live path collect actual money. Creating payment links never risks
         # capital, so the live revenue path is safe by construction.
-        from integrations.stripe_client import StripeClient
         self.stripe = StripeClient()
         self.scorer = ScoringModel(self.cfg.get("scoring_weights"))
         self.allocator = Allocator()
 
         # Unit-economics gate + decision-quality logging.
-        from economics import Economics
-        from calibration import CalibrationLog
         self.economics = Economics(self.cfg)
         self.calibration = CalibrationLog(self.ledger)
         # Brand safety: spend can be autonomous; your NAME shouldn't be. Anything
@@ -358,7 +360,6 @@ class Orchestrator:
         strat = self.strategies[strategy]
         # Fresh Stripe client each action so a key set from the dashboard takes
         # effect without a restart.
-        from integrations.stripe_client import StripeClient
         result = strat.execute(action, sim=self.sim,
                                context={"rng": rng, "stripe": StripeClient(),
                                         "live": not self.sim})

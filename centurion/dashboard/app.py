@@ -60,6 +60,36 @@ def _start_background_agent(cfg) -> None:
     t = threading.Thread(target=_loop, name="centurion-agent", daemon=True)
     t.start()
 
+
+_KEEPALIVE_STARTED = False
+
+
+def _start_keepalive() -> None:
+    """Self-ping the public URL so a free host (which sleeps on HTTP inactivity,
+    not CPU) stays awake. Render provides RENDER_EXTERNAL_URL automatically."""
+    global _KEEPALIVE_STARTED
+    if _KEEPALIVE_STARTED:
+        return
+    url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("CENTURION_PUBLIC_URL")
+    if not url or os.environ.get("CENTURION_KEEPALIVE") == "0":
+        return
+    _KEEPALIVE_STARTED = True
+    import threading
+    import time as _t
+    interval = float(os.environ.get("CENTURION_KEEPALIVE_SECONDS", "600"))  # < 15-min idle
+
+    def _ping():
+        import requests
+        ping_url = url.rstrip("/") + "/healthz"
+        while True:
+            _t.sleep(max(60.0, interval))
+            try:
+                requests.get(ping_url, timeout=20)
+            except Exception:
+                pass
+
+    threading.Thread(target=_ping, name="centurion-keepalive", daemon=True).start()
+
 # Pretty names + stable ids for the five strategies, in display order.
 STRAT_META = [
     ("digital_products", "dp", "Digital products"),
@@ -236,6 +266,12 @@ def create_app(config_path: str | None = None) -> Flask:
     # hosting). Enabled with CENTURION_RUN_AGENT=1. Always simulation on a host.
     if os.environ.get("CENTURION_RUN_AGENT") == "1":
         _start_background_agent(cfg)
+    # Keep a free host awake by self-pinging its public URL (sleeps on HTTP idle).
+    _start_keepalive()
+
+    @app.get("/healthz")
+    def healthz():
+        return jsonify(ok=True)
 
     def authed() -> bool:
         supplied = request.args.get("token") or request.headers.get("X-Centurion-Token")
