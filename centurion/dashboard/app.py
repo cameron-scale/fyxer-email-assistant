@@ -37,6 +37,10 @@ import assistant                              # noqa: E402,F401
 import intelligence.language.templates        # noqa: E402,F401
 import intelligence.language.stub             # noqa: E402,F401
 import intelligence.language.local_llm        # noqa: E402,F401
+try:
+    import stripe                             # noqa: E402,F401  (preload to avoid per-request cost)
+except Exception:
+    pass
 
 # Belt-and-suspenders: serialize Orchestrator construction across threads.
 _ORCH_LOCK = threading.Lock()
@@ -64,9 +68,11 @@ def _start_background_agent(cfg) -> None:
         # money, but spending stays hard-blocked (block_all_spend) so risk is $0.
         # Anything else stays in simulation on a shared host.
         o.sim = os.environ.get("CENTURION_LIVE_REVENUE") != "1"
-        interval = float(cfg.get("cycle_interval_minutes", 45)) * 60
-        # On a free host a tight-ish cadence keeps the dashboard lively.
-        interval = min(interval, 120.0)
+        # Gentle cadence: a free instance is CPU-throttled, so a busy agent
+        # starves web requests. Keep-alive (separate, ~10 min) keeps it awake;
+        # the agent itself can cycle slowly. Override with CENTURION_AGENT_SECONDS.
+        interval = float(os.environ.get("CENTURION_AGENT_SECONDS",
+                                        max(300.0, float(cfg.get("cycle_interval_minutes", 45)) * 60)))
         o.run_forever(sleep_seconds=interval)
 
     t = threading.Thread(target=_loop, name="centurion-agent", daemon=True)
@@ -117,18 +123,18 @@ def _hhmmss(ts: float) -> str:
 
 
 def _stripe_diag() -> dict:
-    """Why are links mock vs real? Reports key presence and lib availability."""
+    """Why are links mock vs real? Cheap: no Stripe object construction / network
+    in the request path (keeps /api/state fast on a throttled free instance)."""
     key = os.environ.get("STRIPE_API_KEY", "")
     try:
         import stripe  # noqa: F401
         lib = True
     except Exception:
         lib = False
-    from integrations.stripe_client import StripeClient
-    mode = "live" if not StripeClient().mock else "mock"
     keytype = ("live" if key.startswith("sk_live") else
                "test" if key.startswith("sk_test") else
                ("set" if key else "missing"))
+    mode = "live" if (key and lib) else "mock"
     return {"mode": mode, "keyType": keytype, "lib": lib}
 
 
