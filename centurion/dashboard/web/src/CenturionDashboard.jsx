@@ -149,8 +149,7 @@ export default function CenturionDashboard() {
   const stateColor = running ? T.gain : systemState === "paused" ? T.warn : T.loss;
   const stateLabel = running ? "LIVE" : systemState === "paused" ? "PAUSED" : "STOPPED";
 
-  const deployed = useMemo(
-    () => strategies.filter(s => s.enabled).reduce((a, s) => a + s.alloc, 0), [strategies]);
+  const deployed = strategies.filter(s => s.enabled).reduce((a, s) => a + s.alloc, 0);
   const available = Math.max(0, +(balance - inflight).toFixed(2));
   const chartData = range === "7d" ? history.slice(-7) : history;
   const donut = [
