@@ -12,6 +12,20 @@ third-party AI API anywhere in the loop**.
 > dollar it earns can be reinvested, but the *loss floor* stays pinned to your
 > seed. That cap is enforced mechanically, not by good behavior.
 
+## Run it on your PC in one click
+1. Install [Python 3.11+](https://www.python.org/downloads/) (tick "Add Python to PATH").
+2. Double-click **`run.bat`** — it starts the dashboard + agent and opens a free
+   public tunnel so you can reach it from your phone anywhere.
+3. Open the dashboard (it pops up locally; the tunnel window prints a
+   `https://…trycloudflare.com` link for your phone). Token: `centurion`.
+
+For live revenue, open the dashboard's **gear → Integrations** and paste your
+Stripe key. Spending stays OFF behind a danger switch. Full guide: **REMOTE_PC.md**.
+
+Other entry points: `start.bat` (simulation only), `start-live.bat` (live,
+no tunnel), `tunnel.bat` (tunnel only), `install-autostart.bat` (run at logon).
+Docs: QUICKSTART · REMOTE_PC · HOSTING · GO_LIVE · STRATEGY · CHECKLIST.
+
 ---
 
 ## What makes it tick
