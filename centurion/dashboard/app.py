@@ -180,7 +180,8 @@ def _hhmmss(ts: float) -> str:
 def _stripe_diag() -> dict:
     """Why are links mock vs real? Cheap: no Stripe object construction / network
     in the request path (keeps /api/state fast on a throttled free instance)."""
-    key = os.environ.get("STRIPE_API_KEY", "")
+    from integrations.stripe_client import resolve_stripe_key
+    key = resolve_stripe_key()
     try:
         import stripe  # noqa: F401
         lib = True

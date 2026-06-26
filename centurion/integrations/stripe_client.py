@@ -13,6 +13,24 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+# Accept the common env-var names people use for a Stripe secret key, so a
+# harmless naming mismatch (STRIPE_API_SECRET vs STRIPE_API_KEY) can't silently
+# drop us into mock mode. First non-empty wins.
+_STRIPE_KEY_ENV_NAMES = (
+    "STRIPE_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_API_SECRET",
+    "STRIPE_SECRET", "STRIPE_KEY",
+)
+
+
+def resolve_stripe_key() -> str:
+    """Return the Stripe secret key from whichever common env var holds it."""
+    for name in _STRIPE_KEY_ENV_NAMES:
+        v = os.environ.get(name, "")
+        if v:
+            return v
+    return ""
+
+
 @dataclass
 class PaymentLink:
     id: str
@@ -31,7 +49,7 @@ class ChargeRecord:
 
 class StripeClient:
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key if api_key is not None else os.environ.get("STRIPE_API_KEY", "")
+        self.api_key = api_key if api_key is not None else resolve_stripe_key()
         self.mock = not bool(self.api_key)
         self._stripe = None
         if not self.mock:

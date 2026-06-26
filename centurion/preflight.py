@@ -62,7 +62,8 @@ def run_checks(config: Config, ledger, risk, language, live: bool) -> List[Check
             detail=f"using '{provider}' (no model needed)"))
 
     # 4. Stripe — required for live revenue; mock is fine for dry runs.
-    stripe_key = os.environ.get("STRIPE_API_KEY", "")
+    from integrations.stripe_client import resolve_stripe_key
+    stripe_key = resolve_stripe_key()
     if live:
         checks.append(Check(
             "Stripe API key", bool(stripe_key), critical=True,
