@@ -9,7 +9,7 @@ REM   2) Download ngrok for Windows, save ngrok.exe in this folder
 REM   3) Claim your free Static Domain in the ngrok dashboard
 REM   4) Run once:  ngrok config add-authtoken YOUR_TOKEN
 REM   5) Put your static domain below, then double-click this file.
-set NGROK_DOMAIN=CHANGE-ME.ngrok-free.app
+set NGROK_DOMAIN=frenzy-frenzy-risotto.ngrok-free.dev
 
 if not exist ngrok.exe (
   echo ngrok.exe not found. Download it from https://ngrok.com/download

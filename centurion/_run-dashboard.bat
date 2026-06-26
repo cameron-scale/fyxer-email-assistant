@@ -9,7 +9,7 @@ set CENTURION_FOCUS_STRATEGY=digital_products
 set CENTURION_SANDBOX_IDENTITY=centurion-store
 REM Your public domain (used for product/SEO links + post-payment delivery
 REM redirect). Make this match the domain your tunnel serves (see DOMAIN_SETUP.md).
-set CENTURION_PUBLIC_URL=https://centurion.scalembs.com
+set CENTURION_PUBLIC_URL=https://frenzy-frenzy-risotto.ngrok-free.dev
 :loop
 echo [%date% %time%] syncing latest code from GitHub...
 git pull --ff-only 2>nul
