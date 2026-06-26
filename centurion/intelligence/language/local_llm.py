@@ -36,7 +36,7 @@ def _is_local(url: str) -> bool:
 class LocalLLMProvider(LanguageProvider):
     name = "local"
 
-    def __init__(self, model: str = "llama3.1:8b-instruct-q4_K_M",
+    def __init__(self, model: str = "llama3.1:8b",
                  host: Optional[str] = None, timeout: float = 120.0):
         self.model = model
         self.host = host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")

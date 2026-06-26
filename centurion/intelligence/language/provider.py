@@ -39,11 +39,13 @@ def get_provider(config: Optional[dict] = None) -> LanguageProvider:
     system runs with no model loaded."""
     config = config or {}
     kind = (config.get("language_provider") or "template").lower()
+    model = config.get("model_name", "llama3.1:8b")
     if kind == "local":
         from .local_llm import LocalLLMProvider
-        return LocalLLMProvider(
-            model=config.get("model_name", "llama3.1:8b-instruct-q4_K_M"),
-        )
+        return LocalLLMProvider(model=model)
+    if kind == "auto":
+        from .auto import AutoProvider
+        return AutoProvider(model=model)
     if kind == "stub":
         from .stub import StubProvider
         return StubProvider()

@@ -44,9 +44,9 @@ heartbeat_interval_minutes: 5
 heartbeat_stale_after_minutes: 20   # watchdog alerts if heartbeat older than this
 
 # --- Language Engine ---
-# local | template | stub
-language_provider: template         # default for dry runs; set 'local' for the model
-model_name: "llama3.1:8b-instruct-q4_K_M"
+# auto | local | template | stub
+language_provider: auto             # template now; auto-upgrades to local Ollama the moment it's installed
+model_name: "llama3.1:8b"
 monthly_compute_budget: 20.0        # USD-equivalent ceiling on inference spend
 
 # --- Edge & discipline (upstream of the code, this is what decides win/lose) ---

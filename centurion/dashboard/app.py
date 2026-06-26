@@ -37,6 +37,7 @@ import assistant                              # noqa: E402,F401
 import intelligence.language.templates        # noqa: E402,F401
 import intelligence.language.stub             # noqa: E402,F401
 import intelligence.language.local_llm        # noqa: E402,F401
+import intelligence.language.auto             # noqa: E402,F401
 try:
     import stripe                             # noqa: E402,F401  (preload to avoid per-request cost)
 except Exception:

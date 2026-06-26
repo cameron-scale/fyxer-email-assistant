@@ -36,8 +36,10 @@ if errorlevel 1 (
 echo.
 echo ============================================================
 echo   Done. The local model is installed and running.
-echo   In config.yaml set:  language_provider: local
-echo   (or pick it later in the dashboard).
+echo   No config change needed: Centurion is set to 'auto' and will
+echo   detect the model within ~1 minute and upgrade itself. Leave the
+echo   'ollama serve' window open. The dashboard's system panel will
+echo   flip from 'template' to 'local' once it's in use.
 echo ============================================================
 pause
 endlocal
