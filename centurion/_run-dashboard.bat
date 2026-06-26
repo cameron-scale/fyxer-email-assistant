@@ -7,6 +7,9 @@ set CENTURION_LIVE_REVENUE=1
 set CENTURION_FUNDED_CAPITAL=10
 set CENTURION_FOCUS_STRATEGY=digital_products
 set CENTURION_SANDBOX_IDENTITY=centurion-store
+REM Your public domain (used for product/SEO links + post-payment delivery
+REM redirect). Make this match the domain your tunnel serves (see DOMAIN_SETUP.md).
+set CENTURION_PUBLIC_URL=https://centurion.scalembs.com
 :loop
 echo [%date% %time%] syncing latest code from GitHub...
 git pull --ff-only 2>nul
