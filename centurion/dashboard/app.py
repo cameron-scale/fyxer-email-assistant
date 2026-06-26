@@ -212,21 +212,30 @@ def build_state(o: Orchestrator) -> dict:
 
     # --- capital split ---
     in_flight = sum(a["cost"] for a in led.actions_by_status("in_progress"))
-    deployed = sum(led.strategy_spend(name) for name, _, _ in STRAT_META)
     available = max(0.0, round(balance - in_flight, 2))
 
     # --- per-strategy performance ---
+    # Compute everything in single passes instead of re-querying per strategy:
+    # calibration.rows() was loaded 5x, strategy_spend queried 10x, and the txn
+    # list scanned 5x for revenue — every poll. That starved a small CPU.
     disabled = o.disabled_strategies()
     cfg_strats = o.cfg.get("strategies", {})
+    rev_by_strat: dict = {}
+    for t in txns:
+        if t["type"] == "credit" and t["strategy"]:
+            rev_by_strat[t["strategy"]] = rev_by_strat.get(t["strategy"], 0.0) + t["amount"]
+    cal_by_strat: dict = {}
+    for r in o.calibration.rows():
+        cal_by_strat.setdefault(r["strategy"], []).append(r)
+    spend_by_strat = {name: led.strategy_spend(name) for name, _, _ in STRAT_META}
+    deployed = sum(spend_by_strat.values())
     strategies = []
-    # precompute per-strategy credit/debit
     for name, sid, pretty in STRAT_META:
-        spent = led.strategy_spend(name)
-        revenue = sum(t["amount"] for t in txns
-                      if t["strategy"] == name and t["type"] == "credit")
+        spent = spend_by_strat[name]
+        revenue = rev_by_strat.get(name, 0.0)
         net = round(revenue - spent, 2)
         # bets + win rate from calibration predictions
-        cal = [r for r in o.calibration.rows() if r["strategy"] == name]
+        cal = cal_by_strat.get(name, [])
         trades = len(cal)
         wins = sum(1 for r in cal if r["realized"] > 0)
         win = (wins / trades) if trades else 0.0
@@ -389,6 +398,14 @@ def create_app(config_path: str | None = None) -> Flask:
                     _web_orch["o"] = Orchestrator(cfg)
                 o = _web_orch["o"]
         return o
+
+    # Build the web Orchestrator once, eagerly, BEFORE the agent starts — so the
+    # first /api/state doesn't pay construction cost under the lock and can never
+    # race the agent's own construction. Best-effort: fall back to lazy on error.
+    try:
+        orch()
+    except Exception:
+        pass
 
     # Optionally run the agent loop in this same process (free single-service
     # hosting). Enabled with CENTURION_RUN_AGENT=1. Always simulation on a host.
