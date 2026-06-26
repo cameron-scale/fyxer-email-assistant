@@ -1,6 +1,8 @@
-# Render.com free-tier blueprint for the Centurion dashboard + agent.
-# One free web service runs the Flask dashboard AND the decision loop in-process
-# (CENTURION_RUN_AGENT=1), in SIMULATION mode (no real money on a shared host).
+# Render.com blueprint for the Centurion dashboard + agent.
+# One web service runs the Flask dashboard AND the decision loop in-process
+# (CENTURION_RUN_AGENT=1), in LIVE collect-only mode: it creates real Stripe
+# payment links to take money, while real SPENDING stays hard-off behind the
+# danger switch — so risk is $0 until you arm it.
 #
 # Deploy: Render dashboard -> New -> Blueprint -> connect this repo -> pick
 # branch claude/centurion-agent-build-xyo5h1. Render reads this file.
@@ -9,7 +11,7 @@ services:
     name: centurion-dashboard
     runtime: python
     rootDir: centurion
-    plan: free
+    plan: starter        # paid: always-on, no idle sleep, dedicated CPU/RAM
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py --init || true; gunicorn -b 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 dashboard.app:app
     envVars:
@@ -17,6 +19,10 @@ services:
         value: "3.11.9"
       - key: CENTURION_RUN_AGENT
         value: "1"
+      - key: CENTURION_LANGUAGE_PROVIDER
+        value: "template"    # no local model in the cloud; stay deterministic
+      # Product/SEO/delivery links automatically use Render's RENDER_EXTERNAL_URL
+      # (a full https URL Render injects), so no public-URL var is needed here.
       - key: CENTURION_FUNDED_CAPITAL
         value: "10"          # $10 seed
       - key: CENTURION_LIVE_REVENUE
