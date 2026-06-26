@@ -24,6 +24,33 @@ def test_cannot_seed_twice(ledger):
         ledger.seed(100.0)
 
 
+def test_reset_seed_on_fresh_ledger(ledger):
+    ledger.seed(100.0)
+    bal = ledger.reset_seed(10.0)
+    assert bal == 10.0
+    assert ledger.balance() == 10.0
+    assert ledger.funded_capital() == 10.0
+    txns = ledger.transactions()
+    assert len(txns) == 1
+    assert txns[0]["description"] == SEED_DESCRIPTION
+
+
+def test_reset_seed_refuses_after_activity(ledger):
+    ledger.seed(100.0)
+    ledger.debit(5.0, strategy="x", description="ad spend")
+    with pytest.raises(RuntimeError):
+        ledger.reset_seed(10.0)
+    assert ledger.balance() == 95.0
+
+
+def test_set_funded_capital_keeps_history(ledger):
+    ledger.seed(100.0)
+    ledger.debit(5.0, strategy="x", description="ad spend")
+    ledger.set_funded_capital(25.0)
+    assert ledger.funded_capital() == 25.0
+    assert ledger.balance() == 95.0
+
+
 def test_credit_and_debit_update_balance(ledger):
     ledger.seed(100.0)
     assert ledger.debit(30.0, strategy="x", description="ad spend") == 70.0

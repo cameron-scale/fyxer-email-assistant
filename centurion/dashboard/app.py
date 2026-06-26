@@ -367,6 +367,7 @@ def _growth_summary(led) -> dict:
 
 def create_app(config_path: str | None = None) -> Flask:
     app = Flask(__name__, static_folder=None)
+    app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # cap code-upload size
     cfg = load_config(config_path)
     token = os.environ.get("CENTURION_DASHBOARD_TOKEN", "change-me")
 
@@ -475,6 +476,95 @@ def create_app(config_path: str | None = None) -> Flask:
                 _os2._exit(0)  # runner loop relaunches with the new code
             _th.Thread(target=_restart, daemon=True).start()
         return jsonify(ok=True, changed=changed, output=out)
+
+    @app.post("/api/control/capital")
+    def api_capital():
+        """Set the funded/seed capital to any amount. On a fresh ledger (no
+        activity beyond the seed) this resets the balance AND the baseline to the
+        new amount. Once there's real revenue/spend, it only adjusts the risk
+        baseline and leaves history intact."""
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        from ledger import SEED_DESCRIPTION
+        body = request.get_json(silent=True) or {}
+        try:
+            amount = round(float(body.get("amount")), 2)
+        except (TypeError, ValueError):
+            return jsonify(error="bad amount"), 400
+        if amount <= 0 or amount > 1_000_000:
+            return jsonify(error="amount must be between 0 and 1,000,000"), 400
+        led = orch().ledger
+        has_activity = any(
+            t.get("description") != SEED_DESCRIPTION for t in led.transactions(5)
+        )
+        if has_activity:
+            led.set_funded_capital(amount)
+            mode = "baseline"
+        else:
+            led.reset_seed(amount)
+            mode = "reset"
+        return jsonify(ok=True, amount=amount, mode=mode, balance=led.balance())
+
+    @app.post("/api/control/upload-code")
+    def api_upload_code():
+        """Apply a .zip of updated source files onto this install and restart into
+        them — a git-free way to push code from the dashboard. Token-gated (same
+        trust level as the ⟳ Update button: a token holder runs whatever code they
+        upload). Paths are confined to the install dir; the live DB and .git are
+        never overwritten."""
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        import io
+        import zipfile
+        f = request.files.get("bundle")
+        if f is None:
+            return jsonify(error="no file uploaded (field 'bundle')"), 400
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(f.read()))
+        except Exception as e:
+            return jsonify(error=f"not a valid .zip: {e}"), 400
+        entries = [n for n in zf.namelist() if not n.endswith("/")]
+        if not entries:
+            return jsonify(error="zip is empty"), 400
+
+        root = ROOT.resolve()
+
+        def _rel(name: str) -> str:
+            n = name.replace("\\", "/").lstrip("/")
+            # The zip I hand you nests everything under "centurion/"; this install
+            # IS the centurion dir, so strip that prefix to map files correctly.
+            if n.startswith("centurion/"):
+                n = n[len("centurion/"):]
+            return n
+
+        written, skipped = [], []
+        for name in entries:
+            rel = _rel(name)
+            parts = rel.split("/")
+            if (not rel or ".." in parts or rel.startswith("data/")
+                    or rel.startswith(".git/") or parts[0] in ("data", ".git")):
+                skipped.append(name)
+                continue
+            dest = (root / rel).resolve()
+            if dest != root and not str(dest).startswith(str(root) + os.sep):
+                skipped.append(name)  # path traversal attempt
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(name) as src:
+                dest.write_bytes(src.read())
+            written.append(rel)
+
+        if written:
+            import threading as _th
+
+            def _restart():
+                import time as _t2
+                import os as _os2
+                _t2.sleep(1.0)
+                _os2._exit(0)  # runner loop relaunches python with the new code
+            _th.Thread(target=_restart, daemon=True).start()
+        return jsonify(ok=True, written=written, skipped=skipped,
+                       restarting=bool(written))
 
     @app.post("/api/control/strategy")
     def api_strategy():

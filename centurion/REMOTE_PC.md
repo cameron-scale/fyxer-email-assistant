@@ -28,6 +28,22 @@ The PC tracks the GitHub branch and can pull + restart into new code:
   and commit to the `claude/centurion-agent-build-xyo5h1` branch — or ask me to
   push a change. Then hit ⟳ Update (or let auto-update do it).
 
+### No-git option: upload a code .zip from the dashboard
+If you didn't clone with git (e.g. you ran from the ZIP), you can still push code
+without any command line:
+- Ask me for the change; I'll hand you a small `.zip` of the updated files.
+- In the dashboard top bar, tap **⬆ Upload**, pick that `.zip`, confirm.
+- It writes the files onto this PC and restarts into them (~10s blink, then
+  reconnects). The zip's `centurion/` prefix is handled automatically, and the
+  live ledger (`data/`) and `.git` are never overwritten.
+- This is token-gated, exactly like ⟳ Update. It works locally and through your
+  tunnel URL, so you can do it from your phone.
+
+### Set the starting capital from the dashboard
+Top bar → **$ Capital** → enter any amount. On a fresh ledger (no sales/spend
+yet) it resets both the balance and the risk baseline to that amount; once
+there's real activity it only adjusts the baseline and keeps your history.
+
 Security note: anyone with the dashboard token can pull+run whatever is on that
 branch onto your PC. Keep the token private; it's your repo and your machine.
 

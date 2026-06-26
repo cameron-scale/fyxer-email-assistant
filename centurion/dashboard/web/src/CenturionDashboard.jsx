@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip,
   PieChart, Pie, Cell,
@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, Gauge, Server, Radio, Settings as SettingsIcon, KeyRound,
   MessageSquare, Send,
 } from "lucide-react";
-import { fetchState, control, getSettings, saveSettings, chat } from "./api.js";
+import { fetchState, control, getSettings, saveSettings, chat, uploadCode } from "./api.js";
 
 // ---- ScaleMBS / Centurion theme tokens ---------------------------------
 const T = {
@@ -147,6 +147,22 @@ export default function CenturionDashboard() {
   } = data;
   const laneB = growth.laneB || [];
 
+  const uploadRef = useRef(null);
+  const onUploadFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";  // allow re-selecting the same file later
+    if (!file) return;
+    if (!window.confirm(`Apply "${file.name}" to the code on this PC and restart into it?\n\n`
+      + "The dashboard will blink for ~10s, then reconnect.")) return;
+    act(async () => {
+      const r = await uploadCode(file);
+      window.alert(
+        `Applied ${r.written.length} file(s)`
+        + (r.skipped.length ? `, skipped ${r.skipped.length}` : "")
+        + (r.restarting ? ".\nRestarting into the new code — reconnecting…" : "."));
+    });
+  };
+
   const updateCode = () => {
     if (!window.confirm("Pull the latest code from GitHub and restart into it? "
       + "The dashboard will blink for ~10s, then reconnect.")) return;
@@ -154,6 +170,21 @@ export default function CenturionDashboard() {
       const r = await control("update");
       window.alert(r.changed ? "Updating — restarting into new code. Reconnecting…"
         : "Already up to date.");
+    });
+  };
+
+  const setCapital = () => {
+    const raw = window.prompt(
+      "Set funded / seed capital (USD).\n\n" +
+      "On a fresh ledger this resets the balance AND the baseline to this amount. " +
+      "Once there's real revenue/spend it only adjusts the risk baseline (history is kept).",
+      String(funded || 10));
+    if (raw == null) return;
+    const amount = parseFloat(raw);
+    if (!(amount > 0)) { window.alert("Enter a positive number."); return; }
+    act(async () => {
+      const r = await control("capital", { amount });
+      window.alert(`Capital set to $${r.amount} — ${r.mode === "reset" ? "balance reset" : "baseline adjusted"}.`);
     });
   };
 
@@ -265,10 +296,22 @@ export default function CenturionDashboard() {
               style={{ background: killArmed ? T.loss : "transparent", border: `1px solid ${T.loss}`, color: killArmed ? T.bg : T.loss }}>
               <Power size={14} />{killArmed ? "Confirm stop" : "Emergency stop"}
             </button>
+            <button onClick={setCapital} disabled={busy} title="Set funded / seed capital"
+              className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"
+              style={{ background: T.raised, border: `1px solid ${T.border}`, color: T.muted }}>
+              $ Capital
+            </button>
             <button onClick={updateCode} disabled={busy} title="Pull latest code from GitHub & restart"
               className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"
               style={{ background: T.raised, border: `1px solid ${T.border}`, color: T.muted }}>
               ⟳ Update
+            </button>
+            <input ref={uploadRef} type="file" accept=".zip" style={{ display: "none" }} onChange={onUploadFile} />
+            <button onClick={() => uploadRef.current && uploadRef.current.click()} disabled={busy}
+              title="Upload a code .zip and restart into it (no git needed)"
+              className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"
+              style={{ background: T.raised, border: `1px solid ${T.border}`, color: T.muted }}>
+              ⬆ Upload
             </button>
             <button onClick={() => setShowSettings(true)} title="Integrations & API keys"
               className="flex items-center justify-center rounded-lg transition"

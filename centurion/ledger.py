@@ -138,6 +138,38 @@ class Ledger:
         v = self.get_state("funded_capital")
         return float(v) if v is not None else 0.0
 
+    def set_funded_capital(self, amount: float) -> None:
+        """Update the funded-capital baseline used for risk caps, the multiple,
+        and mission progress — WITHOUT rewriting transaction history. Use this
+        once the ledger has real activity."""
+        with self._tx() as conn:
+            self._set_state(conn, "funded_capital", str(float(amount)))
+
+    def reset_seed(self, amount: float) -> float:
+        """Reset a fresh ledger to a new seed amount. Only allowed when there has
+        been no activity beyond the initial 'seed capital' credit (no revenue,
+        no spend) — so it's safe during testing. Rewrites the seed so both the
+        balance and the funded-capital baseline become `amount`."""
+        rows = self._conn().execute(
+            "SELECT COUNT(*) AS c FROM transactions WHERE description != ?",
+            (SEED_DESCRIPTION,),
+        ).fetchone()
+        if rows["c"] > 0:
+            raise RuntimeError(
+                "Ledger has activity beyond the seed; refusing to rewrite history. "
+                "Use set_funded_capital to adjust the baseline instead."
+            )
+        with self._tx() as conn:
+            conn.execute("DELETE FROM transactions")
+            conn.execute(
+                "INSERT INTO transactions (ts, strategy, type, amount, balance_after, "
+                "description, reversible, external_ref) VALUES (?,?,?,?,?,?,?,?)",
+                (time.time(), None, "credit", float(amount), float(amount),
+                 SEED_DESCRIPTION, 0, None),
+            )
+            self._set_state(conn, "funded_capital", str(float(amount)))
+        return self.balance()
+
     # --- transactions ---
     def credit(self, amount: float, *, strategy: str | None = None,
                description: str = "", reversible: bool = False,

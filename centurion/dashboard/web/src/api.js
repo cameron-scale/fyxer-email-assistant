@@ -49,6 +49,29 @@ export async function chat(message) {
   return r.json();
 }
 
+export async function uploadCode(file) {
+  let token = getToken();
+  if (!token) {
+    token = window.prompt("Enter your CENTURION_DASHBOARD_TOKEN to upload code:") || "";
+    if (token) setToken(token);
+  }
+  const fd = new FormData();
+  fd.append("bundle", file);
+  fd.append("token", token);
+  // No Content-Type header — the browser sets the multipart boundary.
+  const r = await fetch("/api/control/upload-code", {
+    method: "POST",
+    headers: { "X-Centurion-Token": token },
+    body: fd,
+  });
+  if (r.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    throw new Error("Unauthorized — check your dashboard token.");
+  }
+  if (!r.ok) throw new Error(`upload ${r.status}`);
+  return r.json();
+}
+
 export async function control(path, body = {}) {
   let token = getToken();
   if (!token) {
