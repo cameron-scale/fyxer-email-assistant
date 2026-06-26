@@ -117,7 +117,7 @@ export default function CenturionDashboard() {
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 3000);
+    const id = setInterval(refresh, 5000);
     return () => clearInterval(id);
   }, []);
 

@@ -373,9 +373,22 @@ def create_app(config_path: str | None = None) -> Flask:
     cfg = load_config(config_path)
     token = os.environ.get("CENTURION_DASHBOARD_TOKEN", "change-me")
 
+    # Cache ONE Orchestrator for the web path and reuse it across requests.
+    # Rebuilding the whole engine on every /api/state poll (every few seconds)
+    # was the dominant cost on a small CPU and could spiral into timeouts. Reuse
+    # is safe: the ledger's SQLite connection is thread-local, WAL is on, and
+    # build_state reads fresh data from the DB on every call, so the UI stays
+    # live. Control endpoints mutate this instance AND persist to the DB.
+    _web_orch: dict = {}
+
     def orch() -> Orchestrator:
-        with _ORCH_LOCK:
-            return Orchestrator(cfg)
+        o = _web_orch.get("o")
+        if o is None:
+            with _ORCH_LOCK:
+                if _web_orch.get("o") is None:
+                    _web_orch["o"] = Orchestrator(cfg)
+                o = _web_orch["o"]
+        return o
 
     # Optionally run the agent loop in this same process (free single-service
     # hosting). Enabled with CENTURION_RUN_AGENT=1. Always simulation on a host.

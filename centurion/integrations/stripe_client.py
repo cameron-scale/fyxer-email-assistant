@@ -56,6 +56,13 @@ class StripeClient:
             try:
                 import stripe
                 stripe.api_key = self.api_key
+                # Cap network time so a slow Stripe call can't stall a cycle for
+                # ~80s (the library default). Fail fast and retry next cycle.
+                stripe.max_network_retries = 1
+                try:
+                    stripe.default_http_client = stripe.http_client.RequestsClient(timeout=20)
+                except Exception:
+                    pass
                 self._stripe = stripe
             except Exception:
                 # Library missing -> degrade safely to mock rather than crash.
