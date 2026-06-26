@@ -108,6 +108,7 @@ export default function CenturionDashboard() {
   const [killArmed, setKillArmed] = useState(false);
   const [range, setRange] = useState("all");
   const [showSettings, setShowSettings] = useState(false);
+  const uploadRef = useRef(null);
 
   async function refresh() {
     try { setData(await fetchState()); setErr(null); }
@@ -147,7 +148,6 @@ export default function CenturionDashboard() {
   } = data;
   const laneB = growth.laneB || [];
 
-  const uploadRef = useRef(null);
   const onUploadFile = (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";  // allow re-selecting the same file later
