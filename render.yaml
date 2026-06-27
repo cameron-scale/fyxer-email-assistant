@@ -14,15 +14,26 @@ services:
     plan: starter        # paid: always-on, no idle sleep, dedicated CPU/RAM
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py --init || true; gunicorn -b 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 dashboard.app:app
+    # Persistent disk so the ledger, products, delivery tokens, and SEO pages
+    # SURVIVE redeploys/restarts. Without this, Render's filesystem is ephemeral
+    # and every deploy wipes the DB — which would break post-payment delivery
+    # links for anyone who already bought. The DB + generated files all live
+    # under the mount (db_path.parent).
+    disk:
+      name: centurion-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
+      - key: CENTURION_DATABASE_PATH
+        value: /data/centurion.db   # on the persistent disk above
+      - key: CENTURION_PUBLIC_URL
+        value: "https://centurion-dashboard.onrender.com"   # stable delivery/SEO links
       - key: CENTURION_RUN_AGENT
         value: "1"
       - key: CENTURION_LANGUAGE_PROVIDER
         value: "template"    # no local model in the cloud; stay deterministic
-      # Product/SEO/delivery links automatically use Render's RENDER_EXTERNAL_URL
-      # (a full https URL Render injects), so no public-URL var is needed here.
       - key: CENTURION_FUNDED_CAPITAL
         value: "10"          # $10 seed
       - key: CENTURION_LIVE_REVENUE

@@ -59,6 +59,7 @@ class Config:
 # CENTURION_FUNDED_CAPITAL=10. Lets a host (Render) set values without editing
 # config.yaml. Type is coerced from the literal.
 _ENV_OVERRIDES = {
+    "CENTURION_DATABASE_PATH": ("database_path", str),
     "CENTURION_FUNDED_CAPITAL": ("funded_capital", float),
     "CENTURION_TARGET_CAPITAL": ("target_capital", float),
     "CENTURION_AUTONOMY_LEVEL": ("autonomy_level", str),

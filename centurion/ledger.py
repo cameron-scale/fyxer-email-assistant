@@ -306,8 +306,19 @@ class Ledger:
         )
 
     def set_state(self, key: str, value: Any) -> None:
-        with self._tx() as conn:
-            self._set_state(conn, key, str(value))
+        # Retry briefly on transient "database is locked" — the in-process agent
+        # and the web worker write the same DB, so a save can momentarily collide
+        # with an agent write (this surfaced as a 500 on the settings save).
+        for attempt in range(6):
+            try:
+                with self._tx() as conn:
+                    self._set_state(conn, key, str(value))
+                return
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e).lower() and attempt < 5:
+                    time.sleep(0.2 * (attempt + 1))
+                    continue
+                raise
 
     # --- storefront payment links (surfaced on the dashboard) ---
     def add_payment_link(self, url: str, product: str) -> None:
