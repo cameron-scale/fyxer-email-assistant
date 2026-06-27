@@ -17,8 +17,8 @@ from typing import Optional
 # harmless naming mismatch (STRIPE_API_SECRET vs STRIPE_API_KEY) can't silently
 # drop us into mock mode. First non-empty wins.
 _STRIPE_KEY_ENV_NAMES = (
-    "STRIPE_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_API_SECRET",
-    "STRIPE_SECRET", "STRIPE_KEY",
+    "STRIPE_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_API_SECRET_KEY",
+    "STRIPE_API_SECRET", "STRIPE_SECRET", "STRIPE_KEY",
 )
 
 
