@@ -48,6 +48,28 @@ FORMATS = [
     "swipe file", "spreadsheet toolkit", "checklist bundle", "mini-course outline",
     "canva-style template set", "SOP playbook", "email sequence pack",
 ]
+
+# Niche-specific format banks — process/workflow assets (NOT code lists, which
+# for medical billing would infringe AMA CPT copyright). Keyed by a substring of
+# the configured niche.
+NICHE_FORMATS = {
+    "medical billing": [
+        "denial appeal letter template pack", "credentialing checklist + tracker",
+        "AR follow-up call script set", "new-client onboarding SOP",
+        "patient-statement workflow toolkit", "prior-authorization request template set",
+        "front-desk eligibility-check checklist", "clean-claim submission SOP",
+    ],
+}
+NICHE_PAINS = {
+    "medical billing": [
+        "loses revenue to preventable claim denials",
+        "can't keep AR days under control",
+        "dreads credentialing paperwork and re-creds",
+        "has no repeatable onboarding for new practices",
+        "wastes hours chasing prior authorizations",
+        "struggles to standardize front-desk eligibility checks",
+    ],
+}
 LENSES = ["analogy", "combination", "first-principles", "constraint-flip",
           "trend-riding", "pain-mining"]
 
@@ -61,10 +83,48 @@ class ResearchSignal:
     source: str = "offline-prior"
 
 
+def _niche_audiences(niche: str) -> List[str]:
+    """Expand a configured market niche into audience segments so ideation stays
+    varied while every product aims at a market the operator can actually reach.
+    Deterministic — no model call needed."""
+    n = niche.strip().rstrip(".")
+    return [
+        f"{n} teams", f"solo {n} professionals", f"{n} beginners",
+        f"small practices handling {n}", f"managers responsible for {n}",
+        f"consultants who sell {n}", f"{n} back-office staff",
+        f"owners drowning in {n} admin",
+    ]
+
+
 class ResearchEngine:
-    def __init__(self, language: LanguageProvider, seed: int = 42):
+    def __init__(self, language: LanguageProvider, seed: int = 42,
+                 niche: str | None = None):
         self.language = language
         self.seed = seed
+        self._niche = (niche or "").strip()
+
+    def _current_niche(self) -> str:
+        # Dashboard settings mirror to env at runtime; honor a live override.
+        import os
+        return (os.environ.get("CENTURION_NICHE", "").strip() or self._niche)
+
+    def _audience_pool(self) -> List[str]:
+        niche = self._current_niche()
+        return _niche_audiences(niche) if niche else NICHES
+
+    def _format_pool(self) -> List[str]:
+        niche = self._current_niche().lower()
+        for key, fmts in NICHE_FORMATS.items():
+            if key in niche:
+                return fmts
+        return FORMATS
+
+    def _pain_pool(self) -> List[str]:
+        niche = self._current_niche().lower()
+        for key, pains in NICHE_PAINS.items():
+            if key in niche:
+                return pains
+        return PAINS
 
     # --- signal gathering (pluggable; offline-safe default) ---
     def gather_signals(self, strategy: str, n: int = 3) -> List[ResearchSignal]:
@@ -73,10 +133,12 @@ class ResearchEngine:
         A WebSearch/WebFetch integration can replace this without touching
         callers."""
         rng = random.Random(f"{self.seed}:{strategy}")
+        audiences = self._audience_pool()
+        pains = self._pain_pool()
         signals = []
         for _ in range(n):
-            niche = rng.choice(NICHES)
-            pain = rng.choice(PAINS)
+            niche = rng.choice(audiences)
+            pain = rng.choice(pains)
             signals.append(ResearchSignal(
                 topic=f"{niche} who {pain}",
                 demand=rng.choice(["rising", "steady", "seasonal", "hot"]),
@@ -87,15 +149,19 @@ class ResearchEngine:
 
     # --- creative, human-style ideation ---
     def ideate(self, strategy: str, capital: float, n: int = 6,
-               lessons: Optional[List[dict]] = None) -> List[Opportunity]:
+               lessons: Optional[List[dict]] = None,
+               epoch: int = 0) -> List[Opportunity]:
         """Generate n varied candidate opportunities using rotating creative
         lenses. Each lens produces a different *kind* of idea, the way a sharp
         human brainstorm would — not n minor variants of one idea.
 
         `lessons` (from LearningMemory) bias ideation away from past failures
         and toward past wins: the agent literally thinks with its scars.
+        `epoch` rotates the idea pool over time — without it, a stable balance
+        reproduces the identical opportunity every cycle forever and the catalog
+        freezes at one product.
         """
-        rng = random.Random(self._seed_for(strategy, capital))
+        rng = random.Random(self._seed_for(strategy, capital) + int(epoch))
         avoid = self._avoid_terms(lessons)
         prefer = self._prefer_terms(lessons)
         signals = self.gather_signals(strategy, n=max(3, n // 2))
@@ -131,12 +197,14 @@ class ResearchEngine:
     def _apply_lens(self, lens: str, sig: ResearchSignal, rng: random.Random,
                     prefer: List[str]) -> str:
         niche = sig.topic
-        fmt = rng.choice(FORMATS)
+        formats = self._format_pool()
+        audiences = self._audience_pool()
+        fmt = rng.choice(formats)
         if lens == "analogy":
-            other = rng.choice(NICHES)
+            other = rng.choice(audiences)
             return f"Port the playbook that works for {other} into a {fmt} for {niche}"
         if lens == "combination":
-            fmt2 = rng.choice(FORMATS)
+            fmt2 = rng.choice(formats)
             return f"Fuse a {fmt} with a {fmt2} so {niche} solve two problems in one buy"
         if lens == "first-principles":
             return f"Strip the need of {niche} to its core and rebuild it as a lean {fmt}"

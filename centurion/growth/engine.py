@@ -20,7 +20,7 @@ from . import guard
 
 class GrowthEngine:
     def __init__(self, ledger, language, bandit, approvals, alerter=None,
-                 max_pages_per_cycle: int = 1, max_drafts_per_cycle: int = 2):
+                 max_pages_per_cycle: int = 2, max_drafts_per_cycle: int = 2):
         self.ledger = ledger
         self.planner = KeywordPlanner()
         self.factory = ContentFactory(language)
@@ -44,12 +44,17 @@ class GrowthEngine:
             counts[p["product_slug"]] = counts.get(p["product_slug"], 0) + 1
         product = min(products, key=lambda pr: counts.get(pr.get("slug"), 0))
 
-        clusters = self.planner.map(product.get("title", "this"))
+        import os
+        niche = os.environ.get("CENTURION_NICHE", "")
+        clusters = self.planner.map(product.get("title", "this"), niche=niche)
         existing_text = [p.get("title", "") + " " + p.get("meta", "") for p in pages]
 
-        # ---- Lane A: publish an SEO page (only when active) ----
+        # ---- Lane A: publish SEO pages (only when active) ----
         if not paused:
+            published = 0
             for cluster in clusters[: max(1, self.max_pages) * 3]:
+                if published >= self.max_pages:
+                    break
                 template = self.bandit.select([f"tpl:{t}" for t in PAGE_TEMPLATES]).split(":", 1)[1]
                 page = self.factory.page(cluster.keyword, template, product)
                 if page is None:
@@ -64,7 +69,7 @@ class GrowthEngine:
                 existing_text.append(page.title + " " + page.meta)
                 records.append(_rec("A", "owned-seo", page.title, cluster.keyword,
                                     cluster.ev(), "published", slug=page.slug))
-                break  # one quality page per cycle beats many thin ones
+                published += 1
 
         # ---- Lane B: draft + queue for approval (never auto-post) ----
         drafted = 0
@@ -106,6 +111,15 @@ class GrowthEngine:
             "template": page.template, "cluster": page.cluster,
             "product_slug": page.product_slug, "file": str(f),
             "created": page.created, "views": 0, "clicks": 0})
+        try:
+            # Queue a local-model rewrite via the Ollama bridge (non-blocking;
+            # the template version is live meanwhile).
+            import bridge
+            from .content import _SECTIONS
+            bridge.enqueue_page_upgrade(self.ledger, page.slug, page.title,
+                                        _SECTIONS.get(page.template, []))
+        except Exception:
+            pass
 
     def _queue_lane_b(self, draft: dict, cluster, product) -> int:
         desc = f"[Lane B · {draft['kind']}] {draft['platform']} — {cluster.keyword}"

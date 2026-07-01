@@ -34,6 +34,14 @@ services:
         value: "1"
       - key: CENTURION_LANGUAGE_PROVIDER
         value: "template"    # no local model in the cloud; stay deterministic
+      - key: CENTURION_NICHE
+        value: "medical billing for small practices"   # a market you can reach
+      # CENTURION_BRAND (your company name) and CENTURION_BRIDGE_TOKEN are set
+      # in the dashboard (sync:false) — not committed here.
+      - key: CENTURION_BRAND
+        sync: false
+      - key: CENTURION_BRIDGE_TOKEN
+        sync: false
       - key: CENTURION_FUNDED_CAPITAL
         value: "10"          # $10 seed
       - key: CENTURION_LIVE_REVENUE

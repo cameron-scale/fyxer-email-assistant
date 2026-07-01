@@ -70,6 +70,18 @@ CREATE TABLE IF NOT EXISTS state (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS bridge_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts REAL NOT NULL,
+    kind TEXT NOT NULL,
+    ref TEXT,
+    meta TEXT,
+    prompt TEXT NOT NULL,
+    schema TEXT,
+    status TEXT NOT NULL DEFAULT 'queued',
+    result TEXT
+);
 """
 
 
@@ -388,3 +400,63 @@ class Ledger:
     def get_state(self, key: str, default: Any = None) -> Any:
         row = self._conn().execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
         return row["value"] if row else default
+
+    # --- durable learning rewards from real sales ---
+    # The webhook (web worker) and the agent are different Orchestrator instances
+    # with different in-memory bandits sharing one persisted "bandit" state. If
+    # the webhook updated the bandit directly, the agent's next save would clobber
+    # it. So real-sale rewards are QUEUED here and the agent drains them into its
+    # bandit + calibration at cycle start (single writer, no lost updates).
+    def add_pending_reward(self, strategy: str, net: float, cost: float = 0.0) -> None:
+        import json
+        raw = self.get_state("pending_rewards")
+        try:
+            items = json.loads(raw) if raw else []
+        except Exception:
+            items = []
+        items.append({"strategy": strategy, "net": float(net), "cost": float(cost),
+                      "ts": time.time()})
+        self.set_state("pending_rewards", json.dumps(items[-200:]))
+
+    def drain_pending_rewards(self) -> list[dict]:
+        import json
+        with self._tx() as conn:
+            row = conn.execute("SELECT value FROM state WHERE key='pending_rewards'").fetchone()
+            if not row or not row["value"]:
+                return []
+            try:
+                items = json.loads(row["value"])
+            except Exception:
+                items = []
+            self._set_state(conn, "pending_rewards", "[]")
+        return items
+
+    # --- bridge jobs (local-Ollama quality upgrades, worked by the operator's
+    # own machine via token-gated endpoints; inference never leaves owned hardware) ---
+    def add_bridge_job(self, kind: str, ref: str, prompt: str,
+                       schema: dict | None = None, meta: dict | None = None) -> int:
+        import json
+        with self._tx() as conn:
+            cur = conn.execute(
+                "INSERT INTO bridge_jobs (ts, kind, ref, meta, prompt, schema, status) "
+                "VALUES (?,?,?,?,?,?, 'queued')",
+                (time.time(), kind, ref, json.dumps(meta or {}), prompt,
+                 json.dumps(schema or {})))
+            return int(cur.lastrowid)
+
+    def bridge_jobs_by_status(self, status: str, limit: int = 10) -> list[dict]:
+        rows = self._conn().execute(
+            "SELECT * FROM bridge_jobs WHERE status=? ORDER BY id ASC LIMIT ?",
+            (status, limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_bridge_job(self, job_id: int) -> Optional[dict]:
+        row = self._conn().execute(
+            "SELECT * FROM bridge_jobs WHERE id=?", (job_id,)).fetchone()
+        return dict(row) if row else None
+
+    def set_bridge_status(self, job_id: int, status: str,
+                          result: str | None = None) -> None:
+        with self._tx() as conn:
+            conn.execute("UPDATE bridge_jobs SET status=?, result=? WHERE id=?",
+                         (status, result, job_id))

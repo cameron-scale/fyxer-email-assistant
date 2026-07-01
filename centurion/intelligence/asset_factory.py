@@ -8,10 +8,24 @@ guardrails.
 """
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
 from intelligence.language.provider import LanguageProvider
+
+# Educational-only disclaimer carried on every deliverable — the medical-billing
+# niche is YMYL, and a local model can be confidently wrong about payer rules.
+DISCLAIMER = (
+    "This resource is educational only and is not billing, coding, legal, or "
+    "financial advice. Verify everything against current payer policies and "
+    "official code sets before acting on it.")
+
+
+def _esc(s: Any) -> str:
+    """HTML-escape any model/template text before it enters a page served from
+    the dashboard origin (prevents stored XSS from generated/bridged content)."""
+    return html.escape(str(s or ""))
 
 
 @dataclass
@@ -98,20 +112,29 @@ class AssetFactory:
             sections.append((heading, body))
         html = self._render_product_html(title, listing.body, sections)
         return Asset(kind="product", title=title, body=html,
-                     fields={"price": listing.fields.get("price", "19")})
+                     fields={"price": listing.fields.get("price", "19"),
+                             "description": listing.body,
+                             "tags": listing.fields.get("tags", "")})
 
-    def _render_product_html(self, title, intro, sections) -> str:
+    @staticmethod
+    def _render_product_html(title, intro, sections) -> str:
+        # NOTE: static so bridge.py can call it without an AssetFactory instance.
+        # (self._render_product_html(...) still works — staticmethods bind fine.)
         secs = "".join(
-            f"<h2>{h}</h2><div>{(b or '').replace(chr(10), '<br>')}</div>" for h, b in sections)
+            f"<h2>{_esc(h)}</h2><div>{_esc(b).replace(chr(10), '<br>')}</div>"
+            for h, b in sections)
         return (
             "<!doctype html><html><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-            f"<title>{title}</title>"
+            f"<title>{_esc(title)}</title>"
             "<style>body{font-family:system-ui,Arial,sans-serif;max-width:760px;margin:0 auto;"
             "padding:28px;line-height:1.6;color:#16202b}h1{font-size:30px}h2{margin-top:28px;"
-            "color:#0b6}div{color:#2a3a4a}.tag{color:#7a8699;font-size:13px}</style></head><body>"
-            f"<h1>{title}</h1><p class='tag'>Your purchased copy — thank you!</p>"
-            f"<p>{intro}</p>{secs}</body></html>"
+            "color:#0b6}div{color:#2a3a4a}.tag{color:#7a8699;font-size:13px}"
+            ".disc{margin-top:32px;padding:12px;background:#f6f8fa;border-radius:8px;"
+            "color:#66707a;font-size:12px}</style></head><body>"
+            f"<h1>{_esc(title)}</h1><p class='tag'>Your purchased copy — thank you!</p>"
+            f"<p>{_esc(intro)}</p>{secs}"
+            f"<p class='disc'>{_esc(DISCLAIMER)}</p></body></html>"
         )
 
     def _render_landing_html(self, fields: Dict[str, Any], topic: str) -> str:

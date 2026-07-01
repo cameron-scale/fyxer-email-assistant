@@ -144,9 +144,29 @@ export default function CenturionDashboard() {
     systemState, mode, balance, funded, target, today, multiple, missionPct,
     inflight, vel, history, strategies, activity, pending, system, uptimeDays,
     host, cycleMins, links = [], collectOnly, live, liveSpendArmed, products = [],
-    growth = {},
+    growth = {}, niche = "", controlLocked = false,
   } = data;
   const laneB = growth.laneB || [];
+  const laneBApproved = growth.laneBApproved || [];
+  const pageList = growth.pageList || [];
+
+  const absUrl = (path) => (path && path.startsWith("http"))
+    ? path : (window.location.origin + (path || ""));
+  const shareLink = async (path, title) => {
+    const url = absUrl(path);
+    try {
+      if (navigator.share) { await navigator.share({ title: title || "Centurion", url }); return; }
+    } catch (e) { /* fall through to copy */ }
+    try {
+      await navigator.clipboard.writeText(url);
+      window.alert("Link copied:\n" + url);
+    } catch (e) { window.prompt("Copy this link:", url); }
+  };
+  const copyText = async (text) => {
+    try { await navigator.clipboard.writeText(text); window.alert("Copied to clipboard."); }
+    catch (e) { window.prompt("Copy this:", text); }
+  };
+  const markPosted = (id) => act(() => control("mark-posted", { id }));
 
   const onUploadFile = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -175,16 +195,18 @@ export default function CenturionDashboard() {
 
   const setCapital = () => {
     const raw = window.prompt(
-      "Set funded / seed capital (USD).\n\n" +
-      "On a fresh ledger this resets the balance AND the baseline to this amount. " +
-      "Once there's real revenue/spend it only adjusts the risk baseline (history is kept).",
+      "Fund the seed (USD).\n\n" +
+      "This sets your real capital baseline. It is NOT a card charge — paying " +
+      "your own Stripe link is against Stripe's terms. Real spending stays OFF " +
+      "until you arm it; when you do, load a prepaid card with this amount so the " +
+      "cap is backed by real money.",
       String(funded || 10));
     if (raw == null) return;
     const amount = parseFloat(raw);
     if (!(amount > 0)) { window.alert("Enter a positive number."); return; }
     act(async () => {
-      const r = await control("capital", { amount });
-      window.alert(`Capital set to $${r.amount} — ${r.mode === "reset" ? "balance reset" : "baseline adjusted"}.`);
+      const r = await control("fund", { amount });
+      window.alert(`Seed funded: $${r.amount}.\n${r.note || ""}`);
     });
   };
 
@@ -238,6 +260,22 @@ export default function CenturionDashboard() {
         {err && (
           <div className="mb-3 px-4 py-2 rounded-lg text-sm" style={{ background: `${T.loss}22`, border: `1px solid ${T.loss}55`, color: T.loss }}>
             {err}
+          </div>
+        )}
+
+        {controlLocked && (
+          <div className="mb-3 px-4 py-3 rounded-xl text-sm" style={{ background: `${T.loss}1a`, border: `1px solid ${T.loss}`, color: T.loss }}>
+            <b>⚠ Control plane is OPEN.</b> This live instance still uses the default
+            dashboard token, so controls are disabled for safety. Set{" "}
+            <code>CENTURION_DASHBOARD_TOKEN</code> to your own value in the host's
+            environment (Render → Environment) and redeploy to unlock pause, spend-arm,
+            update, and upload.
+          </div>
+        )}
+
+        {niche && (
+          <div className="mb-3 text-xs" style={{ color: T.dim }}>
+            Aiming at: <span style={{ color: T.muted }}>{niche}</span>
           </div>
         )}
 
@@ -296,10 +334,10 @@ export default function CenturionDashboard() {
               style={{ background: killArmed ? T.loss : "transparent", border: `1px solid ${T.loss}`, color: killArmed ? T.bg : T.loss }}>
               <Power size={14} />{killArmed ? "Confirm stop" : "Emergency stop"}
             </button>
-            <button onClick={setCapital} disabled={busy} title="Set funded / seed capital"
+            <button onClick={setCapital} disabled={busy} title="Fund the seed capital"
               className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"
               style={{ background: T.raised, border: `1px solid ${T.border}`, color: T.muted }}>
-              $ Capital
+              $ Fund
             </button>
             <button onClick={updateCode} disabled={busy} title="Pull latest code from GitHub & restart"
               className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"
@@ -500,7 +538,10 @@ export default function CenturionDashboard() {
                     <div className="text-sm font-semibold truncate">{p.title} · ${Number(p.price).toFixed(0)}{p.mock ? " (test)" : ""}</div>
                     <a href={p.landing} target="_blank" rel="noreferrer" className="text-xs" style={{ color: T.muted }}>sales page ↗</a>
                   </div>
-                  <a href={p.pay_url} target="_blank" rel="noreferrer" className="text-xs font-bold px-2.5 py-1.5 rounded-md shrink-0" style={{ background: T.cyan, color: T.bg }}>Buy link</a>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => shareLink(p.landing, p.title)} className="text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted }} title="Copy/share the sales-page link">Share</button>
+                    <a href={p.pay_url} target="_blank" rel="noreferrer" className="text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: T.cyan, color: T.bg }}>Buy link</a>
+                  </div>
                 </div>
               ))}
               {products.length === 0 && links.map((l, i) => (
@@ -515,7 +556,7 @@ export default function CenturionDashboard() {
         )}
 
         {/* growth: SEO (Lane A) + Lane B approvals */}
-        {(growth.pages > 0 || laneB.length > 0) && (
+        {(growth.pages > 0 || laneB.length > 0 || laneBApproved.length > 0) && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
             <Panel title="Growth · organic SEO (Lane A)" icon={<TrendingUp size={15} color={T.cyan} />}>
               <div className="flex gap-4">
@@ -523,18 +564,39 @@ export default function CenturionDashboard() {
                 <div><div className="text-2xl font-black" style={num}>{growth.views || 0}</div><div className="text-xs" style={{ color: T.dim }}>views</div></div>
                 <div><div className="text-2xl font-black" style={num}>{growth.clicks || 0}</div><div className="text-xs" style={{ color: T.dim }}>→ product</div></div>
               </div>
+              {pageList.length > 0 && (
+                <div className="mt-3 overflow-y-auto" style={{ maxHeight: 150 }}>
+                  {pageList.map((pg) => (
+                    <div key={pg.slug} className="flex items-center justify-between gap-2 py-1">
+                      <a href={pg.url} target="_blank" rel="noreferrer" className="text-xs truncate" style={{ color: T.muted }}>{pg.title}</a>
+                      <button onClick={() => shareLink(pg.url, pg.title)} className="text-xs shrink-0" style={{ color: T.cyan }}>share</button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="text-xs mt-3" style={{ color: T.dim }}>
-                Auto-published to owned pages (sitemap + schema). Ranking compounds over weeks — needs a real domain pointed here.</div>
+                Ranking compounds over weeks. Point a real/owned domain here to count.</div>
             </Panel>
-            <Panel span="lg:col-span-2" title={`Lane B · awaiting your approval (${laneB.length})`} icon={<ShieldCheck size={15} color={T.warn} />}>
-              {laneB.length === 0 && <div className="text-sm" style={{ color: T.dim }}>No drafts waiting. Centurion queues community/video/outreach drafts here — nothing posts without your tap.</div>}
-              <div className="overflow-y-auto" style={{ maxHeight: 300 }}>
+            <Panel span="lg:col-span-2" title={`Lane B · drafts for you to post (${laneB.length + laneBApproved.length})`} icon={<ShieldCheck size={15} color={T.warn} />}>
+              {laneB.length === 0 && laneBApproved.length === 0 && <div className="text-sm" style={{ color: T.dim }}>No drafts yet. Centurion drafts warm-audience notes (your list/LinkedIn) and community replies here — nothing posts without you. The fastest first sale is a warm-email or LinkedIn draft to people you already reach.</div>}
+              <div className="overflow-y-auto" style={{ maxHeight: 340 }}>
+                {laneBApproved.map((d) => (
+                  <div key={d.id} className="px-3 py-2 rounded-lg mb-2" style={{ background: T.raised, border: `1px solid ${T.gain}55` }}>
+                    <div className="text-xs font-bold mb-1" style={{ color: T.gain }}>✓ approved · {d.title}</div>
+                    <div className="text-xs mb-2" style={{ color: T.text, whiteSpace: "pre-wrap" }}>{d.draft}</div>
+                    <div className="flex gap-2">
+                      <button onClick={() => copyText(d.draft)} className="text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: T.cyan, color: T.bg }}>Copy text</button>
+                      <button onClick={() => markPosted(d.id)} disabled={busy} className="text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted }}>Mark posted</button>
+                    </div>
+                  </div>
+                ))}
                 {laneB.map((d) => (
                   <div key={d.id} className="px-3 py-2 rounded-lg mb-2" style={{ background: T.raised }}>
                     <div className="text-xs font-bold mb-1" style={{ color: T.warn }}>{d.title}</div>
-                    <div className="text-xs mb-2" style={{ color: T.muted, whiteSpace: "pre-wrap", maxHeight: 90, overflow: "hidden" }}>{d.draft}</div>
+                    <div className="text-xs mb-2" style={{ color: T.muted, whiteSpace: "pre-wrap", maxHeight: 110, overflow: "hidden" }}>{d.draft}</div>
                     <div className="flex gap-2">
                       <button onClick={() => approve({ id: d.id }, true)} disabled={busy} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: T.gain, color: T.bg }}><Check size={13} />Approve</button>
+                      <button onClick={() => copyText(d.draft)} className="text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted }}>Copy</button>
                       <button onClick={() => approve({ id: d.id }, false)} disabled={busy} className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md" style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.muted }}><X size={13} />Reject</button>
                     </div>
                   </div>

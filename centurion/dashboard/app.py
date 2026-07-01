@@ -177,6 +177,19 @@ def _hhmmss(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
 
 
+def _product_headings(product: dict) -> list:
+    """Pull the deliverable's real <h2> section headings so the landing page
+    describes what's actually in the file — not a hardcoded claim."""
+    import re
+    try:
+        text = Path(product["file"]).read_text(encoding="utf-8")
+    except Exception:
+        return []
+    heads = re.findall(r"<h2[^>]*>(.*?)</h2>", text, re.IGNORECASE | re.DOTALL)
+    clean = [re.sub(r"<[^>]+>", "", h).strip() for h in heads]
+    return [h for h in clean if h][:6]
+
+
 def _stripe_diag() -> dict:
     """Why are links mock vs real? Cheap: no Stripe object construction / network
     in the request path (keeps /api/state fast on a throttled free instance)."""
@@ -355,6 +368,12 @@ def build_state(o: Orchestrator) -> dict:
         "liveSpendArmed": led.get_state("live_spend_enabled", "0") == "1",
         "collectOnly": bool(o.risk.block_all_spend),
         "growth": _growth_summary(led),
+        "niche": os.environ.get("CENTURION_NICHE", "") or o.cfg.get("niche", ""),
+        # True when the live instance still has the default/blank dashboard token,
+        # i.e. the control plane is open to anyone. The UI shows a red warning.
+        "controlLocked": (os.environ.get("CENTURION_LIVE_REVENUE") == "1"
+                          and os.environ.get("CENTURION_DASHBOARD_TOKEN", "change-me")
+                          in ("", "change-me")),
     }
 
 
@@ -362,6 +381,10 @@ def _growth_summary(led) -> dict:
     pages = led.content_pages()
     laneB = [{"id": a["id"], "title": a["description"], "draft": a["rationale"]}
              for a in led.actions_by_status("queued") if a.get("strategy") == "growth"][:12]
+    # Approved drafts stay visible with their full text so the operator can copy
+    # and post them, then mark them posted — the loop no longer dead-ends.
+    approved = [{"id": a["id"], "title": a["description"], "draft": a["rationale"]}
+                for a in led.actions_by_status("approved") if a.get("strategy") == "growth"][:12]
     import json
     try:
         recs = json.loads(led.get_state("growth_records") or "[]")[:12]
@@ -371,7 +394,11 @@ def _growth_summary(led) -> dict:
         "pages": len(pages),
         "views": sum(int(p.get("views", 0)) for p in pages),
         "clicks": sum(int(p.get("clicks", 0)) for p in pages),
+        "pageList": [{"slug": p.get("slug"), "title": p.get("title"),
+                      "url": f"/c/{p.get('slug')}", "views": int(p.get("views", 0)),
+                      "clicks": int(p.get("clicks", 0))} for p in pages[:12]],
         "laneB": laneB,
+        "laneBApproved": approved,
         "records": recs,
     }
 
@@ -420,14 +447,48 @@ def create_app(config_path: str | None = None) -> Flask:
     def healthz():
         return jsonify(ok=True)
 
-    def authed() -> bool:
-        supplied = request.args.get("token") or request.headers.get("X-Centurion-Token")
-        if not supplied:
+    import hmac as _hmac
+    live_mode = os.environ.get("CENTURION_LIVE_REVENUE") == "1"
+    # A live, publicly-reachable instance MUST have a real token — the default
+    # gates the kill switch, spend-arm, git-pull and code-upload. Refuse the
+    # unset/default in live mode rather than ship an open control plane.
+    control_locked = live_mode and (not token or token == "change-me")
+    # Bridge worker gets its OWN token, scoped to /api/bridge/* only, so the
+    # always-on Mac never holds the god-token that can arm spending or push code.
+    bridge_token = os.environ.get("CENTURION_BRIDGE_TOKEN", "")
+
+    def _supplied_token() -> str:
+        s = request.args.get("token") or request.headers.get("X-Centurion-Token")
+        if not s:
             if request.is_json:
-                supplied = (request.get_json(silent=True) or {}).get("token")
+                s = (request.get_json(silent=True) or {}).get("token")
             else:
-                supplied = request.form.get("token")
-        return supplied == token
+                s = request.form.get("token")
+        return s or ""
+
+    def _eq(a: str, b: str) -> bool:
+        # Constant-time, and byte-based so a non-ASCII supplied token can't raise
+        # TypeError (compare_digest rejects non-ASCII str) — that would 500.
+        try:
+            return _hmac.compare_digest((a or "").encode("utf-8"), (b or "").encode("utf-8"))
+        except Exception:
+            return False
+
+    def authed() -> bool:
+        if control_locked:
+            return False  # open control plane refused in live mode
+        supplied = _supplied_token()
+        return bool(supplied) and _eq(supplied, token)
+
+    def bridge_authed() -> bool:
+        # Accept the dedicated bridge token, or the dashboard token as a fallback
+        # (so a single-machine local run still works without extra config).
+        supplied = _supplied_token()
+        if not supplied:
+            return False
+        if bridge_token and _eq(supplied, bridge_token):
+            return True
+        return not control_locked and _eq(supplied, token)
 
     # ---- API ----
     @app.get("/api/state")
@@ -508,6 +569,38 @@ def create_app(config_path: str | None = None) -> Flask:
                 _os2._exit(0)  # runner loop relaunches with the new code
             _th.Thread(target=_restart, daemon=True).start()
         return jsonify(ok=True, changed=changed, output=out)
+
+    @app.post("/api/control/fund")
+    def api_fund():
+        """Fund the seed HONESTLY. Not a self-payment (paying your own Stripe
+        link is against Stripe's terms and risks the account that collects
+        revenue). Funding = (1) attest the real capital backing the ledger, which
+        sets the balance + baseline, and (2) load that same amount on a prepaid
+        card for when the agent's spend danger-switch is armed. This endpoint does
+        (1); the card is a real-world step the operator does once."""
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        body = request.get_json(silent=True) or {}
+        try:
+            amount = round(float(body.get("amount", 10)), 2)
+        except (TypeError, ValueError):
+            return jsonify(error="bad amount"), 400
+        if not (1 <= amount <= 10000):
+            return jsonify(error="amount must be between $1 and $10,000"), 400
+        led = orch().ledger
+        from ledger import SEED_DESCRIPTION
+        has_activity = any(t.get("description") != SEED_DESCRIPTION
+                           for t in led.transactions(5))
+        if has_activity:
+            led.set_funded_capital(amount)
+            mode = "baseline"
+        else:
+            led.reset_seed(amount)
+            mode = "reset"
+        return jsonify(ok=True, amount=amount, mode=mode, balance=led.balance(),
+                       note=("Seed set. Real spending stays OFF until you arm it; "
+                             "when you do, load a $%.2f prepaid card so the cap is "
+                             "backed by real money." % amount))
 
     @app.post("/api/control/capital")
     def api_capital():
@@ -598,6 +691,19 @@ def create_app(config_path: str | None = None) -> Flask:
         return jsonify(ok=True, written=written, skipped=skipped,
                        restarting=bool(written))
 
+    @app.post("/api/control/mark-posted")
+    def api_mark_posted():
+        """Operator posted an approved Lane-B draft themselves — mark it done so
+        it leaves the queue. Centurion never posts to third-party platforms."""
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        try:
+            aid = int((request.get_json(silent=True) or {}).get("id"))
+        except (TypeError, ValueError):
+            return jsonify(error="bad id"), 400
+        orch().ledger.update_action_status(aid, "posted")
+        return jsonify(ok=True)
+
     @app.post("/api/control/strategy")
     def api_strategy():
         if not authed():
@@ -609,6 +715,44 @@ def create_app(config_path: str | None = None) -> Flask:
         full = ids.get(name, name)
         orch().set_strategy_enabled(full, enabled)
         return jsonify(ok=True)
+
+    # ---- Ollama bridge: the operator's own machine works quality-upgrade jobs.
+    # Token-gated both ways; the wire carries prompts/text only. Inference stays
+    # on operator-owned hardware (the no-third-party-AI invariant).
+    @app.get("/api/bridge/jobs")
+    def api_bridge_jobs():
+        if not bridge_authed():
+            return jsonify(error="unauthorized"), 401
+        import json as _json
+        jobs = orch().ledger.bridge_jobs_by_status("queued", limit=3)
+        return jsonify(jobs=[{
+            "id": j["id"], "kind": j["kind"], "prompt": j["prompt"],
+            "schema": _json.loads(j["schema"] or "{}"),
+        } for j in jobs])
+
+    @app.post("/api/bridge/result")
+    def api_bridge_result():
+        if not bridge_authed():
+            return jsonify(error="unauthorized"), 401
+        import json as _json
+        import bridge as _bridge
+        body = request.get_json(silent=True) or {}
+        try:
+            job_id = int(body.get("id"))
+        except (TypeError, ValueError):
+            return jsonify(error="bad id"), 400
+        result = body.get("result")
+        led = orch().ledger
+        job = led.get_bridge_job(job_id)
+        if not job or job.get("status") != "queued":
+            return jsonify(error="job not found or not queued"), 404
+        if not isinstance(result, dict) or not result:
+            led.set_bridge_status(job_id, "failed", "empty result")
+            return jsonify(ok=False, note="empty result"), 400
+        ok, note = _bridge.apply_result(led, job, result)
+        led.set_bridge_status(job_id, "done" if ok else "failed",
+                              _json.dumps(result)[:4000] if ok else note)
+        return jsonify(ok=ok, note=note)
 
     @app.get("/api/settings")
     def api_settings_get():
@@ -648,22 +792,37 @@ def create_app(config_path: str | None = None) -> Flask:
 
     @app.get("/product/<slug>")
     def product_landing(slug):
+        import html as _html
         p = orch().ledger.get_product(slug)
         if not p:
             return "Product not found", 404
+        e = _html.escape
+        desc = p.get("description") or \
+            "A focused, ready-to-use digital resource. Instant download after purchase."
+        # "What's inside" derived from the deliverable's REAL section headings —
+        # never a hardcoded claim the file might not back up.
+        headings = _product_headings(p)
+        inside = ("<h3>What's inside</h3><ul>" +
+                  "".join(f"<li>{e(h)}</li>" for h in headings) + "</ul>") if headings else ""
         return (
             "<!doctype html><html><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-            f"<title>{p['title']}</title>"
+            f"<title>{e(p['title'])}</title>"
+            f"<meta name='description' content=\"{e(desc[:150])}\">"
             "<style>body{font-family:system-ui,Arial,sans-serif;max-width:620px;margin:0 auto;"
             "padding:40px;line-height:1.6;color:#13202c;text-align:center}"
+            "ul{text-align:left;display:inline-block;margin:14px auto}"
             ".buy{display:inline-block;margin-top:18px;background:#0b6;color:#fff;padding:14px 28px;"
             "border-radius:10px;text-decoration:none;font-weight:700;font-size:18px}"
-            ".p{font-size:34px;font-weight:800;margin:8px 0}</style></head><body>"
-            f"<h1>{p['title']}</h1>"
-            "<p>A focused, ready-to-use digital toolkit. Instant download after purchase.</p>"
+            ".p{font-size:34px;font-weight:800;margin:8px 0}"
+            ".fine{color:#7a8699;font-size:13px;margin-top:16px}</style></head><body>"
+            f"<h1>{e(p['title'])}</h1>"
+            f"<p>{e(desc)}</p>"
+            f"{inside}"
             f"<div class='p'>${p['price']:.0f}</div>"
-            f"<a class='buy' href='{p['pay_url']}'>Buy now</a>"
+            f"<a class='buy' href='{e(p['pay_url'])}'>Buy now</a>"
+            "<p class='fine'>Instant delivery after checkout. If it's not useful "
+            "to you, reply to your receipt within 7 days for a full refund.</p>"
             "</body></html>"
         )
 
@@ -707,13 +866,28 @@ def create_app(config_path: str | None = None) -> Flask:
 
     @app.get("/deliver/<token>")
     def deliver(token):
-        p = orch().ledger.get_product_by_token(token)
+        led = orch().ledger
+        p = led.get_product_by_token(token)
         if not p:
             return "Invalid or expired delivery link.", 404
         f = Path(p["file"])
         if not f.exists():
             return "Product file missing.", 404
-        return f.read_text(encoding="utf-8")
+        import html as _html
+        e = _html.escape
+        doc = f.read_text(encoding="utf-8")
+        # Cross-sell: a buyer is the warmest possible traffic — show them the
+        # rest of the catalog. Links point at the /product/ landing (never at
+        # another buyer's /deliver/<token>).
+        others = [q for q in led.products() if q.get("slug") != p.get("slug")][:3]
+        if others:
+            items = "".join(
+                f"<li><a href='/product/{e(q['slug'])}'>{e(q['title'])}</a> — ${q['price']:.0f}</li>"
+                for q in others)
+            block = ("<hr style='margin-top:36px'><div style='color:#555'>"
+                     "<h3>Also from this store</h3><ul>" + items + "</ul></div>")
+            doc = doc.replace("</body>", block + "</body>") if "</body>" in doc else doc + block
+        return doc
 
     @app.post("/webhook/stripe")
     def stripe_webhook():
@@ -723,7 +897,21 @@ def create_app(config_path: str | None = None) -> Flask:
                                      os.environ.get("STRIPE_WEBHOOK_SECRET"))
         except Exception as e:
             return jsonify(error=str(e)), 400
-        res = handle_event(event, orch().ledger)
+        o = orch()
+        res = handle_event(event, o.ledger)
+        # Feed REAL sale dollars back into the Decision Core. Queue it durably so
+        # the AGENT (single bandit writer) applies it at the next cycle — updating
+        # the web bandit here would be clobbered by the agent's own save. Stripe's
+        # fee is subtracted so the learned reward is net.
+        if res.handled and res.kind == "checkout.session.completed" and res.amount > 0:
+            try:
+                meta = ((event.get("data", {}) or {}).get("object", {}) or {}).get("metadata", {}) or {}
+                strat = meta.get("strategy")
+                if strat:
+                    net = round(res.amount - (res.amount * 0.029 + 0.30), 2)
+                    o.ledger.add_pending_reward(strat, net)
+            except Exception:
+                pass
         # Ping your phone when real money lands.
         if res.handled and res.kind and "refund" not in res.kind and res.amount > 0:
             try:

@@ -66,7 +66,16 @@ class Strategy:
             self.config.get("scoring_weights"))
         funded = context.get("funded_capital", capital)
         lessons = context.get("lessons")
-        opps = self.research.ideate(self.name, capital, n=6, lessons=lessons)
+        # Rotate the idea pool every few cycles and skip topics that already
+        # shipped, so the catalog GROWS instead of regenerating one product.
+        epoch = int(context.get("cycle_count", 0)) // 3
+        opps = self.research.ideate(self.name, capital, n=6, lessons=lessons,
+                                    epoch=epoch)
+        existing = {p.get("title", "").lower() for p in self.ledger.products()}
+        if existing:
+            fresh = [o for o in opps
+                     if not any(t and t in o.brief.lower() for t in existing)]
+            opps = fresh or opps
         ranked = scorer.rank(opps, funded)
         best, best_score = (ranked[0] if ranked else (None, 0.0))
         capital_plan = min(best.est_capital if best else 0.0, capital)

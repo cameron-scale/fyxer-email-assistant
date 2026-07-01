@@ -6,6 +6,7 @@ drafts are never posted here — they are returned for approval.
 """
 from __future__ import annotations
 
+import html
 import re
 import time
 from dataclasses import dataclass, field
@@ -13,8 +14,20 @@ from typing import List, Optional
 
 from . import guard
 
+# Educational-only line for YMYL niches (billing/coding is not professional advice).
+PAGE_DISCLAIMER = ("Educational only — not billing, coding, legal, or financial "
+                   "advice. Verify against current payer policy before acting.")
+
+
+def _e(s) -> str:
+    return html.escape(str(s or ""))
+
 PAGE_TEMPLATES = ["comparison", "roundup", "problem-solution", "glossary", "use-case"]
-LANE_B_KINDS = ["reddit_reply", "video_script", "outreach_pitch"]
+# Warm-channel kinds come FIRST — a short, honest note to the operator's own
+# audience (list / LinkedIn) is the highest-EV first-customer path, far above
+# cold SEO or forum replies. They queue for one-tap approval like everything else.
+LANE_B_KINDS = ["warm_email", "linkedin_post", "reddit_reply",
+                "video_script", "outreach_pitch"]
 
 _SECTIONS = {
     "comparison":      ["The honest comparison", "Where each one fits", "How to choose"],
@@ -89,33 +102,56 @@ class ContentFactory:
             "use-case": f"{k}: a real-world walkthrough",
         }.get(template, k)
 
-    def _render(self, title, meta, parts, slug, product) -> str:
+    @staticmethod
+    def _render(title, meta, parts, slug, product) -> str:
+        # Static so bridge.py can re-render an upgraded page. All model/template
+        # text is HTML-escaped before it enters a page on the dashboard origin.
         secs = "".join(
-            f"<h2>{h}</h2><p>{(b or '').strip().replace(chr(10), '</p><p>')}</p>"
+            f"<h2>{_e(h)}</h2><p>{_e((b or '').strip()).replace(chr(10), '</p><p>')}</p>"
             for h, b in parts)
         prod_title = product.get("title", "the toolkit")
         # Internal link to the product via the click-tracking redirect.
-        cta = (f"<div class='cta'><p>Built a focused toolkit for this: "
-               f"<a href='/go/{slug}'>{prod_title}</a>.</p></div>")
+        cta = (f"<div class='cta'><p>Built a focused resource for this: "
+               f"<a href='/go/{_e(slug)}'>{_e(prod_title)}</a>.</p></div>")
         schema = (
             '{"@context":"https://schema.org","@type":"Article",'
             f'"headline":{_json(title)},"description":{_json(meta)}}}')
         return (
             "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-            f"<title>{title}</title><meta name='description' content=\"{meta}\">"
-            f"<link rel='canonical' href='/c/{slug}'>"
+            f"<title>{_e(title)}</title><meta name='description' content=\"{_e(meta)}\">"
+            f"<link rel='canonical' href='/c/{_e(slug)}'>"
             f"<script type='application/ld+json'>{schema}</script>"
             "<style>body{font-family:system-ui,Arial,sans-serif;max-width:740px;margin:0 auto;"
             "padding:28px;line-height:1.6;color:#15202b}h1{font-size:30px}h2{margin-top:26px;color:#0b6}"
             ".cta{margin-top:30px;padding:16px;background:#f3f7f5;border-radius:10px}"
+            ".disc{margin-top:24px;color:#8a929b;font-size:12px}"
             "a{color:#0a7}</style></head><body>"
-            f"<h1>{title}</h1>{secs}{cta}</body></html>")
+            f"<h1>{_e(title)}</h1>{secs}{cta}"
+            f"<p class='disc'>{_e(PAGE_DISCLAIMER)}</p></body></html>")
 
     # --- Lane B (draft only, never posted here) ---
     def lane_b_draft(self, kind: str, cluster_keyword: str, product: dict) -> dict:
         prod = product.get("title", "the toolkit")
-        if kind == "reddit_reply":
+        landing = f"/product/{product.get('slug', '')}"
+        if kind == "warm_email":
+            platform = "Warm email to your own list/clients (you send it)"
+            draft = self._gen(
+                f"Write a short, plain, honest email from a medical-billing service "
+                f"owner to their existing clients/contacts. Say we put together a "
+                f"practical resource on '{cluster_keyword}' — '{prod}' — and share the "
+                f"link once. Helpful and low-key, no hype, no income/results claims, "
+                f"no pressure. 120 words max. End with the link: {landing}")
+            reason = "your warmest audience; you send from your own address"
+        elif kind == "linkedin_post":
+            platform = "LinkedIn post (you post from your account)"
+            draft = self._gen(
+                f"Write a short, useful LinkedIn post for a medical-billing audience "
+                f"about '{cluster_keyword}'. Lead with one concrete tip, then mention "
+                f"we made '{prod}' if they want the full version. No hype, no income "
+                f"claims, no fake stats. 100 words. Include the link: {landing}")
+            reason = "professional reach you already have; one tap to post"
+        elif kind == "reddit_reply":
             platform = "Reddit (relevant subreddit)"
             draft = self._gen(
                 f"Write a genuinely helpful, on-topic reply to someone asking about "
@@ -150,4 +186,7 @@ def _scrub(text: str) -> str:
 
 
 def _json(s: str) -> str:
-    return '"' + (s or "").replace('\\', '').replace('"', "'") + '"'
+    # Neutralize quotes, backslashes, and angle brackets so a title/meta can't
+    # break out of the JSON string or the surrounding <script> block.
+    safe = (s or "").replace('\\', '').replace('"', "'").replace('<', ' ').replace('>', ' ')
+    return '"' + safe + '"'

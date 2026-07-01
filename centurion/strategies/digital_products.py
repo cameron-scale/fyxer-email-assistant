@@ -54,11 +54,15 @@ class DigitalProductsStrategy(Strategy):
                 topic = action.meta.get("topic") or action.description
                 public_url = os.environ.get("CENTURION_PUBLIC_URL") \
                     or os.environ.get("RENDER_EXTERNAL_URL")
+                brand = os.environ.get("CENTURION_BRAND", "") or self.config.get("brand_identity", "")
                 product = storefront.publish_product(
-                    self.ledger, self.assets, stripe, topic, public_url=public_url)
+                    self.ledger, self.assets, stripe, topic,
+                    public_url=public_url, brand=brand)
                 return ExecutionResult(True, cost=0.0, revenue=0.0,
                                        external_ref=product["pay_url"], reversible=True,
                                        detail=f"published '{product['title']}' @ ${product['price']:.0f}")
+            except storefront.NotSellable as e:
+                return ExecutionResult(False, detail=f"held back low-quality product: {e}")
             except Exception as e:
                 self.ledger.set_state("last_stripe_error", str(e)[:300])
                 return ExecutionResult(False, detail=f"product publish failed: {e}")

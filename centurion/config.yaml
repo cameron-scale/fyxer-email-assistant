@@ -43,6 +43,17 @@ cycle_interval_minutes: 45
 heartbeat_interval_minutes: 5
 heartbeat_stale_after_minutes: 20   # watchdog alerts if heartbeat older than this
 
+# --- Market focus ---
+# The audience Centurion aims products, SEO pages, and Lane-B drafts at. Set
+# this to a MARKET DESCRIPTION you can reach (e.g. "medical billing for small
+# practices") — NOT your company name. A warm channel beats any copy tweak.
+# Empty = generic rotation. Overridable via CENTURION_NICHE / dashboard settings.
+niche: ""
+# Your real brand/company name. Publishable text that contains it is routed to
+# human approval and never auto-published, so the agent can't put your name on
+# something you haven't seen. Overridable via CENTURION_BRAND.
+brand_identity: ""
+
 # --- Language Engine ---
 # auto | local | template | stub
 language_provider: auto             # template now; auto-upgrades to local Ollama the moment it's installed
@@ -67,11 +78,11 @@ brand_human_gate: true
 brand_identity: "ScaleMBS"
 sandbox_identity: null    # e.g. a separate storefront/handle to publish under
 
-# Focus beats spread on a $100 bankroll. Cold-start recommendation: concentrate
-# on productized service arbitrage — service marketplaces ARE the distribution
-# (buyers already search there), capital ~0, ticket high enough to clear fees.
-# Set to null to spread across all enabled strategies, or another name to switch.
-focus_strategy: service_arbitrage
+# Focus beats spread on a small bankroll. digital_products is the ONLY strategy
+# with a fully wired LIVE execution path (real product file + real Stripe link +
+# post-payment delivery), so live runs focus there by default. Set to null to
+# spread across all enabled strategies, or another name to switch.
+focus_strategy: digital_products
 
 # --- Strategies (enable/disable individually) ---
 strategies:

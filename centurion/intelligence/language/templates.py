@@ -34,9 +34,19 @@ class TemplateProvider(LanguageProvider):
         return self._field("text", topic, prompt)
 
     def _extract_topic(self, prompt: str) -> str:
-        m = re.search(r"(?:about|for|on)\s+([A-Za-z0-9 ,'-]{3,60})", prompt)
+        # Prefer the LAST "about …" — asset prompts read "… for {strategy}
+        # about {topic}", so a greedy first match on "for" used to grab the
+        # strategy name and every product came out titled the same. Quoted
+        # titles ('…') beat everything when present.
+        q = re.findall(r"[\"']([^\"']{3,80})[\"']", prompt)
+        if q:
+            return q[-1].strip().rstrip(".")
+        m = re.findall(r"\babout\s+([A-Za-z0-9 ,'&-]{3,80})", prompt)
         if m:
-            return m.group(1).strip().rstrip(".")
+            return m[-1].strip().rstrip(".")
+        m = re.findall(r"\b(?:for|on)\s+([A-Za-z0-9 ,'&-]{3,80})", prompt)
+        if m:
+            return m[-1].strip().rstrip(".")
         return " ".join(prompt.split()[:6]) or "your niche"
 
     def _field(self, key: str, topic: str, prompt: str) -> str:
@@ -60,9 +70,22 @@ class TemplateProvider(LanguageProvider):
             return _slug(topic)
         if "cta" in key_l or "call_to_action" in key_l:
             return f"Get the {topic.title()} Toolkit"
-        # generic
-        return (f"{topic.title()}: a concise, useful asset built to sell. "
-                f"(Deterministic template output.)")
+        # generic body text — must read clean to a buyer or a search engine;
+        # never leak provider markers into shipped artifacts.
+        heading = ""
+        hm = re.search(r"titled\s+'([^']{2,80})'", prompt)
+        if hm:
+            heading = hm.group(1)
+        steps = [
+            f"Write down exactly where {topic} costs you time or money today — be specific, one line per issue.",
+            f"Pick the single highest-cost issue and apply the checklist in this section to it first.",
+            f"Set a 30-minute weekly review to keep {topic} from drifting back into chaos.",
+        ]
+        if heading:
+            return (f"{heading} — here is the practical core for {topic}. "
+                    + " ".join(steps))
+        return (f"A practical, no-fluff working guide for {topic}: "
+                + " ".join(steps))
 
     def available(self) -> bool:
         return True

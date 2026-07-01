@@ -47,6 +47,24 @@ class Cluster:
 _INTENT_STRENGTH = {"problem": 0.6, "comparison": 0.85, "alternative": 0.8,
                     "best-for": 0.9, "how-to": 0.5}
 
+# Curated real-world query banks by niche. Hand-picked queries beat title-
+# mangled pseudo-keywords; these are things billers actually search. Copyright-
+# and PHI-safe (process/workflow topics, not code lists). Keyed by niche substring.
+NICHE_SEEDS = {
+    "medical billing": [
+        ("claim denial management checklist", "best-for", 0.86),
+        ("how to appeal a denied insurance claim", "how-to", 0.7),
+        ("timely filing appeal letter template", "how-to", 0.75),
+        ("prior authorization request checklist", "best-for", 0.8),
+        ("reduce AR days in medical billing", "problem", 0.72),
+        ("medical credentialing checklist for new providers", "best-for", 0.82),
+        ("patient statement workflow best practices", "how-to", 0.6),
+        ("front desk insurance eligibility check steps", "how-to", 0.62),
+        ("new client onboarding for billing companies", "best-for", 0.78),
+        ("clean claim submission checklist", "best-for", 0.8),
+    ],
+}
+
 
 class KeywordPlanner:
     def __init__(self, volume_fn=None):
@@ -61,9 +79,19 @@ class KeywordPlanner:
         core = [w for w in words if w not in stop][:4]
         return " ".join(core) or (topic or "this")
 
-    def map(self, topic: str, per_intent: int = 2) -> List[Cluster]:
-        core = self._core(topic)
+    def map(self, topic: str, per_intent: int = 2,
+            niche: str = "") -> List[Cluster]:
         out: List[Cluster] = []
+        # 1) Curated real queries for the niche come first (highest quality).
+        nl = (niche or "").lower()
+        for key, seeds in NICHE_SEEDS.items():
+            if key in nl:
+                for kw, intent, strength in seeds:
+                    diff = 0.25 + (_h(kw) % 45) / 100.0     # curated => easier band
+                    out.append(Cluster(intent, kw, round(diff, 2), round(strength, 2)))
+                break
+        # 2) Template expansion from the product's job-to-be-done (fills breadth).
+        core = self._core(topic)
         for intent in INTENTS:
             tmpls = _TEMPLATES[intent]
             for i in range(min(per_intent, len(tmpls))):

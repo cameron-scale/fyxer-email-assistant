@@ -74,7 +74,8 @@ class StripeClient:
 
     def create_payment_link(self, *, amount: float, product_name: str,
                             idem: Optional[str] = None,
-                            redirect_url: Optional[str] = None) -> PaymentLink:
+                            redirect_url: Optional[str] = None,
+                            metadata: Optional[dict] = None) -> PaymentLink:
         idem = idem or self.idempotency_key("plink", product_name, f"{amount:.2f}")
         if self.mock:
             return PaymentLink(id=f"mock_plink_{idem[:12]}",
@@ -88,6 +89,10 @@ class StripeClient:
             # Deliver the product immediately after payment.
             params["after_completion"] = {
                 "type": "redirect", "redirect": {"url": redirect_url}}
+        if metadata:
+            # Stripe copies payment-link metadata onto each Checkout Session it
+            # creates, so the webhook can classify the payment (sale vs deposit).
+            params["metadata"] = dict(metadata)
         link = self._stripe.PaymentLink.create(idempotency_key=idem, **params)
         return PaymentLink(id=link.id, url=link.url, amount=amount, mock=False)
 

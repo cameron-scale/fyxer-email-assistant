@@ -60,6 +60,8 @@ class Config:
 # config.yaml. Type is coerced from the literal.
 _ENV_OVERRIDES = {
     "CENTURION_DATABASE_PATH": ("database_path", str),
+    "CENTURION_NICHE": ("niche", str),
+    "CENTURION_BRAND": ("brand_identity", str),
     "CENTURION_FUNDED_CAPITAL": ("funded_capital", float),
     "CENTURION_TARGET_CAPITAL": ("target_capital", float),
     "CENTURION_AUTONOMY_LEVEL": ("autonomy_level", str),

@@ -18,6 +18,7 @@ STATE_PREFIX = "setting:"
 
 # Integration fields the dashboard can configure, grouped for display.
 FIELDS = [
+    {"env": "CENTURION_NICHE",       "label": "Market niche (who you can reach)", "secret": False, "group": "Market focus"},
     {"env": "STRIPE_API_KEY",        "label": "Stripe secret key",            "secret": True,  "group": "Stripe (revenue)"},
     {"env": "STRIPE_WEBHOOK_SECRET", "label": "Stripe webhook signing secret","secret": True,  "group": "Stripe (revenue)"},
     {"env": "OLLAMA_HOST",           "label": "Local model host (Ollama URL)","secret": False, "group": "Local model"},

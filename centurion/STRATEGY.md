@@ -1,24 +1,26 @@
-# Centurion strategy — the cold-start plan
+# Centurion strategy — the warm-channel plan
 
-This is the part no architecture can fix: **without a validated edge and a
-distribution channel, a $100 bankroll mostly lands as an honorable shortfall.**
-You confirmed there's no existing audience yet, so this plan is built around that
-reality instead of pretending otherwise.
+This is the part no architecture can fix: **without distribution, a small
+bankroll mostly lands as an honorable shortfall.** The difference now is that you
+DO have a reachable audience — the ScaleMBS medical-billing world — so the plan is
+built to aim one honest product straight at it. See `PLAYBOOK.md` for the tap-by-
+tap operator loop.
 
-## The single bet: one narrow-niche productized service
+## The single bet: honest niche products + your warm channel
 
-Centurion is configured to **focus on `service_arbitrage` only** (`focus_strategy`
-in `config.yaml`). Reasoning:
+Centurion focuses on **`digital_products`** (`focus_strategy` in `config.yaml`) —
+the one strategy with a fully wired live path (real deliverable file + real Stripe
+link + post-payment delivery). Reasoning:
 
-- **Distribution is borrowed, not built.** A service marketplace (Fiverr, Upwork,
-  etc., per their ToS for automated assistance + human oversight) already has
-  buyers searching. That sidesteps the fatal flaw of POD/templates/affiliate
-  with no audience: making something nobody sees. *The marketplace is the engine
-  of demand.*
-- **The fee math clears.** A $75 ticket loses ~$2.50 to Stripe; a $5 product
-  loses ~6% to the fixed fee alone. Higher ticket = fees are noise.
-- **Capital ≈ $0.** The deliverable is AI-assisted work, so the downside is time,
-  not the bankroll. The $100 is reserved for *amplifying* what already converts.
+- **Distribution is yours, not borrowed.** The highest-EV first sale is a
+  **warm-email or LinkedIn draft** (Lane B) to billers you already reach, carrying
+  one quality product link. Centurion drafts it; you approve, copy, send. Cold SEO
+  (Lane A) compounds in the background over weeks — it is not the week-one plan.
+- **The fee math clears.** A $19–$49 ticket loses only ~$0.85–$1.72 to Stripe;
+  two or three sales clear $100. A $5 product loses ~6% to the fixed fee alone, so
+  price for a professional buyer, not a bargain hunter.
+- **Capital ≈ $0 to make.** The deliverable is generated work; the $10 seed is a
+  loss cap, not a production cost. Real spending stays off until you arm it.
 
 ## The sequence (organic-first, de-risked)
 
@@ -49,17 +51,19 @@ in `config.yaml`). Reasoning:
   layer, not only the small local model, so conversion doesn't hinge on weaker
   copy. The local model drafts; templates guarantee a floor.
 
-## When you DO have distribution
+## Using your distribution well
 
-The single highest-leverage change remains pointing Centurion at a real audience
-(a list, a following, an existing client base). The moment one exists, switch
-`focus_strategy` to the offer that fits it and set `sandbox_identity` so it can
-operate autonomously through that channel. Distribution is the edge; this plan is
-the best version of *not having one yet*.
+You have the edge most cold-starts lack: a warm audience. Use it deliberately —
+approve one genuinely useful product, send one honest note, and let the buyers
+(not an algorithm) decide. The bandit then learns from **real Stripe sales**
+(rewards are queued by the webhook and applied by the agent) and makes more of
+what actually sold. Set `CENTURION_BRAND` so your company name can never
+auto-publish, and keep `sandbox_identity` for anything posted under a store name.
 
 ## Honest odds
 
-Higher-ticket service on borrowed distribution is the most defensible cold bet,
-but 10x from $100 is still hard and most honest attempts fall short. The point of
-the discipline above is to make the *downside* small and the *learning* real, so
-a shortfall is cheap and informative rather than a blown bankroll.
+With a real warm channel and an honest $19–$49 product, $10 → $100 is a handful of
+sales, not a miracle — plausible inside a couple of weeks if you actually send the
+drafts. The discipline above keeps the *downside* pinned to the seed and the
+*learning* real, so a shortfall is cheap and informative rather than a blown
+bankroll. The one thing the software can't do is press send for you.

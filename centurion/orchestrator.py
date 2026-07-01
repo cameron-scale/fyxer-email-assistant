@@ -93,7 +93,8 @@ class Orchestrator:
         self.perf_monitor = PerformanceMonitor(self, self.error_log)
 
         self.language = get_provider(self.cfg)
-        self.research = ResearchEngine(self.language, seed=self.seed)
+        self.research = ResearchEngine(self.language, seed=self.seed,
+                                       niche=self.cfg.get("niche") or None)
         self.assets = AssetFactory(self.language)
 
         # Revenue rail. Mock mode (no key) lets dry runs work; a real key makes
@@ -204,6 +205,7 @@ class Orchestrator:
                              balance_before=balance_before, balance_after=balance_before)
 
         report.notes += self.recover()
+        self._apply_real_sale_rewards(report)
 
         if self.risk.is_paused():
             report.notes.append(f"PAUSED ({self.risk.pause_reason()}): operating live "
@@ -252,7 +254,8 @@ class Orchestrator:
             lessons = self.memory.relevant(name, limit=6)
             ev = strat.evaluate(capital, {"scorer": self.scorer,
                                           "funded_capital": funded,
-                                          "lessons": lessons})
+                                          "lessons": lessons,
+                                          "cycle_count": self.cycle_count})
             eval_cache[name] = ev
             if ev.best is None:
                 continue
@@ -430,9 +433,41 @@ class Orchestrator:
                 self.memory.learn_failure(strategy, f"lost {-net:.2f} on {action.description}",
                                           opp_type=opp_type, evidence={"net": net})
 
+    def _apply_real_sale_rewards(self, report: CycleReport) -> None:
+        """Drain real Stripe-sale rewards queued by the webhook and teach the
+        bandit + calibration from actual dollars. Single writer = this loop, so
+        the persisted bandit is never clobbered."""
+        try:
+            rewards = self.ledger.drain_pending_rewards()
+        except Exception:
+            return
+        applied = 0
+        for r in rewards:
+            strat = r.get("strategy")
+            net = float(r.get("net", 0.0))
+            if not strat:
+                continue
+            self.bandit.update(strat, net)
+            try:
+                self.calibration.record(strat, net, net, float(r.get("cost", 0.0)))
+            except Exception:
+                pass
+            self.memory.learn_success(strat, f"real sale net {net:.2f}",
+                                      evidence={"net": net})
+            applied += 1
+        if applied:
+            self._save_bandit()
+            report.notes.append(f"learned from {applied} real sale(s)")
+
     def _operate_live_assets(self, rng: random.Random, report: CycleReport) -> None:
         """When paused or out of capital: existing assets can still earn. In sim
-        this trickles small, zero-cost revenue from prior builds."""
+        this trickles small, zero-cost revenue from prior builds. NEVER in live
+        mode: real revenue only ever enters via the Stripe webhook — a simulated
+        'passive sale' on a real ledger would be fabricated income."""
+        if not self._sim:
+            report.notes.append("live mode: passive revenue arrives only via "
+                                "real Stripe events; nothing to simulate.")
+            return
         executed = self.ledger.actions_by_status("executed")
         if not executed:
             return
