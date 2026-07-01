@@ -39,7 +39,7 @@ max_spend_per_day: 40.0
 anomaly_error_threshold: 3
 
 # --- Orchestrator cadence ---
-cycle_interval_minutes: 45
+cycle_interval_minutes: 10   # responsive; Lane A page publishing is capped/day separately
 heartbeat_interval_minutes: 5
 heartbeat_stale_after_minutes: 20   # watchdog alerts if heartbeat older than this
 

@@ -167,6 +167,13 @@ export default function CenturionDashboard() {
     catch (e) { window.prompt("Copy this:", text); }
   };
   const markPosted = (id) => act(() => control("mark-posted", { id }));
+  const runNow = () => act(async () => {
+    const r = await control("run-cycle");
+    const msg = r.lastError
+      ? `Cycle ${r.cycle} ran. ⚠ Publish error: ${r.lastError}`
+      : `Cycle ${r.cycle}: ${r.executed} executed, ${r.products} product(s) live.`;
+    window.alert(msg);
+  });
   const resetLedger = () => {
     if (!window.confirm("Wipe TEST data (fabricated balances, old test products) and "
       + "re-seed to $10? This refuses if any real Stripe sale exists.")) return;
@@ -346,6 +353,11 @@ export default function CenturionDashboard() {
               className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"
               style={{ background: T.raised, border: `1px solid ${T.border}`, color: T.muted }}>
               $ Fund
+            </button>
+            <button onClick={runNow} disabled={busy} title="Run one decision cycle now (publish a product + draft Lane B)"
+              className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"
+              style={{ background: T.cyan, border: `1px solid ${T.cyan}`, color: T.bg }}>
+              ▶ Run now
             </button>
             <button onClick={resetLedger} disabled={busy} title="Wipe test data & re-seed (refuses if real sales exist)"
               className="text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg"

@@ -20,7 +20,8 @@ from . import guard
 
 class GrowthEngine:
     def __init__(self, ledger, language, bandit, approvals, alerter=None,
-                 max_pages_per_cycle: int = 2, max_drafts_per_cycle: int = 2):
+                 max_pages_per_cycle: int = 2, max_drafts_per_cycle: int = 2,
+                 max_pages_per_day: int = 3):
         self.ledger = ledger
         self.planner = KeywordPlanner()
         self.factory = ContentFactory(language)
@@ -29,6 +30,15 @@ class GrowthEngine:
         self.alerter = alerter
         self.max_pages = max_pages_per_cycle
         self.max_drafts = max_drafts_per_cycle
+        # Decouple SEO-page volume from cycle frequency: a hard daily cap keeps
+        # publishing well below anything Google would read as scaled-content
+        # abuse, no matter how often the agent cycles.
+        self.max_pages_per_day = max_pages_per_day
+
+    def _pages_last_24h(self) -> int:
+        cutoff = time.time() - 86400
+        return sum(1 for p in self.ledger.content_pages()
+                   if float(p.get("created", 0) or 0) >= cutoff)
 
     def run(self, products: List[dict], paused: bool = False) -> List[dict]:
         """Returns structured records. If paused/heartbeat-missed, Lane A stops
@@ -49,11 +59,13 @@ class GrowthEngine:
         clusters = self.planner.map(product.get("title", "this"), niche=niche)
         existing_text = [p.get("title", "") + " " + p.get("meta", "") for p in pages]
 
-        # ---- Lane A: publish SEO pages (only when active) ----
-        if not paused:
+        # ---- Lane A: publish SEO pages (only when active, under the daily cap) ----
+        day_budget = max(0, self.max_pages_per_day - self._pages_last_24h())
+        if not paused and day_budget > 0:
             published = 0
-            for cluster in clusters[: max(1, self.max_pages) * 3]:
-                if published >= self.max_pages:
+            cap = min(self.max_pages, day_budget)
+            for cluster in clusters[: max(1, cap) * 3]:
+                if published >= cap:
                     break
                 template = self.bandit.select([f"tpl:{t}" for t in PAGE_TEMPLATES]).split(":", 1)[1]
                 page = self.factory.page(cluster.keyword, template, product)

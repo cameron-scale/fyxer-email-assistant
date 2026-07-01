@@ -336,6 +336,9 @@ def build_state(o: Orchestrator) -> dict:
         "blocks": len(led.actions_by_status("rejected")),
         "calibration": o.calibration.stats().verdict,
         "stripe": _stripe_diag(),
+        # Last product-publish error (e.g. a Stripe key that can't create links),
+        # so a silent publish failure is visible instead of just "0 products".
+        "lastError": (led.get_state("last_stripe_error") or "")[:200],
     }
 
     return {
@@ -601,6 +604,27 @@ def create_app(config_path: str | None = None) -> Flask:
                        note=("Seed set. Real spending stays OFF until you arm it; "
                              "when you do, load a $%.2f prepaid card so the cap is "
                              "backed by real money." % amount))
+
+    @app.post("/api/control/run-cycle")
+    def api_run_cycle():
+        """Run ONE decision cycle right now (instead of waiting for the timer) so
+        the operator immediately sees products + Lane B drafts. Runs in the same
+        live/sim mode as the background agent."""
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        o = orch()
+        o.sim = os.environ.get("CENTURION_LIVE_REVENUE") != "1"
+        try:
+            report = o.run_cycle()
+        except Exception as e:
+            return jsonify(ok=False, error=str(e)[:300]), 500
+        return jsonify(ok=True, cycle=report.cycle,
+                       executed=report.actions_executed,
+                       queued=report.actions_queued,
+                       rejected=report.actions_rejected,
+                       products=len(o.ledger.products()),
+                       notes=report.notes[-6:],
+                       lastError=(o.ledger.get_state("last_stripe_error") or "")[:200])
 
     @app.post("/api/control/reset-ledger")
     def api_reset_ledger():
