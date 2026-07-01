@@ -157,6 +157,29 @@ class Ledger:
         with self._tx() as conn:
             self._set_state(conn, "funded_capital", str(float(amount)))
 
+    def hard_reset(self, amount: float) -> float:
+        """Wipe ALL transactions + derived state and re-seed to `amount`. For
+        clearing TEST data (e.g. fabricated balances from an earlier bug) before
+        real money flows. Deliberately unconditional — the caller is token-gated
+        and must confirm. Do NOT use once real sales exist."""
+        with self._tx() as conn:
+            conn.execute("DELETE FROM transactions")
+            conn.execute("DELETE FROM opportunities")
+            conn.execute("DELETE FROM actions")
+            conn.execute("DELETE FROM bridge_jobs")
+            # Clear derived caches so products/pages/bandit/rewards start clean.
+            for k in ("payment_links", "content_pages", "growth_records",
+                      "growth_draft_n", "pending_rewards", "bandit",
+                      "products", "compute_spent", "cycle_count"):
+                conn.execute("DELETE FROM state WHERE key=?", (k,))
+            conn.execute(
+                "INSERT INTO transactions (ts, strategy, type, amount, balance_after, "
+                "description, reversible, external_ref) VALUES (?,?,?,?,?,?,?,?)",
+                (time.time(), None, "credit", float(amount), float(amount),
+                 SEED_DESCRIPTION, 0, None))
+            self._set_state(conn, "funded_capital", str(float(amount)))
+        return self.balance()
+
     def reset_seed(self, amount: float) -> float:
         """Reset a fresh ledger to a new seed amount. Only allowed when there has
         been no activity beyond the initial 'seed capital' credit (no revenue,

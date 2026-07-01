@@ -602,6 +602,28 @@ def create_app(config_path: str | None = None) -> Flask:
                              "when you do, load a $%.2f prepaid card so the cap is "
                              "backed by real money." % amount))
 
+    @app.post("/api/control/reset-ledger")
+    def api_reset_ledger():
+        """Wipe TEST data (fabricated balances, old products) and re-seed. Guarded
+        by the token AND an explicit confirm flag. Refuses if any REAL Stripe
+        sale exists, so it can't erase actual revenue."""
+        if not authed():
+            return jsonify(error="unauthorized"), 401
+        body = request.get_json(silent=True) or {}
+        if not body.get("confirm"):
+            return jsonify(error="confirm required"), 400
+        try:
+            amount = round(float(body.get("amount", 10)), 2)
+        except (TypeError, ValueError):
+            return jsonify(error="bad amount"), 400
+        led = orch().ledger
+        real_sales = [t for t in led.transactions(2000)
+                      if (t.get("external_ref") or "").startswith("pay:")]
+        if real_sales:
+            return jsonify(error="refusing: real Stripe sales exist on this ledger"), 409
+        bal = led.hard_reset(amount)
+        return jsonify(ok=True, balance=bal, amount=amount)
+
     @app.post("/api/control/capital")
     def api_capital():
         """Set the funded/seed capital to any amount. On a fresh ledger (no
