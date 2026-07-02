@@ -3,7 +3,7 @@
 
 import React from 'react';
 import {
-  View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, TextInput,
+  View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView,
   KeyboardAvoidingView, Platform, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,8 +20,11 @@ const TONES = [
 ];
 
 export default function SettingsScreen({ navigate, goBack }) {
-  const { prefs, setPrefs, vips, toggleVip, accounts } = useStore();
+  const { prefs, setPrefs, vips, toggleVip, accounts, mailAccounts, activeAccountId, folderMeta } = useStore();
   const connected = ['gmail', 'outlook'].filter((a) => accounts[a]);
+  const activeAccount = (mailAccounts || []).find((a) => a.id === activeAccountId) || (mailAccounts || [])[0];
+  const profileName = prefs?.sig?.name || activeAccount?.name || folderMeta?.displayName || null;
+  const profileEmail = prefs?.sig?.email || activeAccount?.email || folderMeta?.email || null;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -39,8 +42,8 @@ export default function SettingsScreen({ navigate, goBack }) {
         <View style={styles.profileCard}>
           <ProfileAvatar size={60} />
           <View>
-            <Text style={styles.profileName}>Cameron Gallup</Text>
-            <Text style={styles.profileEmail}>cameron@scalembs.com</Text>
+            <Text style={styles.profileName}>{profileName || 'Your account'}</Text>
+            {profileEmail ? <Text style={styles.profileEmail}>{profileEmail}</Text> : null}
           </View>
         </View>
 
@@ -93,25 +96,6 @@ export default function SettingsScreen({ navigate, goBack }) {
           Archive and you can move it back anytime. Turn this off to keep everything in your inbox.
         </Text>
 
-        {/* Backend server */}
-        <Text style={styles.sectionLabel}>Backend server URL</Text>
-        <Text style={styles.help}>
-          Paste your deployed server's address (e.g. https://brisk.onrender.com) to connect
-          Outlook and turn on AI summaries. See server/README.md.
-        </Text>
-        <View style={styles.group}>
-          <TextInput
-            style={styles.input}
-            value={prefs.serverUrl}
-            onChangeText={(t) => setPrefs({ serverUrl: t.trim() })}
-            placeholder="https://your-server.onrender.com"
-            placeholderTextColor={colors.ink4}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-          />
-        </View>
-
         {/* Default tone */}
         <Text style={styles.sectionLabel}>Default reply tone</Text>
         <View style={styles.chips}>
@@ -162,8 +146,9 @@ export default function SettingsScreen({ navigate, goBack }) {
         <View style={styles.privacy}>
           <Ionicons name="lock-closed" size={14} color="#2E7D32" />
           <Text style={styles.privacyText}>
-            Scale Mail sorts everything on your device and only ever requests read access. Your VIPs,
-            tone and signature stay private on this phone.
+            Priority scoring runs on your device. To read, send and summarize mail, Scale Mail
+            requests read & send access and processes messages on our server and Anthropic's AI —
+            never for ads. Your VIPs, tone and signature stay on this phone.
           </Text>
         </View>
       </ScrollView>
@@ -196,7 +181,6 @@ const styles = StyleSheet.create({
   },
   help: { fontSize: 13, color: colors.ink3, marginBottom: 10, marginTop: -2, lineHeight: 18 },
   group: { backgroundColor: colors.surface2, borderRadius: 14, overflow: 'hidden' },
-  input: { paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: colors.ink },
   chips: { flexDirection: 'row', gap: 8 },
   chip: { backgroundColor: colors.surface2, borderRadius: radius.pill, paddingVertical: 9, paddingHorizontal: 16 },
   chipActive: { backgroundColor: colors.blueLight },

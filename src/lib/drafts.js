@@ -60,10 +60,12 @@ const BODIES = {
 // Returns an array of { label, text } suggestions, best first.
 export function suggestReplies(email, opts = {}) {
   const tone = TONE[opts.tone] ? opts.tone : 'professional';
-  const signature = opts.signature || 'Cameron';
+  const signature = (opts.signature || '').trim();
   const t = TONE[tone];
   const name = firstName(email.priority?.senderName || '');
-  const make = (intent) => `${t.hi(name)}\n\n${BODIES[intent][tone]}${t.sign(signature)}`;
+  // Only append a sign-off when the user actually has a signature — otherwise
+  // omit the whole block (no dangling "Best regards," with an empty name).
+  const make = (intent) => `${t.hi(name)}\n\n${BODIES[intent][tone]}${signature ? t.sign(signature) : ''}`;
 
   const text = `${email.subject} ${email.body || ''}`.toLowerCase();
   const wantsMeeting = /(meeting|call|schedule|catch up|chat|sync)/.test(text);

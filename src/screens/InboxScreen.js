@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SectionList, Pressable, RefreshControl, TextInput, ScrollView, ActivityIndicator,
+  View, Text, StyleSheet, SectionList, Pressable, RefreshControl, TextInput, ScrollView, ActivityIndicator, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,8 +39,13 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
     emails, counts, loading, refresh, snooze, archive, accounts, error, sortBy, setSortBy,
     searchEmails, searching: searchBusy, runSearch, clearSearch, chatAnswer, askMailQuestion,
     mailboxUnread, syncingAll, prefs, archivingSoon, archivingSoonCount,
+    mailAccounts, activeAccountId, folderMeta,
   } = useStore();
   const connected = accounts.outlook || accounts.gmail || accounts.icloud;
+  // Header label derived from the active mailbox — never a hardcoded personal name.
+  const activeAccount = (mailAccounts || []).find((a) => a.id === activeAccountId);
+  const inboxLabel = activeAccount?.name || activeAccount?.email
+    || folderMeta?.displayName || folderMeta?.email || 'Your Inbox';
   const [filter, setFilter] = useState(params?.filter || 'all');
   // A smart-folder tab opens the inbox pre-filtered; the plain Inbox tab clears it.
   useEffect(() => { setFilter(params?.filter || 'all'); }, [params?.filter]);
@@ -173,11 +178,13 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
   // "Keep an eye on" — watched conversations with NEW activity (today, or unread)
   // float to their own pinned section at the very top, regardless of timestamp.
   const watchingOn = !starred && !usingSearch && filter === 'all';
+  // Watched conversations float up from the WHOLE list, even if they'd sort below
+  // the first page — then the date sections fill from the sliced remainder.
   const watchedActive = watchingOn
-    ? visible.filter((e) => e.watched && (dayBucket(e.date) === 'Today' || e.read === false))
+    ? threaded.filter((e) => e.watched && (dayBucket(e.date) === 'Today' || e.read === false))
     : [];
   const watchedIds = new Set(watchedActive.map((e) => e.id));
-  const rest = watchedActive.length ? visible.filter((e) => !watchedIds.has(e.id)) : visible;
+  const rest = (watchedActive.length ? threaded.filter((e) => !watchedIds.has(e.id)) : threaded).slice(0, visibleCount);
 
   // Group the remainder into Today / Last 7 days / Earlier.
   const grouped = {};
@@ -233,7 +240,7 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
                   </Pressable>
                 )}
                 <View>
-                <Text style={styles.eyebrow}>{starred ? 'Mailbox' : (syncingAll ? 'Syncing all mail…' : "Cameron's Inbox")}</Text>
+                <Text style={styles.eyebrow}>{starred ? 'Mailbox' : (syncingAll ? 'Syncing all mail…' : inboxLabel)}</Text>
                 <View ref={wordmarkRef} collapsable={false} style={styles.logoRow}>
                   <Text style={styles.logoScale}>Scale</Text>
                   <Text style={styles.logoMail}>Mail</Text>
@@ -471,8 +478,9 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
         </>
       )}
 
-      {/* Classification sheet — teach ScaleMail how to treat the selected sender(s). */}
-      {classifyOpen && (
+      {/* Classification sheet — teach ScaleMail how to treat the selected sender(s).
+          Rendered in a Modal so it floats above the tab bar (sibling in App.js). */}
+      <Modal visible={classifyOpen} transparent animationType="fade" onRequestClose={() => setClassifyOpen(false)}>
         <View style={styles.classifyWrap}>
           <Pressable style={styles.classifyBackdrop} onPress={() => setClassifyOpen(false)} />
           <View style={styles.classifySheet}>
@@ -490,7 +498,7 @@ export default function InboxScreen({ navigate, starred, openSheet, params }) {
             ))}
           </View>
         </View>
-      )}
+      </Modal>
 
       {!!flash && (
         <View style={styles.flashWrap} pointerEvents="none">

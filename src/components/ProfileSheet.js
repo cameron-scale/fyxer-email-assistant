@@ -35,12 +35,13 @@ function Row({ icon, bg, color, title, onPress, right }) {
 }
 
 export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, onOpenDigest, onOpenHealth, onOpenCalendar, onOpenPinned }) {
-  const { vips, prefs, setPrefs, updateAvatar, accounts, startTour, openLearn } = useStore();
-  const [focused, setFocused] = useState(true);
-  const [notifs, setNotifs] = useState(true);
-  const [junk, setJunk] = useState(true);
+  const { vips, prefs, setPrefs, updateAvatar, accounts, startTour, openLearn, mailAccounts, activeAccountId, folderMeta } = useStore();
   const [usage, setUsage] = useState(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+
+  const activeAccount = (mailAccounts || []).find((a) => a.id === activeAccountId) || (mailAccounts || [])[0];
+  const profileName = prefs?.sig?.name || activeAccount?.name || folderMeta?.displayName || null;
+  const profileEmail = prefs?.sig?.email || activeAccount?.email || folderMeta?.email || null;
 
   const pickAvatar = async () => {
     try {
@@ -84,8 +85,8 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, o
           </View>
         </Pressable>
         <View>
-          <Text style={styles.name}>Cameron Gallup</Text>
-          <Text style={styles.email}>cameron@scalembs.com</Text>
+          <Text style={styles.name}>{profileName || 'Your account'}</Text>
+          {profileEmail ? <Text style={styles.email}>{profileEmail}</Text> : null}
           <Text style={styles.avHint}>Tap photo to change · shows when you email people</Text>
         </View>
       </View>
@@ -122,10 +123,10 @@ export default function ProfileSheet({ onClose, onOpenSettings, onOpenConnect, o
 
       <Text style={styles.section}>Preferences</Text>
       <View style={styles.group}>
-        <Row icon="checkmark-circle" bg="#E8F5E9" color="#2E7D32" title="Focused Inbox" right={<Toggle value={focused} onChange={setFocused} />} />
-        <Row icon="notifications" bg="#FFF7E6" color="#B45309" title="Notifications" right={<Toggle value={notifs} onChange={setNotifs} />} />
+        <Row icon="checkmark-circle" bg="#E8F5E9" color="#2E7D32" title="Focused Inbox" right={<Toggle value={prefs.focusedInbox !== false} onChange={(v) => setPrefs({ focusedInbox: v })} />} />
+        <Row icon="notifications" bg="#FFF7E6" color="#B45309" title="Notifications" right={<Toggle value={prefs.notifications !== false} onChange={(v) => setPrefs({ notifications: v })} />} />
         <Row icon="chatbubbles" bg="#EAF1FF" color={colors.blue} title="Group conversations" right={<Toggle value={prefs.groupThreads !== false} onChange={(v) => setPrefs({ groupThreads: v })} />} />
-        <Row icon="shield-checkmark" bg="#FDECEA" color="#C62828" title="Junk Filter" right={<Toggle value={junk} onChange={setJunk} />} />
+        <Row icon="shield-checkmark" bg="#FDECEA" color="#C62828" title="Junk Filter" right={<Toggle value={prefs.junkFilter !== false} onChange={(v) => setPrefs({ junkFilter: v })} />} />
         <Row icon="play-circle" bg="#E8F1FE" color={colors.blue} title="Replay tutorial" onPress={() => go(startTour)} right={chevron} />
       </View>
 

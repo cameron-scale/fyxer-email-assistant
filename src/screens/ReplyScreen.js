@@ -33,7 +33,15 @@ export default function ReplyScreen({ params, goBack }) {
   const email = findEmail(params.id);
   const p = email?.priority;
   const backendReady = isBackendConfigured(prefs.serverUrl);
-  const canSend = backendReady && accounts.outlook && email?.account === 'outlook';
+  // Resolve the reply's account/token/provider the same way send() does below, so
+  // a Gmail- or iCloud-only user can still reply — not just Outlook accounts.
+  const replyAcct = (mailAccounts || []).find((a) => a.id === email?.accountId);
+  const replyToken = replyAcct?.refreshToken || outlookRefresh;
+  const replyProvider = replyAcct?.type || (email?.account === 'gmail' ? 'google' : 'outlook');
+  const canSend = backendReady && (
+    (!!replyAcct && !!replyAcct.refreshToken) ||
+    (accounts.outlook && email?.account === 'outlook') // legacy Outlook-only fallback
+  );
 
   const drafts = useMemo(
     () => (email ? suggestReplies(email, prefs) : []),
@@ -81,13 +89,19 @@ export default function ReplyScreen({ params, goBack }) {
 
   const saveToDrafts = async () => {
     if (!canSend) {
-      Alert.alert('Connect Outlook first', 'Saving to Drafts needs your Outlook account connected.');
+      Alert.alert('Connect an email account first', 'Saving to Drafts needs an email account connected.');
+      return;
+    }
+    // The draft-save backend only writes to the Outlook Drafts folder — never save
+    // a Gmail/iCloud draft with the wrong token; those users send directly for now.
+    if (replyProvider !== 'outlook') {
+      Alert.alert('Send instead', 'Saving to Drafts is only available for Outlook right now — send your reply directly for now.');
       return;
     }
     setSavingDraft(true);
     try {
       await saveDraft(prefs.serverUrl, {
-        refreshToken: outlookRefresh,
+        refreshToken: replyToken,
         toEmail,
         subject,
         html: composeHtml(body, prefs.sig),
@@ -104,17 +118,16 @@ export default function ReplyScreen({ params, goBack }) {
   const send = async () => {
     if (!canSend) {
       Alert.alert(
-        'Connect Outlook to send',
-        'Live sending works once your Outlook account is connected via the backend. Your reply is composed and ready to copy in the meantime.'
+        'Connect an email account to send',
+        'Live sending works once your email account is connected via the backend. Your reply is composed and ready to copy in the meantime.'
       );
       return;
     }
     setSending(true);
     try {
-      const acct = (mailAccounts || []).find((a) => a.id === email.accountId);
       await sendReply(prefs.serverUrl, {
-        refreshToken: acct?.refreshToken || outlookRefresh,
-        provider: acct?.type || (email.account === 'gmail' ? 'google' : 'outlook'),
+        refreshToken: replyToken,
+        provider: replyProvider,
         toEmail,
         subject,
         body: composeText(body, prefs.sig),

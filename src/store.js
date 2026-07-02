@@ -28,7 +28,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: 'Cameron', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, hiddenIds: {}, watched: [], pinnedIds: {}, autoArchive: true, archiveNoticeSeen: false };
+const DEFAULT_PREFS = { tone: 'professional', signature: '', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, hiddenIds: {}, watched: [], pinnedIds: {}, autoArchive: true, archiveNoticeSeen: false };
 
 // Normalize a subject for "same conversation" matching (drop Re:/Fwd:, lowercase).
 const watchSubjectNorm = (s) => String(s || '').toLowerCase()
@@ -194,7 +194,10 @@ export function StoreProvider({ children }) {
               const knownIds = new Set(list.map((a) => a.id));
               if (rt) knownIds.add('legacy');
               const keep = arr.filter((e) => !e.accountId || knownIds.has(e.accountId));
-              if (keep.length) { setRaw(keep); rawRef.current = keep; }
+              // Only seed from cache if the live fetch hasn't already populated raw —
+              // otherwise a fast/warm fetch that landed first would be clobbered by the
+              // stale snapshot (and its newest mail lost until a manual refresh).
+              if (keep.length) setRaw((prev) => (prev && prev.length ? prev : keep));
             }
           }
         } catch (e) { /* no cache yet */ }
@@ -375,14 +378,14 @@ export function StoreProvider({ children }) {
   // --- Actions used by swipes / buttons (each records an undoable "recent action") ---
   const archive = useCallback((id) => {
     setOverride(id, { status: 'archived' });
-    setRecentAction({ id, label: 'Archived' });
+    setRecentAction({ id, label: 'Archived', restore: true });
     persistAction(id, 'archive');
     hideIds([id]);
   }, [setOverride, persistAction, hideIds]);
 
   const markDone = useCallback((id) => {
     setOverride(id, { status: 'done' });
-    setRecentAction({ id, label: 'Marked done' });
+    setRecentAction({ id, label: 'Marked done', restore: true });
     persistAction(id, 'read'); // "done" also marks it read in the mailbox
     hideIds([id]);
   }, [setOverride, persistAction, hideIds]);
@@ -408,7 +411,7 @@ export function StoreProvider({ children }) {
 
   const trashEmail = useCallback((id) => {
     setOverride(id, { status: 'archived' }); // hide from the list
-    setRecentAction({ id, label: 'Deleted' });
+    setRecentAction({ id, label: 'Deleted', restore: true });
     persistAction(id, 'trash');
     hideIds([id]);
   }, [setOverride, persistAction, hideIds]);
@@ -416,7 +419,7 @@ export function StoreProvider({ children }) {
   // Report as junk / spam: move it to the Junk folder and hide it.
   const reportJunk = useCallback((id) => {
     setOverride(id, { status: 'archived' });
-    setRecentAction({ id, label: 'Reported as junk' });
+    setRecentAction({ id, label: 'Reported as junk', restore: true });
     persistAction(id, 'junk');
     hideIds([id]);
   }, [setOverride, persistAction, hideIds]);
@@ -466,19 +469,23 @@ export function StoreProvider({ children }) {
   const lastNightly = () => { const n = new Date(); const b = new Date(n.getFullYear(), n.getMonth(), n.getDate(), 23, 59, 0, 0); if (n.getTime() < b.getTime()) b.setDate(b.getDate() - 1); return b.getTime(); };
 
   // Keep the persistent eligible-id set in sync with what we've seen (stable count).
+  // MUST wait for bootstrap: writing prefs before the saved copy is read back would
+  // race the bootstrap read and clobber all persisted prefs with defaults.
   useEffect(() => {
+    if (!bootstrapped) return;
     const staged = { ...(prefs.archiveStaged || {}) };
     const now = Date.now();
     let changed = false;
     for (const e of archivingSoon) { if (!staged[e.id]) { staged[e.id] = now; changed = true; } }
     for (const id of Object.keys(staged)) { if (archiveKeptSet.has(id) || gone(id)) { delete staged[id]; changed = true; } }
     if (changed) setPrefsState((p) => { const next = { ...p, archiveStaged: staged }; saveToken('prefs', JSON.stringify(next)).catch(() => {}); return next; });
-  }, [archivingSoon, archiveKeptSet, overrides]); // eslint-disable-line
+  }, [bootstrapped, archivingSoon, archiveKeptSet, overrides]); // eslint-disable-line
 
   // Nightly sweep: archive every eligible email at 11:59 PM (catching up on next open).
   // Auto-archive only MOVES mail to the Archive folder — it never deletes — and you
   // can switch it off entirely (prefs.autoArchive). Each sweep is undoable.
   useEffect(() => {
+    if (!bootstrapped) return; // never write prefs before the saved copy is read back
     if (prefs.autoArchive === false) return; // user turned it off → never sweep
     const sweep = () => {
       const boundary = lastNightly();
@@ -518,7 +525,7 @@ export function StoreProvider({ children }) {
     sweep();
     const t = setInterval(sweep, 60 * 1000); // re-check every minute while open
     return () => clearInterval(t);
-  }, [archivingSoon, prefs.archiveLastRun, prefs.autoArchive]); // eslint-disable-line
+  }, [bootstrapped, archivingSoon, prefs.archiveLastRun, prefs.autoArchive]); // eslint-disable-line
 
   // Keeping an email teaches the engine: never archive THIS one (archiveKept), and
   // remember the SENDER so similar mail stops getting auto-archived and ranks up
@@ -598,6 +605,10 @@ export function StoreProvider({ children }) {
       } else if (cur.id != null) {
         setOverride(cur.id, { status: undefined, snoozedUntil: undefined });
         unhideIds([cur.id]);
+        // Archive/trash/junk/done already MOVED the message on the server — undo has
+        // to move it back, or it just vanishes on the next refresh (looks like data
+        // loss). Snooze/mark-unread have no server move, so they don't set `restore`.
+        if (cur.restore) persistAction(cur.id, 'inbox');
       }
       return null;
     });
@@ -992,16 +1003,28 @@ export function StoreProvider({ children }) {
     if (!list || !list.length) { setAccounts((a) => ({ ...a, outlook: false })); setOutlookRefresh(null); try { await clearToken('outlook_refresh'); } catch (e) {} }
   }, [persistAccounts]);
 
-  // Load the Sent or Drafts folder on demand (for those tabs).
+  // Load the Sent or Drafts folder on demand (for those tabs) — across EVERY
+  // connected account and provider, not just Outlook, so Gmail/iCloud users get
+  // their Sent & Drafts too.
   const loadFolder = useCallback(async (name) => {
-    const rt = outlookRefresh;
-    if (!rt) return;
+    const targets = (mailAccounts && mailAccounts.length)
+      ? (activeAccountId === 'all' ? mailAccounts : mailAccounts.filter((a) => a.id === activeAccountId))
+      : (outlookRefresh ? [{ id: 'legacy', type: 'outlook', refreshToken: outlookRefresh }] : []);
+    if (!targets.length) return;
     setFolderLoading(true);
     try {
-      const { emails: fetched } = await fetchInbox(prefs.serverUrl, rt, 50, name);
-      setFolders((f) => ({ ...f, [name]: fetched }));
+      const results = await Promise.all(targets.map(async (acc) => {
+        try {
+          const provider = acc.type || 'outlook';
+          const { emails: fetched } = await fetchInbox(prefs.serverUrl, acc.refreshToken, 50, name, 0, null, provider);
+          return (fetched || []).map((e) => ({ ...e, accountId: acc.id, accountEmail: acc.email }));
+        } catch (e) { return []; }
+      }));
+      const merged = results.flat();
+      setFolders((f) => ({ ...f, [name]: merged }));
+      summarizeBatch(merged);
     } catch (e) { /* leave previous */ } finally { setFolderLoading(false); }
-  }, [outlookRefresh, prefs.serverUrl]);
+  }, [mailAccounts, activeAccountId, outlookRefresh, prefs.serverUrl, summarizeBatch]);
 
   // Whole-mailbox search via Graph (finds old mail the device never loaded).
   const runSearch = useCallback(async (q) => {

@@ -32,6 +32,7 @@ export default function TriageScreen({ navigate, goBack }) {
   const [index, setIndex] = useState(0);
 
   const pan = useRef(new Animated.ValueXY()).current;
+  const flingRef = useRef(null);
   const current = deck[index];
 
   const finish = (direction) => {
@@ -55,6 +56,10 @@ export default function TriageScreen({ navigate, goBack }) {
       finish(direction)
     );
   };
+  // Keep the responder pointed at the CURRENT render's fling closure. The
+  // PanResponder below is created once, so without this it would keep calling
+  // the very first render's fling (acting on deck[0] forever).
+  flingRef.current = fling;
 
   const responder = useRef(
     PanResponder.create({
@@ -63,9 +68,9 @@ export default function TriageScreen({ navigate, goBack }) {
         useNativeDriver: false,
       }),
       onPanResponderRelease: (_, g) => {
-        if (g.dx > SWIPE) fling('right');
-        else if (g.dx < -SWIPE) fling('left');
-        else if (g.dy < -SWIPE) fling('up');
+        if (g.dx > SWIPE) flingRef.current('right');
+        else if (g.dx < -SWIPE) flingRef.current('left');
+        else if (g.dy < -SWIPE) flingRef.current('up');
         else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
       },
     })

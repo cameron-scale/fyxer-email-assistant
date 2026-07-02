@@ -21,11 +21,27 @@ function eventType(subject) {
   return TYPE_COLORS.meeting;
 }
 
+// All-day events are serialized as UTC midnight (e.g. `2026-07-03T00:00:00Z`);
+// parsing that and reading LOCAL fields lands on the prior evening in any
+// negative-UTC (US) offset, filing the event a day early. Detect an all-day
+// start and build a LOCAL midnight from its date portion instead.
+function isAllDay(iso, allDay) {
+  return !!allDay || /^\d{4}-\d{2}-\d{2}(T00:00:00Z?)?$/.test(iso || '');
+}
+function startDate(iso, allDay) {
+  if (!iso) return null;
+  if (isAllDay(iso, allDay)) {
+    const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(iso);
+}
+
 // "Today" / "Tomorrow" / "Wed, Jun 24" — robust against null.
-function dayKey(iso) {
+function dayKey(iso, allDay) {
   if (!iso) return 'Scheduled';
-  const d = new Date(iso);
-  if (isNaN(d)) return 'Scheduled';
+  const d = startDate(iso, allDay);
+  if (!d || isNaN(d)) return 'Scheduled';
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const that = new Date(d); that.setHours(0, 0, 0, 0);
   const diff = Math.round((that - today) / 86400000);
@@ -113,7 +129,7 @@ export default function CalendarScreen({ goBack, navigate }) {
     const order = [];
     events.forEach((e) => {
       if (!e.start) return;
-      const k = dayKey(e.start);
+      const k = dayKey(e.start, e.allDay);
       if (!grouped[k]) { grouped[k] = []; order.push(k); }
       grouped[k].push(e);
     });
@@ -129,8 +145,8 @@ export default function CalendarScreen({ goBack, navigate }) {
     const eventDays = new Set();
     events.forEach((e) => {
       if (!e.start) return;
-      const d = new Date(e.start);
-      if (isNaN(d)) return;
+      const d = startDate(e.start, e.allDay);
+      if (!d || isNaN(d)) return;
       eventDays.add(localDateKey(d));
     });
 
@@ -148,11 +164,11 @@ export default function CalendarScreen({ goBack, navigate }) {
   }, [events]);
 
   const rsvp = async (e, response) => {
-    setBusyId(e.id);
+    setBusyId(`${e._accId}-${e.id}`);
     try {
       await rsvpEvent(prefs.serverUrl, e._token || outlookRefresh, e.id, response, e._provider || 'outlook');
       const mapped = response === 'accept' ? 'accepted' : response === 'decline' ? 'declined' : 'tentativelyAccepted';
-      setEvents((prev) => prev.map((x) => (x.id === e.id ? { ...x, response: mapped } : x)));
+      setEvents((prev) => prev.map((x) => (x.id === e.id && x._accId === e._accId ? { ...x, response: mapped } : x)));
     } catch (err) {
       Alert.alert('Could not RSVP', err.message || 'Please try again.');
     } finally { setBusyId(null); }
@@ -237,7 +253,7 @@ export default function CalendarScreen({ goBack, navigate }) {
                 </Pressable>
               )}
               {!answered && !isOrg && (
-                busyId === item.id ? <ActivityIndicator color={colors.blue} style={{ marginLeft: 8 }} /> : (
+                busyId === `${item._accId}-${item.id}` ? <ActivityIndicator color={colors.blue} style={{ marginLeft: 8 }} /> : (
                   <View style={styles.rsvpRow}>
                     <Pressable style={[styles.rsvp, styles.accept]} onPress={() => rsvp(item, 'accept')}><Text style={styles.acceptText}>Accept</Text></Pressable>
                     <Pressable style={styles.rsvp} onPress={() => rsvp(item, 'tentative')}><Text style={styles.rsvpText}>Maybe</Text></Pressable>
@@ -275,7 +291,7 @@ export default function CalendarScreen({ goBack, navigate }) {
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={(e) => e.id}
+          keyExtractor={(e) => `${e._accId || ''}-${e.id}`}
           contentContainerStyle={styles.list}
           stickySectionHeadersEnabled={false}
           showsVerticalScrollIndicator={false}

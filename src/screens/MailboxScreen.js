@@ -22,12 +22,13 @@ const SECTION_ORDER = ['Today', 'Last 7 days', 'Earlier'];
 
 export default function MailboxScreen({ navigate, route, openSheet }) {
   const c = COPY[route] || COPY.Sent;
-  const { folders, folderLoading, loadFolder, vips, accounts } = useStore();
+  const { folders, folderLoading, loadFolder, vips, accounts, mailAccounts } = useStore();
   const list = folders[c.key] || [];
+  const anyConnected = accounts.outlook || accounts.gmail || accounts.icloud || (mailAccounts && mailAccounts.length > 0);
 
   useEffect(() => {
-    if (accounts.outlook) loadFolder(c.key);
-  }, [c.key, accounts.outlook]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (anyConnected) loadFolder(c.key);
+  }, [c.key, anyConnected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ranked = useMemo(() => prioritize(list, vips), [list, vips]);
   const sections = useMemo(() => {
@@ -71,8 +72,8 @@ export default function MailboxScreen({ navigate, route, openSheet }) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <View style={styles.emptyIcon}><Ionicons name={c.icon} size={28} color={colors.onDarkFaint} /></View>
-            <Text style={styles.emptyTitle}>{accounts.outlook ? c.title : 'Connect your email'}</Text>
-            <Text style={styles.emptySub}>{accounts.outlook ? c.sub : 'Tap the profile icon to connect Outlook.'}</Text>
+            <Text style={styles.emptyTitle}>{anyConnected ? c.title : 'Connect your email'}</Text>
+            <Text style={styles.emptySub}>{anyConnected ? c.sub : 'Tap the profile icon to connect an email account.'}</Text>
           </View>
         }
       />

@@ -122,10 +122,58 @@ export default function DigestScreen({ goBack, navigate, params }) {
   const openMeetings = () => (firstMeeting && firstMeeting.id ? nav('Thread', { id: firstMeeting.id }) : nav('Inbox', { filter: 'meetings' }));
   const openNewsletters = () => nav('Inbox', { filter: 'newsletter' });
 
-  // Names to weave into the narrative.
-  const actionName = (firstAction && firstAction.priority && firstAction.priority.senderName) || 'Dana';
-  const securityName = (securityEmail && securityEmail.priority && securityEmail.priority.senderName) || 'Microsoft';
-  const meetingName = (firstMeeting && firstMeeting.priority && firstMeeting.priority.senderName) || 'Priya';
+  // Names to weave into the narrative — only ever a REAL sender name, or null.
+  // We never invent a placeholder; a paragraph simply drops the name clause when
+  // there isn't a real one.
+  const actionName = (firstAction && firstAction.priority && firstAction.priority.senderName) || null;
+  const securityName = (securityEmail && securityEmail.priority && securityEmail.priority.senderName) || null;
+  const meetingName = (firstMeeting && firstMeeting.priority && firstMeeting.priority.senderName) || null;
+
+  // Build the AI-summary paragraphs from REAL data only. Each paragraph is added
+  // solely when it has something true to say, so the digest never fabricates a
+  // count, a name, or an alert that isn't in the user's actual mailbox.
+  const summaryParagraphs = [];
+
+  if (actionCount > 0) {
+    summaryParagraphs.push(
+      <SummaryParagraph key="action" count={actionCount} onPress={openAction}>
+        You have <Hi c={ACCENT.blue}>{actionCount} action item{actionCount === 1 ? '' : 's'}</Hi> waiting{actionName ? (
+          <>{' '}— the most pressing is a request from <Hi c={ACCENT.blue}>{actionName}</Hi> that needs a reply before the day gets away from you</>
+        ) : null}. Nothing here is on fire, but a few quick responses would clear the deck.
+      </SummaryParagraph>,
+    );
+  }
+
+  if (securityEmail) {
+    summaryParagraphs.push(
+      <SummaryParagraph key="security" count={1} onPress={openSecurity}>
+        Heads up: {securityName ? (<><Hi c={ACCENT.amber}>{securityName}</Hi> flagged</>) : 'there is'} a{' '}
+        <Hi c={ACCENT.amber}>security sign-in alert</Hi> on your account. It looks routine, but it is worth a
+        ten-second glance to confirm it was you.
+      </SummaryParagraph>,
+    );
+  }
+
+  if (meetingCount > 0) {
+    summaryParagraphs.push(
+      <SummaryParagraph key="meetings" count={meetingCount} onPress={openMeetings}>
+        On the calendar front, there {meetingCount === 1 ? 'is' : 'are'}{' '}
+        <Hi c={ACCENT.indigo}>{meetingCount} meeting{meetingCount === 1 ? '' : 's'}</Hi> to review{meetingName ? (
+          <>{' '}— the most recent is from <Hi c={ACCENT.indigo}>{meetingName}</Hi></>
+        ) : null}.
+      </SummaryParagraph>,
+    );
+  }
+
+  if (newsletterCount > 0) {
+    summaryParagraphs.push(
+      <SummaryParagraph key="newsletters" count={newsletterCount} onPress={openNewsletters}>
+        Everything else is low-stakes: <Hi c={ACCENT.teal}>{newsletterCount} newsletter{newsletterCount === 1 ? '' : 's'}</Hi> and
+        digests piled up overnight. None need a reply — sweep them when you have a quiet minute, or just{' '}
+        <Hi c={ACCENT.teal}>archive the lot</Hi>.
+      </SummaryParagraph>,
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -156,52 +204,20 @@ export default function DigestScreen({ goBack, navigate, params }) {
             <Text style={styles.aiLabel}>AI Summary</Text>
           </View>
 
-          {/* Paragraph 1 — action items */}
-          <SummaryParagraph
-            count={actionCount}
-            onPress={openAction}
-          >
-            You have <Hi c={ACCENT.blue}>{actionCount} action items</Hi> waiting — the most pressing is a request
-            from <Hi c={ACCENT.blue}>{actionName}</Hi> that needs a reply before the day gets away from you. Nothing
-            here is on fire, but a few quick responses would clear the deck.
-          </SummaryParagraph>
-
-          <View style={styles.divider} />
-
-          {/* Paragraph 2 — security alert */}
-          <SummaryParagraph
-            count={securityEmail ? 1 : 1}
-            onPress={openSecurity}
-          >
-            Heads up: <Hi c={ACCENT.amber}>{securityName}</Hi> flagged a{' '}
-            <Hi c={ACCENT.amber}>security sign-in alert</Hi> on your account. It looks routine, but it is worth a
-            ten-second glance to confirm it was you.
-          </SummaryParagraph>
-
-          <View style={styles.divider} />
-
-          {/* Paragraph 3 — meeting recaps */}
-          <SummaryParagraph
-            count={meetingCount || 2}
-            onPress={openMeetings}
-          >
-            On the calendar front, there {meetingCount === 1 ? 'is' : 'are'}{' '}
-            <Hi c={ACCENT.indigo}>{meetingCount || 2} meeting{(meetingCount || 2) === 1 ? '' : 's'}</Hi> with notes
-            to review — <Hi c={ACCENT.indigo}>{meetingName}</Hi> shared a recap with a couple of follow-ups assigned
-            to you.
-          </SummaryParagraph>
-
-          <View style={styles.divider} />
-
-          {/* Paragraph 4 — newsletters */}
-          <SummaryParagraph
-            count={newsletterCount}
-            onPress={openNewsletters}
-          >
-            Everything else is low-stakes: <Hi c={ACCENT.teal}>{newsletterCount} newsletters</Hi> and digests piled
-            up overnight. None need a reply — sweep them when you have a quiet minute, or just{' '}
-            <Hi c={ACCENT.teal}>archive the lot</Hi>.
-          </SummaryParagraph>
+          {/* Paragraphs are built from real mailbox data only — each one is present
+              solely when it has something true to report (see summaryParagraphs). */}
+          {summaryParagraphs.length ? (
+            summaryParagraphs.map((para, i) => (
+              <React.Fragment key={para.key}>
+                {i > 0 ? <View style={styles.divider} /> : null}
+                {para}
+              </React.Fragment>
+            ))
+          ) : (
+            <Text style={styles.narrative}>
+              Your inbox is quiet right now — nothing needs your attention. Enjoy the calm.
+            </Text>
+          )}
         </View>
 
         {/* Needs Your Attention */}
@@ -281,7 +297,9 @@ export default function DigestScreen({ goBack, navigate, params }) {
             </Text>
             <Text style={styles.securitySub} numberOfLines={2}>
               {securityEmail
-                ? `${securityName} reported an unusual sign-in. Tap to review and confirm it was you.`
+                ? (securityName
+                    ? `${securityName} reported an unusual sign-in. Tap to review and confirm it was you.`
+                    : 'An unusual sign-in was reported. Tap to review and confirm it was you.')
                 : 'Your accounts look healthy. Tap to review recent sign-in activity.'}
             </Text>
           </View>

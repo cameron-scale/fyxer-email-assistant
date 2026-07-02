@@ -3,7 +3,7 @@
 // categories, reply tone, VIPs, insights, preferences, AI usage and server URL.
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, Alert, ActivityIndicator, TextInput, Modal, Linking,
+  View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView, Alert, ActivityIndicator, TextInput, Modal, Linking, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -112,7 +112,7 @@ export default function ConnectScreen({ goBack, navigate }) {
     if (!backendReady) {
       Alert.alert(
         'Add your server first',
-        'To connect Outlook, paste your backend URL in Settings → "Backend server URL". See server/README.md for the 15-minute setup.',
+        'To connect Outlook, paste your backend URL in Settings → "Backend server URL".',
         [{ text: 'Open Settings', onPress: () => navigate && navigate('Settings') }, { text: 'OK' }]
       );
       return;
@@ -155,8 +155,10 @@ export default function ConnectScreen({ goBack, navigate }) {
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Text style={styles.h1}>Accounts & Settings</Text>
         <Text style={styles.sub}>
-          Manage your mailboxes and everything ScaleMail does. We only ever ask to READ your
-          mail so it can sort it — your password is never seen by this app.
+          Manage your mailboxes and everything Scale Mail does. Scale Mail requests permission to
+          read and send mail on your behalf. Your mail is processed by our server and by Anthropic's
+          AI to generate summaries and draft replies — it's never sold or used for ads. For iCloud,
+          your app-specific password is sent securely to our server to connect over IMAP.
         </Text>
 
         <Section title="Connect a mailbox" />
@@ -261,14 +263,14 @@ export default function ConnectScreen({ goBack, navigate }) {
 
         <View style={styles.privacy}>
           <Ionicons name="lock-closed" size={14} color="#34C759" />
-          <Text style={styles.privacyText}>ScaleMail sorts everything for you and only ever requests read/send access. Your VIPs, tone and signature stay private on this phone.</Text>
+          <Text style={styles.privacyText}>Scale Mail requests read and send access, and your mail is processed by our server and Anthropic's AI for summaries and drafts. Priority scoring runs on this phone, and your VIPs, tone and signature stay private here.</Text>
         </View>
         <View style={{ height: 140 }} />
       </ScrollView>
 
       {/* iCloud connect form (IMAP + app-specific password) */}
       <Modal visible={icloudOpen} transparent animationType="slide" onRequestClose={() => setIcloudOpen(false)}>
-        <View style={styles.modalWrap}>
+        <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalCard}>
             <View style={styles.modalHead}>
               <Text style={styles.modalTitle}>Connect iCloud Mail</Text>
@@ -288,7 +290,7 @@ export default function ConnectScreen({ goBack, navigate }) {
               {busy === 'icloud' ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnText}>Connect</Text>}
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

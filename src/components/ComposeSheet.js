@@ -134,7 +134,9 @@ export default function ComposeSheet({ onClose }) {
           multiline scrollEnabled={false}
           onContentSizeChange={(e) => setBodyHeight(e.nativeEvent.contentSize.height)}
         />
-        <Text style={styles.sig}>{`\n${prefs.signature || 'Cameron'}`}</Text>
+        {!!(prefs.signature && prefs.signature.trim()) && (
+          <Text style={styles.sig}>{`\n${prefs.signature}`}</Text>
+        )}
 
         {isBackendConfigured(prefs.serverUrl) && (
           <Pressable style={styles.voiceBtn} onPress={polish} disabled={polishing}>

@@ -123,14 +123,24 @@ export default function ThreadScreen({ goBack, navigate, params }) {
     if (params.id && markRead) markRead(params.id);
   }, [params.id]); // eslint-disable-line
 
+  // When the thread changes (e.g. advance() reuses this same screen instance for
+  // the next email), drop the previous conversation's per-message state so the old
+  // messages/RSVP can't render under the new email's subject.
+  useEffect(() => {
+    setMessages(null);
+    setRsvpDone(null);
+  }, [params.id]);
+
   useEffect(() => {
     if (!seed?.threadKey || !token) { setLoading(false); return; }
+    let cancelled = false;
     setLoading(true);
     fetchThread(prefs.serverUrl, token, seed.threadKey, provider)
-      .then((r) => setMessages(r.messages || []))
-      .catch(() => setMessages(null))
-      .finally(() => setLoading(false));
-  }, [seed?.threadKey, token]); // eslint-disable-line
+      .then((r) => { if (!cancelled) setMessages(r.messages || []); })
+      .catch(() => { if (!cancelled) setMessages(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [params.id, seed?.threadKey, token]); // eslint-disable-line
 
   const doRsvp = async (response) => {
     if (!seed?.invite?.eventId) return;
