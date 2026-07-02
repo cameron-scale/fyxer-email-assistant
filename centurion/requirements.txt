@@ -1,0 +1,16 @@
+# Centurion - dependency-light by design.
+# Core runtime
+numpy>=1.24
+PyYAML>=6.0
+Flask>=3.0
+requests>=2.31
+gunicorn>=21.2   ; sys_platform != "win32"   # production WSGI server for hosting
+stripe>=7.0      # real Stripe payment links / webhooks (mock mode if no key)
+
+# Optional (NOT installed by default — keeps the build lean and reliable on
+# free hosts where heavy wheels can time out / OOM during build):
+#   scikit-learn   -> optional EV regressor in the Decision Core. The code
+#                     imports it lazily and falls back to rules-based scoring
+#                     if absent. Install manually if you want the regressor:
+#                       pip install "scikit-learn>=1.3"
+#   twilio         -> optional SMS alerts / remote approval

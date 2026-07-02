@@ -1,0 +1,45 @@
+# Centurion 24/7 stack. `restart: always` relaunches any crashed service.
+# The local model (Ollama) runs as its own service so the Language Engine stays
+# fully self-hosted — no third-party AI API anywhere.
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: always
+    env_file: ../.env
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: always
+    command: ["python", "-m", "flask", "--app", "dashboard.app", "run", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: ../.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../data:/app/data
+
+  # Optional self-hosted model server. Pull a model once:
+  #   docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_K_M
+  ollama:
+    image: ollama/ollama:latest
+    restart: always
+    volumes:
+      - ollama_models:/root/.ollama
+    # Uncomment for GPU acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - capabilities: ["gpu"]
+
+volumes:
+  ollama_models:

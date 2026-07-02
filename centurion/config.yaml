@@ -1,0 +1,118 @@
+# Centurion configuration. Edit values here; secrets live in .env.
+
+# --- Capital (the hard wall) ---
+funded_capital: 100.0          # total money that may ever be LOST, in USD (hard)
+target_capital: 1000.0         # the 10x mission milestone (the scoreboard)
+ultimate_target: 1000000000.0  # keep compounding past 10x; do not stop at $1k
+# Reinvest earned money: spend caps scale with the CURRENT balance (a fixed
+# fraction of capital) so profit compounds into bigger deployments. The LOSS
+# floor stays pinned to funded_capital, so worst case is still the seed.
+reinvest_earnings: true
+per_action_cap_multiple: 1000.0  # bound a single bet even at huge balances
+
+# --- Autonomy dial ---
+# full   -> every guardrail-and-capital-cleared action executes immediately
+# guarded-> spends <= guarded_auto_approve_cap execute, larger spends queue
+# review -> every spend / external action queues for approval
+# Shipped default is `guarded` for the first live runs (watch its judgment for a
+# few cycles); switch to full with one command: `python main.py set-autonomy full`.
+autonomy_level: guarded
+guarded_auto_approve_cap: 5.0
+
+# --- Risk Manager limits ---
+# Per-action and per-strategy caps NEVER rise as the balance falls. They only
+# tighten under drawdown (anti-escalation). See risk.py.
+per_action_cap: 10.0           # max single spend at full balance
+per_strategy_cap: 30.0         # max cumulative spend per strategy
+drawdown_floor: 0.20           # stop spending once balance < floor * funded_capital
+diversification_limit: 0.50    # max fraction of capital on any one strategy
+
+# Anti-escalation: the per-action cap is scaled DOWN by available_fraction.
+# As drawdown deepens, the effective cap shrinks. It is never scaled up.
+anti_escalation: true
+
+# Velocity caps so it cannot drain the budget in one bad hour while you sleep.
+max_spend_per_hour: 15.0
+max_spend_per_day: 40.0
+
+# Anomaly auto-pause: consecutive errors / guardrail trips before halting.
+anomaly_error_threshold: 3
+
+# --- Orchestrator cadence ---
+cycle_interval_minutes: 10   # responsive; Lane A page publishing is capped/day separately
+heartbeat_interval_minutes: 5
+heartbeat_stale_after_minutes: 20   # watchdog alerts if heartbeat older than this
+
+# --- Market focus ---
+# The audience Centurion aims products, SEO pages, and Lane-B drafts at. Set
+# this to a MARKET DESCRIPTION you can reach (e.g. "medical billing for small
+# practices") — NOT your company name. A warm channel beats any copy tweak.
+# Empty = generic rotation. Overridable via CENTURION_NICHE / dashboard settings.
+niche: ""
+# Your real brand/company name. Publishable text that contains it is routed to
+# human approval and never auto-published, so the agent can't put your name on
+# something you haven't seen. Overridable via CENTURION_BRAND.
+brand_identity: ""
+# Lane B = draft-and-approve outreach (email/LinkedIn/community). It needs YOU to
+# post it, so fully-autonomous mode leaves it OFF (no drafts to approve). Lane A
+# (owned-infra SEO) still runs hands-off. Set true / CENTURION_LANE_B=1 to bring
+# back the approve-and-send drafts — the fastest path to a first sale, but it
+# requires your taps. Auto-posting to third-party platforms is never done.
+lane_b_enabled: false
+
+# --- Language Engine ---
+# auto | local | template | stub
+language_provider: auto             # template now; auto-upgrades to local Ollama the moment it's installed
+model_name: "llama3.1:8b"
+monthly_compute_budget: 20.0        # USD-equivalent ceiling on inference spend
+
+# --- Edge & discipline (upstream of the code, this is what decides win/lose) ---
+# Force the unit economics to clear AFTER Stripe fees before deploying capital.
+# A $5 product loses ~6% to the fixed fee alone — favor higher-ticket or
+# zero-marginal-cost plays. If nothing clears, HOLD is a first-class move.
+min_net_ev: 1.0          # min expected profit (after fees) to deploy capital
+min_margin: 0.5          # min return-on-spend (50% over cost) for paid actions
+
+# Cheapest de-risking: prove $1 of REAL organic revenue before any budget is
+# spent. ON by default for the cold-start plan (no audience yet) — earn the
+# first organic dollar before risking the bankroll on paid promotion.
+require_organic_proof: true
+
+# Brand safety: spend can be autonomous; your NAME should not be. Anything
+# published under the real brand is human-gated unless a sandbox identity is set.
+brand_human_gate: true
+brand_identity: "ScaleMBS"
+sandbox_identity: null    # e.g. a separate storefront/handle to publish under
+
+# Focus beats spread on a small bankroll. digital_products is the ONLY strategy
+# with a fully wired LIVE execution path (real product file + real Stripe link +
+# post-payment delivery), so live runs focus there by default. Set to null to
+# spread across all enabled strategies, or another name to switch.
+focus_strategy: digital_products
+
+# --- Strategies (enable/disable individually) ---
+strategies:
+  digital_products:    {enabled: true}
+  service_arbitrage:   {enabled: true}
+  print_on_demand:     {enabled: true}
+  content_affiliate:   {enabled: true}
+  reselling_research:  {enabled: true}
+
+# --- Auto-debugger / self-healing ---
+# Operational self-healing (retry, provider fallback, quarantine a failing
+# strategy, pause+alert) is ALWAYS on. This flag governs ONLY autonomous
+# source-code rewriting, which is gated and OFF by default: even when enabled it
+# generates a patch, tests it in a sandbox, and only applies if tests pass.
+auto_apply_code_fixes: false
+
+# --- Storage ---
+database_path: "data/centurion.db"
+report_dir: "data/reports"
+
+# --- Decision Core ---
+decision_seed: 42                   # fixed seed -> deterministic allocations
+scoring_weights:
+  ev_per_dollar: 0.40
+  ev_per_hour: 0.25
+  capital_at_risk_penalty: 0.25     # subtracted, weights risk down
+  time_to_revenue_penalty: 0.10     # subtracted, faster revenue preferred

@@ -1,0 +1,10 @@
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.mem
+data/reports/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+data/products/

@@ -1,0 +1,65 @@
+# Render.com blueprint for the Centurion dashboard + agent.
+# One web service runs the Flask dashboard AND the decision loop in-process
+# (CENTURION_RUN_AGENT=1), in LIVE collect-only mode: it creates real Stripe
+# payment links to take money, while real SPENDING stays hard-off behind the
+# danger switch — so risk is $0 until you arm it.
+#
+# Deploy: Render dashboard -> New -> Blueprint -> connect this repo -> pick
+# branch claude/centurion-agent-build-xyo5h1. Render reads this file.
+services:
+  - type: web
+    name: centurion-dashboard
+    runtime: python
+    rootDir: centurion
+    plan: starter        # paid: always-on, no idle sleep, dedicated CPU/RAM
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py --init || true; gunicorn -b 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 dashboard.app:app
+    # Persistent disk so the ledger, products, delivery tokens, and SEO pages
+    # SURVIVE redeploys/restarts. Without this, Render's filesystem is ephemeral
+    # and every deploy wipes the DB — which would break post-payment delivery
+    # links for anyone who already bought. The DB + generated files all live
+    # under the mount (db_path.parent).
+    disk:
+      name: centurion-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: CENTURION_DATABASE_PATH
+        value: /data/centurion.db   # on the persistent disk above
+      - key: CENTURION_PUBLIC_URL
+        value: "https://centurion-dashboard.onrender.com"   # stable delivery/SEO links
+      - key: CENTURION_RUN_AGENT
+        value: "1"
+      - key: CENTURION_LANGUAGE_PROVIDER
+        value: "template"    # no local model in the cloud; stay deterministic
+      - key: CENTURION_NICHE
+        value: ""            # broad mode: rotate across general digital-product
+                             # niches and let the bandit find what sells. Set a
+                             # specific market here to target one you can reach.
+      - key: CENTURION_LANE_B
+        value: "0"           # fully autonomous: no draft-and-approve queue. Set
+                             # to 1 to bring back approve-and-send outreach drafts.
+      # CENTURION_BRAND (your company name) and CENTURION_BRIDGE_TOKEN are set
+      # in the dashboard (sync:false) — not committed here.
+      - key: CENTURION_BRAND
+        sync: false
+      - key: CENTURION_BRIDGE_TOKEN
+        sync: false
+      - key: CENTURION_FUNDED_CAPITAL
+        value: "10"          # $10 seed
+      - key: CENTURION_LIVE_REVENUE
+        value: "1"           # LIVE: create real Stripe payment links (collect money)
+      - key: CENTURION_FOCUS_STRATEGY
+        value: "digital_products"   # the strategy that creates sellable products + links
+      - key: CENTURION_SANDBOX_IDENTITY
+        value: "centurion-store"    # post under a sandbox identity, not your real brand
+      # Real SPENDING stays OFF by default (danger switch in the dashboard). Until
+      # armed, this collects revenue with $0 spend risk.
+      - key: CENTURION_DASHBOARD_TOKEN
+        sync: false          # set your dashboard password at deploy
+      - key: STRIPE_API_KEY
+        sync: false          # your Stripe secret key (set in Render env) to take real money
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false          # optional: for auto-crediting sales in real time
