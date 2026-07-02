@@ -31,22 +31,43 @@ from intelligence.language.provider import LanguageProvider
 
 # Seed material for divergent ideation. Real signals (web search, trends) can be
 # merged into these pools at runtime; defaults keep the system productive offline.
+# A deliberately WIDE spread of digital-product buyer niches, so broad mode
+# explores many markets and the bandit concentrates on whatever converts. All
+# are audiences that routinely buy templates/toolkits/guides.
 NICHES = [
-    "freelance designers", "indie game devs", "real-estate agents", "yoga studios",
-    "newsletter writers", "Etsy sellers", "podcast hosts", "dog trainers",
-    "Notion power users", "small law firms", "wedding planners", "Shopify owners",
-    "coffee roasters", "personal trainers", "bookkeepers", "tattoo artists",
+    # creators & solopreneurs
+    "freelance designers", "newsletter writers", "podcast hosts", "YouTubers",
+    "course creators", "online coaches", "virtual assistants", "copywriters",
+    "photographers", "indie game devs", "indie hackers", "SaaS founders",
+    # commerce
+    "Etsy sellers", "Shopify owners", "Amazon FBA sellers", "dropshippers",
+    "print-on-demand sellers", "handmade-goods makers",
+    # local & service businesses
+    "real-estate agents", "wedding planners", "personal trainers", "dog trainers",
+    "yoga studios", "coffee roasters", "restaurant owners", "salon owners",
+    "cleaning-service owners", "landscapers", "event planners", "tattoo artists",
+    # professional & back-office
+    "bookkeepers", "small law firms", "HR managers", "recruiters",
+    "real-estate investors", "property managers", "insurance agents",
+    "consultants", "financial advisors", "notaries",
+    # knowledge & ops
+    "Notion power users", "project managers", "customer-support teams",
+    "nonprofit teams", "student organizations",
 ]
 PAINS = [
     "wastes hours on repetitive setup", "struggles to price their work",
     "can't write compelling copy", "has no system for follow-ups",
     "loses leads in a messy inbox", "dreads invoicing", "fears blank-page syndrome",
     "can't keep content consistent", "reinvents the same doc every week",
+    "has no repeatable onboarding for new clients", "forgets steps under pressure",
+    "spends too long on proposals and quotes", "has no clean way to track tasks",
 ]
 FORMATS = [
     "Notion template system", "prompt pack", "fill-in-the-blank guide",
     "swipe file", "spreadsheet toolkit", "checklist bundle", "mini-course outline",
     "canva-style template set", "SOP playbook", "email sequence pack",
+    "onboarding kit", "planner + tracker", "script pack", "proposal template kit",
+    "workflow toolkit", "starter kit",
 ]
 
 # Niche-specific format banks — process/workflow assets (NOT code lists, which
