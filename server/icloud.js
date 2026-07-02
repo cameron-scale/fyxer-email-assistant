@@ -122,8 +122,12 @@ export async function icloudAttachment(refreshToken, uid, attachmentId, folder =
 // read | unread | archive | trash | junk | inbox — flags or moves between mailboxes.
 export async function icloudAction(refreshToken, uid, action, folder = 'inbox') {
   return withClient(refreshToken, async (client) => {
-    // Un-archive restores from the Archive mailbox back to the inbox.
-    const mbox = action === 'inbox' ? FOLDER.archive : (FOLDER[folder] || 'INBOX');
+    // IMAP UIDs are per-mailbox, so we must open the mailbox the message actually
+    // lives in — NOT silently fall back to INBOX (which would flag/move whatever
+    // unrelated message happens to share that UID in the inbox). Un-archive restores
+    // from the Archive mailbox; everything else uses the message's real folder,
+    // accepting a well-known key ('sent', 'junk', …) or a raw IMAP mailbox name.
+    const mbox = action === 'inbox' ? FOLDER.archive : (FOLDER[folder] || folder || 'INBOX');
     const lock = await client.getMailboxLock(mbox);
     try {
       const u = { uid: String(uid) };

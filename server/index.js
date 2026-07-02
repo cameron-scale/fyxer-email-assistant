@@ -75,7 +75,11 @@ function debugAuth(req, res, next) {
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-app.set('trust proxy', true);
+// Render puts exactly ONE proxy hop in front of us. `true` would trust the whole
+// (attacker-supplied) X-Forwarded-For chain, letting anyone spoof req.ip to bypass
+// the rate limiter or lock a victim out; `1` uses the single real client IP Render
+// appends.
+app.set('trust proxy', 1);
 
 // ── Security middleware (NDA hardening) ──────────────────────────────────────
 // 1) Baseline response headers.
@@ -89,20 +93,25 @@ app.use((req, res, next) => {
 // 2) Per-IP rate limiting (always on) so the backend can't be scraped / DoS'd and
 // nobody can burn the AI budget. AI endpoints get a tighter ceiling. In-memory
 // sliding window — fine for a single instance; swap for Redis when you scale out.
-const AI_PATHS = new Set(['/summarize', '/ask', '/next-steps', '/suggest', '/learn-keep', '/quick-replies', '/draft', '/signature', '/learn/profile', '/snooze-suggest', '/relationship', '/digest', '/voice', '/profile']);
+// Match by PREFIX so the expensive real routes (/signature/generate, /voice-format,
+// /learn/profile) actually fall under the tight AI ceiling.
+const AI_PREFIXES = ['/summarize', '/ask', '/next-steps', '/suggest', '/learn-keep', '/quick-replies', '/draft', '/signature', '/learn', '/snooze-suggest', '/relationship', '/digest', '/voice', '/profile'];
+const isAiPath = (p) => AI_PREFIXES.some((x) => p === x || p.startsWith(x + '/') || p.startsWith(x));
 const rlBuckets = new Map(); // ip -> { count, resetAt }
 const RL_WINDOW_MS = 60 * 1000;
 const RL_MAX = parseInt(process.env.RATE_LIMIT_PER_MIN || '240', 10);
 const RL_AI_MAX = parseInt(process.env.RATE_LIMIT_AI_PER_MIN || '50', 10);
+const RL_MAX_BUCKETS = 50000; // bound memory even under a spoofing attempt
 setInterval(() => { const now = Date.now(); for (const [ip, e] of rlBuckets) if (now > e.resetAt) rlBuckets.delete(ip); }, 5 * 60 * 1000).unref?.();
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
+  const ai = isAiPath(req.path);
   const ip = req.ip || req.socket?.remoteAddress || 'x';
-  const key = `${ip}:${AI_PATHS.has(req.path) ? 'ai' : 'all'}`;
-  const max = AI_PATHS.has(req.path) ? RL_AI_MAX : RL_MAX;
+  const key = `${ip}:${ai ? 'ai' : 'all'}`;
+  const max = ai ? RL_AI_MAX : RL_MAX;
   const now = Date.now();
   let e = rlBuckets.get(key);
-  if (!e || now > e.resetAt) { e = { count: 0, resetAt: now + RL_WINDOW_MS }; rlBuckets.set(key, e); }
+  if (!e || now > e.resetAt) { if (rlBuckets.size > RL_MAX_BUCKETS) rlBuckets.clear(); e = { count: 0, resetAt: now + RL_WINDOW_MS }; rlBuckets.set(key, e); }
   e.count += 1;
   if (e.count > max) { res.set('Retry-After', Math.ceil((e.resetAt - now) / 1000)); return res.status(429).json({ error: 'Too many requests' }); }
   next();
@@ -220,7 +229,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-44',
+    version: 'debug-45',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -304,13 +313,26 @@ app.delete('/img/:file', (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 
+// SECURITY: only ever redirect the OAuth result to OUR app's deep links (or the
+// debug sentinel). Without this, an attacker could send a victim a real Microsoft/
+// Google login link with ?app_redirect=https://evil.com and receive the session id
+// on their server, then claim the full mailbox refresh token. Anything not on the
+// allowlist falls back to the app's own scheme.
+function safeAppRedirect(v) {
+  const s = String(v || '');
+  if (s === 'debug') return s;
+  if (/^brisk:\/\//i.test(s)) return s;             // standalone build
+  if (/^exp(\+[a-z0-9-]+)?:\/\//i.test(s)) return s; // Expo Go / dev client
+  return APP_REDIRECT;
+}
+
 // ── 1. Microsoft login ───────────────────────────────────────────────────────
 app.get('/auth/microsoft/start', (req, res) => {
   if (!MS_CLIENT_ID) return res.status(500).send('Server missing MS_CLIENT_ID');
   // The app tells us where to send the user back (its own deep link). We stash it
   // in `state` so we get it back on the callback. This makes it work in Expo Go
   // (an exp:// URL) and in a real build (brisk://) alike.
-  const appRedirect = String(req.query.app_redirect || APP_REDIRECT);
+  const appRedirect = safeAppRedirect(req.query.app_redirect || APP_REDIRECT);
   // `claim` is a secret nonce the app generated and already holds. We carry it
   // through OAuth `state` and store the token under it, so the app can claim the
   // token with a key it NEVER had to read back out of the (lossy) deep link.
@@ -332,14 +354,17 @@ function decodeState(req) {
   const raw = req.query.state ? String(req.query.state) : '';
   try {
     const obj = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
-    if (obj && typeof obj === 'object' && obj.r) return { appRedirect: obj.r, claim: obj.c || '' };
+    // Re-validate on the way OUT too: `state` is attacker-forgeable base64.
+    if (obj && typeof obj === 'object' && obj.r) return { appRedirect: safeAppRedirect(obj.r), claim: obj.c || '' };
   } catch (e) {}
   // Back-compat: older state was just base64(appRedirect).
-  try { if (raw) return { appRedirect: Buffer.from(raw, 'base64url').toString('utf8'), claim: '' }; } catch (e) {}
+  try { if (raw) return { appRedirect: safeAppRedirect(Buffer.from(raw, 'base64url').toString('utf8')), claim: '' }; } catch (e) {}
   return { appRedirect: APP_REDIRECT, claim: '' };
 }
 
+const htmlEscape = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function debugPage(ok, detail) {
+  detail = htmlEscape(detail); // never reflect attacker-controlled error text raw
   const color = ok ? '#0a7d33' : '#c0392b';
   const title = ok ? '✅ Login worked!' : '❌ Login failed';
   return `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -430,7 +455,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-44', recentCallbacks }));
+app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-45', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -444,7 +469,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', debugAuth, (_req, res) => {
   res.json({
-    version: 'debug-44',
+    version: 'debug-45',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -545,7 +570,7 @@ async function googleAccessFromRefresh(refreshToken) {
 
 app.get('/auth/google/start', (req, res) => {
   if (!GOOGLE_CLIENT_ID) return res.status(500).send('Server missing GOOGLE_CLIENT_ID');
-  const appRedirect = String(req.query.app_redirect || APP_REDIRECT);
+  const appRedirect = safeAppRedirect(req.query.app_redirect || APP_REDIRECT);
   const claim = String(req.query.claim || '');
   const state = Buffer.from(JSON.stringify({ r: appRedirect, c: claim })).toString('base64url');
   const params = new URLSearchParams({
@@ -692,6 +717,14 @@ const WELL_KNOWN_FOLDER = { inbox: 'inbox', sent: 'sentitems', drafts: 'drafts',
 // immediately. Cache by Graph message id so a re-load never re-bills the AI.
 const SUMMARY_CACHE_FILE = path.join(process.cwd(), 'summary-cache.json');
 let summaryCache = readSecure(SUMMARY_CACHE_FILE); // encrypted at rest; {} if no key
+// SECURITY: namespace every AI cache entry by a fingerprint of the email's own
+// content (sender+subject), NOT the bare message id. iCloud ids are per-mailbox IMAP
+// UIDs (tiny integers) that collide across accounts, so a bare-id cache would serve
+// one user's private summary to another — and let anyone enumerate cached summaries
+// by POSTing sequential ids. Content-fingerprinting makes keys unguessable and
+// per-email, so a cache hit can only ever be the same email's own summary.
+function cacheFp(a, b) { return crypto.createHash('sha256').update(`${a || ''} ${b || ''}`).digest('base64url').slice(0, 14); }
+function sumKey(e) { return `${e.id}:${cacheFp(e.from, e.subject)}`; }
 
 // ── Generic AI cache (key -> value) for per-email AI like next-steps / quick
 // replies, so opening the same email again never re-bills the AI. Disk-backed.
@@ -745,13 +778,13 @@ async function attachSummaries(emails, { summarizeNew = true } = {}) {
     // sees (the first page). Deeper backlog pages still attach any cached summary
     // but don't generate new ones, so a full-mailbox sync can't drain the AI cap.
     const todo = summarizeNew
-      ? emails.filter((e) => e.id && !summaryCache[e.id]).slice(0, INBOX_SUMMARY_CAP)
+      ? emails.filter((e) => e.id && !summaryCache[sumKey(e)]).slice(0, INBOX_SUMMARY_CAP)
       : [];
     if (todo.length) {
       const got = await aiSummarize(todo.map((e) => ({ id: e.id, from: e.from, subject: e.subject, body: e.body })));
-      const n = Object.keys(got).length;
+      let n = 0;
+      for (const e of todo) { if (got[e.id] != null) { summaryCache[sumKey(e)] = got[e.id]; n += 1; } }
       if (n) {
-        Object.assign(summaryCache, got);
         summaryCacheDirty = true;
         trimSummaryCache();
         persistSummaryCache();
@@ -759,7 +792,7 @@ async function attachSummaries(emails, { summarizeNew = true } = {}) {
       }
     }
   } catch (e) { record({ stage: 'inbox_summary_error', message: e.message }); }
-  for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; }
+  for (const e of emails) { const v = summaryCache[sumKey(e)]; if (v) e.aiSummary = v; }
   return emails;
 }
 
@@ -814,7 +847,7 @@ app.post('/inbox', async (req, res) => {
         if (lr.ok) { unreadCount = ld.messagesUnread ?? null; totalCount = ld.messagesTotal ?? null; }
       } catch (e) { /* counts are best-effort */ }
       const outgoingG = fkey === 'sentitems' || fkey === 'drafts';
-      if (!outgoingG) { for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; } }
+      if (!outgoingG) { for (const e of emails) { const v = summaryCache[sumKey(e)]; if (v) e.aiSummary = v; } }
       record({ stage: 'gmail_inbox_ok', count: emails.length, label: labelId });
       return res.json({ emails, unreadCount, totalCount, skip: 0, hasMore: false });
     }
@@ -879,7 +912,7 @@ app.post('/inbox', async (req, res) => {
     // fast). Generation is driven solely by the client's /summarize call so each
     // message is summarized exactly once — no server/client race that would make
     // the text flicker.
-    if (!outgoing) { for (const e of emails) { if (summaryCache[e.id]) e.aiSummary = summaryCache[e.id]; } }
+    if (!outgoing) { for (const e of emails) { const v = summaryCache[sumKey(e)]; if (v) e.aiSummary = v; } }
 
     const { unreadCount = null, totalCount = null } = await countsPromise;
 
@@ -1013,6 +1046,10 @@ function sanitizeHtml(html = '') {
 
 // Find the first meeting link (Join button) in the message.
 function detectMeeting(s = '') {
+  // Cap the input first: the URL patterns below can backtrack badly on a hostile
+  // body that's one giant unbroken token, which would block the event loop. A real
+  // meeting link is near the top of the message anyway.
+  s = String(s).slice(0, 20000);
   // Decode HTML entities and (a copy of) percent-encoding so links that are wrapped
   // in a redirect (e.g. Google Calendar invites: google.com/url?q=https%3A%2F%2Fzoom…)
   // or HTML-escaped still resolve to a clean, openable URL.
@@ -1253,12 +1290,18 @@ app.post('/action', async (req, res) => {
       if (action === 'trash') {
         const r = await fetch(`${GMAIL}/messages/${id}/trash`, { method: 'POST', headers: auth });
         if (!r.ok) throw new Error('Gmail trash failed');
+      } else if (action === 'inbox') {
+        // Restore: a trashed message keeps the TRASH label even if you add INBOX, so
+        // it stays hidden and is auto-deleted after 30 days. Untrash first (harmless
+        // if it wasn't trashed), then ensure it's back in the inbox and out of spam.
+        await fetch(`${GMAIL}/messages/${id}/untrash`, { method: 'POST', headers: auth }).catch(() => {});
+        const r = await fetch(`${GMAIL}/messages/${id}/modify`, { method: 'POST', headers: auth, body: JSON.stringify({ addLabelIds: ['INBOX'], removeLabelIds: ['SPAM'] }) });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error?.message || 'Gmail restore failed'); }
       } else {
         const body = {
           read: { removeLabelIds: ['UNREAD'] },
           unread: { addLabelIds: ['UNREAD'] },
           archive: { removeLabelIds: ['INBOX'] },
-          inbox: { addLabelIds: ['INBOX'], removeLabelIds: ['SPAM'] }, // un-archive / restore
           junk: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
         }[action];
         if (!body) throw new Error(`unknown action ${action}`);
@@ -1462,23 +1505,23 @@ app.post('/summarize', async (req, res) => {
     if (!items.length) return res.json({ summaries: {} });
     // Skip anything we've already cached server-side (the inbox attaches those),
     // so we never re-bill and only summarize genuinely new mail.
-    const fresh = items.filter((i) => i.id && !summaryCache[i.id]);
+    const fresh = items.filter((i) => i.id && !summaryCache[sumKey(i)]);
     // Daily budget guard: if we've hit the cap, only return what's cached.
     const summaries = (fresh.length && underDailyBudget())
       ? await aiSummarize(fresh.map((i) => ({ id: i.id, from: i.from, subject: i.subject, body: i.preview || i.body || '' })))
       : {};
-    const n = Object.keys(summaries).length;
+    let n = 0;
+    for (const i of fresh) { if (summaries[i.id] != null) { summaryCache[sumKey(i)] = summaries[i.id]; n += 1; } }
     if (n) {
-      Object.assign(summaryCache, summaries);
       summaryCacheDirty = true;
       trimSummaryCache();
       persistSummaryCache();
       bumpUsage('summaries', n);
       countAi(n);
     }
-    // Return cached ones too so the client gets summaries for everything it asked.
+    // Return cached ones (keyed by the client's own id) for everything it asked.
     const out = {};
-    for (const i of items) { if (summaryCache[i.id]) out[i.id] = summaryCache[i.id]; }
+    for (const i of items) { const v = summaryCache[sumKey(i)]; if (v) out[i.id] = v; }
     record({ stage: 'summarize_ok', count: n, ms: Date.now() - started });
     res.json({ summaries: out });
   } catch (e) {
@@ -1842,7 +1885,7 @@ app.post('/quick-replies', async (req, res) => {
   try {
     const { subject, body, senderName, id } = req.body || {};
     if (!ANTHROPIC_API_KEY) return res.json({ replies: [] });
-    const cacheKey = id ? `qr:${id}` : '';
+    const cacheKey = id ? `qr:${id}:${cacheFp(senderName, subject)}` : '';
     const cached = auxGet(cacheKey);
     if (cached) return res.json(cached);
     if (!underDailyBudget()) return res.json({ replies: [] });
@@ -1878,7 +1921,7 @@ app.post('/next-steps', async (req, res) => {
     if (!ANTHROPIC_API_KEY) return res.json({ recommendation: '', steps: [] });
     const noteStr = String(note || '').trim().slice(0, 240);
     // Cache per email (+ note) so re-opening is free; skip when over the daily budget.
-    const cacheKey = id ? `next:${id}${noteStr ? ':n' + noteStr.length : ''}` : '';
+    const cacheKey = id ? `next:${id}:${cacheFp(senderName, subject)}${noteStr ? ':n' + noteStr.length : ''}` : '';
     const cached = auxGet(cacheKey);
     if (cached) return res.json(cached);
     if (!underDailyBudget()) return res.json({ recommendation: '', steps: [] });
@@ -2298,4 +2341,16 @@ function stripHtml(s = '') {
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Brisk server listening on ${PORT}`));
+// One-time cleanup: remove any legacy plaintext handoff files (pre-encryption) and
+// expired encrypted ones left behind by a process recycle.
+try {
+  for (const f of fs.readdirSync(HANDOFF_DIR)) {
+    if (f.endsWith('.json')) { try { fs.unlinkSync(path.join(HANDOFF_DIR, f)); } catch (e) {} }
+  }
+} catch (e) {}
+
+app.listen(PORT, () => {
+  console.log(`Scale Mail server listening on ${PORT}`);
+  if (!ENC_KEY) console.warn('[WARN] SERVER_ENC_KEY is unset — sensitive data (OAuth handoffs, AI caches) will NOT persist to disk, so a process recycle mid-login shows "sign-in link expired". Set it before production.');
+  if (!APP_API_KEY) console.warn('[WARN] APP_API_KEY is unset — the backend accepts requests without the app key. Set it (and EXPO_PUBLIC_APP_KEY in the app) before production.');
+});
