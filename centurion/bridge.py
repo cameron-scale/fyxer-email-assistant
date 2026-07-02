@@ -14,9 +14,26 @@ never keys or money. If the Mac is off, nothing breaks — upgrades just wait.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from growth import guard
+
+
+def _clean_section(text: str) -> str:
+    """Tidy a model-written section: local models sometimes wrap the opening
+    sentence in quotation marks or prepend the section label. Strip those so the
+    prose reads clean. Conservative — only touches a leading quoted clause."""
+    t = (text or "").strip()
+    # Unwrap a leading quoted clause: '"…sentence." rest' -> '…sentence. rest'
+    if t[:1] in ('"', "“"):
+        rest = t[1:]
+        m = re.search(r'["”]', rest)
+        t = (rest[:m.start()] + rest[m.end():]).strip() if m else rest.strip()
+    # Drop a stray wrapping pair around the whole body.
+    if len(t) > 1 and t[0] in ('"', "“") and t[-1] in ('"', "”"):
+        t = t[1:-1].strip()
+    return t
 
 # Keep the queue small: newest artifacts matter most, and an unbounded queue on
 # a $10 operation is noise.
@@ -71,7 +88,9 @@ def enqueue_page_upgrade(ledger, page_slug: str, title: str,
     prompt = (
         f"You are improving an SEO article titled '{title}'. Write specific, "
         f"experience-grade content that would help a reader even if they never "
-        f"buy anything. No income claims, no fabricated proof.")
+        f"buy anything. No income claims, no fabricated proof. Write in plain "
+        f"prose only: do NOT wrap sentences in quotation marks, do NOT add a "
+        f"heading, label, or preamble — return just the paragraph text.")
     return ledger.add_bridge_job(
         "page_upgrade", page_slug, prompt, schema=schema,
         meta={"title": title, "headings": headings})
@@ -113,7 +132,7 @@ def _apply_page(ledger, job: dict, result: dict) -> tuple[bool, str]:
         return False, "page no longer exists"
     meta_info = json.loads(job.get("meta") or "{}")
     headings = meta_info.get("headings") or []
-    parts = [(h, str(result.get(f"sec{i}", "")).strip())
+    parts = [(h, _clean_section(str(result.get(f"sec{i}", ""))))
              for i, h in enumerate(headings) if str(result.get(f"sec{i}", "")).strip()]
     if len(parts) < 2:
         return False, "upgrade too thin; keeping template version"
