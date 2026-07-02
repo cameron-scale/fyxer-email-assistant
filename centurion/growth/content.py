@@ -132,24 +132,37 @@ class ContentFactory:
 
     # --- Lane B (draft only, never posted here) ---
     def lane_b_draft(self, kind: str, cluster_keyword: str, product: dict) -> dict:
+        import os
         prod = product.get("title", "the toolkit")
-        landing = f"/product/{product.get('slug', '')}"
+        slug = product.get("slug", "")
+        base = os.environ.get("CENTURION_PUBLIC_URL", "").rstrip("/")
+        link = f"{base}/product/{slug}" if base else f"/product/{slug}"
+        niche = (os.environ.get("CENTURION_NICHE", "") or "your work").strip()
+        niche_short = niche.split(" for ")[0].strip() or niche  # "medical billing"
         if kind == "warm_email":
             platform = "Warm email to your own list/clients (you send it)"
-            draft = self._gen(
-                f"Write a short, plain, honest email from a medical-billing service "
-                f"owner to their existing clients/contacts. Say we put together a "
-                f"practical resource on '{cluster_keyword}' — '{prod}' — and share the "
-                f"link once. Helpful and low-key, no hype, no income/results claims, "
-                f"no pressure. 120 words max. End with the link: {landing}")
+            # Hand-built so it reads like a real, sendable note even on the
+            # template engine (this is the highest-EV content in the system).
+            draft = (
+                f"Hi [first name],\n\n"
+                f"Quick one — I put together a resource I thought might be useful "
+                f"for your {niche_short} work: the {prod}.\n\n"
+                f"It's a ready-to-use pack (templates + a short step-by-step) meant "
+                f"to save you some back-and-forth. If it's handy, it's here:\n"
+                f"{link}\n\n"
+                f"No pressure at all — just sharing in case it helps. Happy to hear "
+                f"what you think.\n\n"
+                f"Best,\n[your name]")
             reason = "your warmest audience; you send from your own address"
         elif kind == "linkedin_post":
             platform = "LinkedIn post (you post from your account)"
-            draft = self._gen(
-                f"Write a short, useful LinkedIn post for a medical-billing audience "
-                f"about '{cluster_keyword}'. Lead with one concrete tip, then mention "
-                f"we made '{prod}' if they want the full version. No hype, no income "
-                f"claims, no fake stats. 100 words. Include the link: {landing}")
+            draft = (
+                f"One thing that quietly eats time in {niche_short}: {cluster_keyword}.\n\n"
+                f"A simple way to get ahead of it is to standardize it once — a clear "
+                f"template and a short checklist you reuse every time, instead of "
+                f"rebuilding it under pressure.\n\n"
+                f"I packaged the full version as the {prod} if it's useful to anyone:\n"
+                f"{link}")
             reason = "professional reach you already have; one tap to post"
         elif kind == "reddit_reply":
             platform = "Reddit (relevant subreddit)"
