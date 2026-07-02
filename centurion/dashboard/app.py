@@ -39,7 +39,13 @@ import intelligence.language.stub             # noqa: E402,F401
 import intelligence.language.local_llm        # noqa: E402,F401
 import intelligence.language.auto             # noqa: E402,F401
 try:
+    import requests as _rq                    # noqa: E402,F401  (fully init before threads)
+    _ = _rq.Session
+except Exception:
+    pass
+try:
     import stripe                             # noqa: E402,F401  (preload to avoid per-request cost)
+    import integrations.stripe_client         # noqa: E402,F401  (runs one-time http-client setup)
 except Exception:
     pass
 from supervisor import Supervisor              # noqa: E402,F401  (preload; used by watchdog)

@@ -12,6 +12,25 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
+# Import requests fully at module load (single-threaded) and touch Session so it
+# can't be caught half-initialized when the agent thread makes its first Stripe
+# call — that surfaced as "partially initialized module 'requests'...".
+try:
+    import requests as _requests
+    _ = _requests.Session
+except Exception:
+    _requests = None
+
+# Configure the Stripe library ONCE, here, at import time — not per StripeClient
+# construction (which the agent does on every action, across threads). Sets a
+# hard network timeout so a slow Stripe call can't stall a cycle for ~80s.
+try:
+    import stripe as _stripe_mod
+    _stripe_mod.max_network_retries = 1
+    _stripe_mod.default_http_client = _stripe_mod.http_client.RequestsClient(timeout=20)
+except Exception:
+    pass
+
 
 # Accept the common env-var names people use for a Stripe secret key, so a
 # harmless naming mismatch (STRIPE_API_SECRET vs STRIPE_API_KEY) can't silently
@@ -56,13 +75,8 @@ class StripeClient:
             try:
                 import stripe
                 stripe.api_key = self.api_key
-                # Cap network time so a slow Stripe call can't stall a cycle for
-                # ~80s (the library default). Fail fast and retry next cycle.
-                stripe.max_network_retries = 1
-                try:
-                    stripe.default_http_client = stripe.http_client.RequestsClient(timeout=20)
-                except Exception:
-                    pass
+                # Network timeout + http client are configured once at module
+                # import (above) to avoid a threaded partial-import race.
                 self._stripe = stripe
             except Exception:
                 # Library missing -> degrade safely to mock rather than crash.
