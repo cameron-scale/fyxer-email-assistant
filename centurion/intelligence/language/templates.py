@@ -46,61 +46,146 @@ def _stable_pick(options: list[str], seed_text: str) -> str:
     return options[h % len(options)]
 
 
+_TITLE_SUFFIXES = (
+    ": an honest comparison", ": a practical shortlist", " — and how to fix it",
+    " - and how to fix it", ": what it means", ": a real-world walkthrough",
+    ": a real world walkthrough",
+)
+
+
+def _short_subject(topic: str) -> str:
+    """Turn a long page TITLE into a short, readable subject noun so section
+    bodies don't jam the whole headline into every sentence. Strips the template
+    suffix, then trims at the first natural break so it reads as a thing, not a
+    sentence. Deterministic."""
+    t = (topic or "").strip()
+    low = t.lower()
+    for suf in _TITLE_SUFFIXES:
+        if low.endswith(suf):
+            t = t[: len(t) - len(suf)].strip()
+            break
+    # Cut at the first connector so "X or Y", "X for Z", "X vs Y" -> "X".
+    for sep in (" or ", " vs ", " versus ", " for ", ": ", " — ", " – "):
+        i = t.lower().find(sep)
+        if i > 4:
+            t = t[:i].strip()
+            break
+    words = t.split()
+    if len(words) > 6:
+        t = " ".join(words[:6])
+    return (t or "this").rstrip(",.").lower()
+
+
 def _section_body(heading: str, topic: str) -> str:
-    """Distinct, section-appropriate body text (deterministic). Different section
-    headings get different framing so a page never repeats one paragraph. This is
-    still template-grade — real depth needs the local model via the bridge."""
+    """Distinct, section-appropriate body text (deterministic). Every section
+    heading used by the content templates gets its OWN body, so a page never
+    repeats a paragraph. Uses a short subject (not the full title) so sentences
+    read naturally. Still template-grade — real depth needs the local model via
+    the bridge."""
     h = (heading or "").lower()
-    t = topic
-    if any(w in h for w in ("definition", "what it means", "what is", "glossary")):
-        return (f"In plain terms, {t} is the repeatable way a team handles this "
-                f"without reinventing it each time. It usually combines a short "
-                f"process, a reusable template, and a check at the end so nothing "
-                f"slips. Getting it defined once is what makes it fast later.")
-    if any(w in h for w in ("why", "matters", "important")):
-        return (f"When {t} is ad-hoc, small mistakes compound: rework, missed "
-                f"steps, and time lost re-deciding the same things. Standardizing "
-                f"it protects your hours and makes the output consistent even on a "
-                f"busy day. That consistency is the real payoff.")
-    if any(w in h for w in ("step", "how to", "quick start", "set it up", "setup")):
-        return ("1) List the exact steps you take today, in order. "
+    s = _short_subject(topic)
+
+    # --- glossary ---
+    if "definition" in h or "what it means" in h or "what is" in h:
+        return (f"Put simply, {s} is the repeatable way you handle a recurring task "
+                f"without reinventing it each time. In practice it's a short process "
+                f"plus a reusable template and a final check, so the result comes out "
+                f"the same whether you're fresh or slammed. Defining it once is what "
+                f"makes every run after it fast.")
+    if "related" in h or "terms" in h:
+        return ("A few neighbouring ideas are worth knowing. The checklist is the "
+                "minimum set of steps you never skip. The template is the reusable "
+                "shell you fill in. The review is the quick final pass before "
+                "anything goes out. Used together, they're what turn a one-off effort "
+                "into something dependable.")
+
+    # --- problem-solution (problem and fix must NOT collide) ---
+    if "problem" in h:
+        return (f"The pain usually looks familiar: {s} takes longer than it should, "
+                f"the output isn't consistent, and there's no single source of truth "
+                f"to point to. Every round starts a little from scratch, so small "
+                f"mistakes creep back in. The cost isn't one big failure — it's the "
+                f"steady drip of redone work.")
+    if "why" in h and ("happen" in h or "it" in h):
+        return (f"It happens because the process lives in your head, not on paper. "
+                f"When {s} is ad-hoc, each person does it slightly differently and "
+                f"details get re-decided every time. That's fine once; across a busy "
+                f"month it quietly eats hours and makes quality a coin flip.")
+    if "fix" in h or "solution" in h:
+        return ("The fix isn't more effort — it's doing it once, well, and reusing "
+                "that. Write the process down, cut it to the steps that actually "
+                "matter, and turn the repeatable part into a template. From then on "
+                "you're filling in blanks instead of starting cold, and the result "
+                "stays even no matter who runs it.")
+
+    # --- steps / setup / how-to ---
+    if "step" in h or "set it up" in h or "setup" in h or "how to" in h or "quick start" in h:
+        return ("1) Write down the exact steps you take today, in order. "
                 "2) Cut anything that isn't load-bearing. "
                 "3) Turn what's left into a template you fill in. "
-                "4) Add one final check before it goes out. "
-                "5) Reuse it every time instead of starting from scratch.")
-    if any(w in h for w in ("example", "walkthrough", "scenario", "use case", "real-world")):
-        return (f"Say you're starting {t} on a Monday. You open the template, fill "
-                f"the three fields that change each time, run the checklist, and "
-                f"you're done in minutes — not the half-day it used to take. Same "
-                f"quality, far less thinking.")
-    if any(w in h for w in ("compare", "comparison", "vs", "choose", "shortlist", "roundup", "look for")):
-        return (f"The options for {t} mostly differ on setup time, flexibility, and "
-                f"how much they lock you in. Favor the one you'll actually keep "
-                f"using: low friction beats feature lists you'll never touch. Pick "
-                f"for the workflow you have, not the one you wish you had.")
-    if any(w in h for w in ("problem", "fix", "trouble")):
-        return (f"The problem usually shows up as {t} eating time it shouldn't — "
-                f"redone work, inconsistent results, and no single source of truth. "
-                f"The fix isn't more effort; it's doing it once, well, and reusing "
-                f"that. Small system, big time-back.")
-    if any(w in h for w in ("related", "terms")):
-        return (f"Nearby ideas worth knowing: the checklist (the minimum steps you "
-                f"never skip), the template (the reusable shell), and the review "
-                f"(the final pass). Together they're what make {t} dependable "
-                f"instead of a coin flip.")
-    if any(w in h for w in ("template", "checklist", "core", "system", "what good")):
-        return (f"The core of {t} is a short, reusable shell plus a checklist. Keep "
-                f"the shell to the fields that actually change, and keep the "
-                f"checklist to the steps you refuse to skip. If it's longer than a "
-                f"page, it won't get used.")
-    if any(w in h for w in ("next", "after")):
-        return (f"From here, use it on the very next real task so it earns its keep. "
-                f"Tweak it once after that first run, then leave it alone. The goal "
-                f"isn't a perfect {t} system — it's one you'll actually reuse.")
-    # fallback (still topic-specific, not a repeated boilerplate)
-    return (f"Here's the practical part for {t}: keep it to a short, reusable "
-            f"process you can run without thinking, and a final check so quality "
-            f"stays even. Do it once properly and it pays back every time after.")
+                "4) Add one final check before it ships. "
+                "5) Reuse it every time instead of rebuilding from memory. "
+                "Fifteen minutes now saves the same fifteen on every future run.")
+
+    # --- use-case ---
+    if "scenario" in h:
+        return (f"Picture a normal Monday with {s} on your plate. Instead of staring "
+                f"at a blank page, you open the template, fill the two or three fields "
+                f"that change this time, and run the checklist. What used to be a "
+                f"half-day of deciding-as-you-go becomes a few focused minutes.")
+    if "what good" in h or "good looks" in h:
+        return (f"Good {s} is boring in the best way: predictable, quick, and easy to "
+                f"hand off. You can tell it's working when someone else could pick it "
+                f"up and get the same result without asking you a dozen questions. "
+                f"If it still needs your head every time, it isn't finished.")
+
+    # --- comparison ---
+    if "honest comparison" in h or ("compar" in h and "how" not in h):
+        return (f"The realistic options for {s} mostly differ on three things: how "
+                f"long they take to set up, how much they bend to your workflow, and "
+                f"how locked-in you get. There's rarely a single winner — there's the "
+                f"one that fits how you actually work, and several that look good on "
+                f"paper but sit unused.")
+    if "where" in h and "fit" in h:
+        return (f"Each approach has a sweet spot. The lightweight one wins when you "
+                f"value speed and low friction over bells and whistles. The heavier "
+                f"one earns its keep only if you'll genuinely use the extra features. "
+                f"Match the choice to your volume and how often {s} actually comes up.")
+    if "how to choose" in h or "choose" in h:
+        return ("Choose for the workflow you have, not the one you wish you had. "
+                "Favour whatever you'll still be using in a month over the longest "
+                "feature list. If two options are close, pick the one with less setup "
+                "— low friction is what keeps a system alive.")
+
+    # --- roundup ---
+    if "shortlist" in h:
+        return (f"Here's the short version for {s}: a handful of solid options cover "
+                f"almost everyone, and the rest is noise. This shortlist sticks to "
+                f"ones that are quick to start and easy to keep using, rather than "
+                f"whatever happens to be trending this week.")
+    if "look for" in h or "what to look" in h:
+        return ("When you're weighing options, look for three things: how fast you "
+                "can get going, whether it fits your existing workflow, and how easy "
+                "it is to walk away if it's not working. Anything that scores well on "
+                "all three tends to stick; anything that fails one usually gets "
+                "abandoned.")
+    if "who" in h and ("for" in h or "each" in h):
+        return ("Who each one is for comes down to volume and taste. If you only do "
+                "this occasionally, the simplest option is plenty. If it's a core "
+                "part of your week, it's worth the one that scales. Be honest about "
+                "which camp you're in — most people over-buy.")
+
+    # --- example ---
+    if "example" in h or "walkthrough" in h:
+        return (f"Here's it in action. You start {s}, open the template, and fill "
+                f"only the parts that change this time. You run the short checklist, "
+                f"catch the one thing you'd otherwise forget, and you're done — same "
+                f"quality, a fraction of the thinking.")
+
+    # --- generic fallback (still subject-specific, never a repeated boilerplate) ---
+    return (f"The practical takeaway for {s}: keep it to a short, reusable process "
+            f"you can run on autopilot, with one final check so quality stays even. "
+            f"Do it properly once and it quietly pays you back on every run after.")
 
 
 class TemplateProvider(LanguageProvider):

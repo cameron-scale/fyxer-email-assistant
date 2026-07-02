@@ -104,8 +104,11 @@ class ContentFactory:
 
     @staticmethod
     def _render(title, meta, parts, slug, product) -> str:
-        # Static so bridge.py can re-render an upgraded page. All model/template
-        # text is HTML-escaped before it enters a page on the dashboard origin.
+        # Emits an ARTICLE FRAGMENT (no <html>/<head>/<style>) — the dashboard
+        # wraps it in the shared site shell at serve time so every guide carries
+        # the site's header, nav and footer. Static so bridge.py can re-render an
+        # upgraded page. All model/template text is HTML-escaped before it enters
+        # a page on the dashboard origin.
         secs = "".join(
             f"<h2>{_e(h)}</h2><p>{_e((b or '').strip()).replace(chr(10), '</p><p>')}</p>"
             for h, b in parts)
@@ -117,18 +120,11 @@ class ContentFactory:
             '{"@context":"https://schema.org","@type":"Article",'
             f'"headline":{_json(title)},"description":{_json(meta)}}}')
         return (
-            "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
-            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-            f"<title>{_e(title)}</title><meta name='description' content=\"{_e(meta)}\">"
-            f"<link rel='canonical' href='/c/{_e(slug)}'>"
+            f"<article class='guide'>"
             f"<script type='application/ld+json'>{schema}</script>"
-            "<style>body{font-family:system-ui,Arial,sans-serif;max-width:740px;margin:0 auto;"
-            "padding:28px;line-height:1.6;color:#15202b}h1{font-size:30px}h2{margin-top:26px;color:#0b6}"
-            ".cta{margin-top:30px;padding:16px;background:#f3f7f5;border-radius:10px}"
-            ".disc{margin-top:24px;color:#8a929b;font-size:12px}"
-            "a{color:#0a7}</style></head><body>"
+            f"<p class='crumb'><a href='/guides'>Guides</a> › {_e(title)}</p>"
             f"<h1>{_e(title)}</h1>{secs}{cta}"
-            f"<p class='disc'>{_e(PAGE_DISCLAIMER)}</p></body></html>")
+            f"<p class='disc'>{_e(PAGE_DISCLAIMER)}</p></article>")
 
     # --- Lane B (draft only, never posted here) ---
     def lane_b_draft(self, kind: str, cluster_keyword: str, product: dict) -> dict:

@@ -14,6 +14,7 @@ Build the React UI once:  cd dashboard/web && npm install && npm run build
 from __future__ import annotations
 
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -187,52 +188,109 @@ def _store_name() -> str:
     return os.environ.get("CENTURION_STORE_NAME", "").strip() or "Toolkit Shop"
 
 
-def _site_shell(title: str, body: str, *, meta: str = "", canonical: str = "") -> str:
-    """Wrap page body in a clean, branded site layout (header + footer) so the
-    public pages read like a real shop, not a bare centered page."""
+_NAV = [("/shop", "Shop"), ("/guides", "Guides"), ("/about", "About"), ("/faq", "FAQ")]
+
+
+def _site_shell(title: str, body: str, *, meta: str = "", canonical: str = "",
+                active: str = "", head_extra: str = "") -> str:
+    """Wrap page body in a branded, multi-page site layout (header + nav +
+    footer) so every public page — shop, product, and SEO guide — reads as one
+    coherent site rather than a bare floating document."""
     import html as _h
     store = _h.escape(_store_name())
+    initial = _h.escape((_store_name().strip()[:1] or "T").upper())
     metatag = f"<meta name='description' content=\"{_h.escape(meta[:150])}\">" if meta else ""
     canontag = f"<link rel='canonical' href='{_h.escape(canonical)}'>" if canonical else ""
+    nav = "".join(
+        f"<a href='{href}'{' class=on' if href == active else ''}>{_h.escape(label)}</a>"
+        for href, label in _NAV)
+    year = "2026"
     return (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        f"<title>{_h.escape(title)}</title>{metatag}{canontag}"
+        f"<title>{_h.escape(title)}</title>{metatag}{canontag}{head_extra}"
         "<style>"
-        ":root{--ink:#12202e;--muted:#5b6b7c;--line:#e6ebf0;--brand:#0a7d5a;--bg:#fbfcfd}"
-        "*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Segoe UI,Inter,Arial,"
-        "sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}"
+        ":root{--ink:#0f1f2e;--muted:#5b6b7c;--line:#e7ecf1;--brand:#0a7d5a;"
+        "--brand2:#0bb07b;--bg:#f7f9fb;--card:#fff}"
+        "*{box-sizing:border-box}html{scroll-behavior:smooth}"
+        "body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,"
+        "sans-serif;color:var(--ink);background:var(--bg);line-height:1.65;font-size:16px}"
         "a{color:var(--brand);text-decoration:none}a:hover{text-decoration:underline}"
-        ".hdr{border-bottom:1px solid var(--line);background:#fff}"
-        ".hdr .in,.wrap{max-width:920px;margin:0 auto;padding:0 22px}"
-        ".hdr .in{display:flex;align-items:center;justify-content:space-between;height:60px}"
-        ".brand{font-weight:800;font-size:18px;color:var(--ink)}"
-        ".nav a{margin-left:18px;color:var(--muted);font-weight:600;font-size:14px}"
-        ".wrap{padding-top:36px;padding-bottom:60px}"
-        ".hero{padding:26px 0 6px}.hero h1{font-size:32px;margin:0 0 8px}"
-        ".hero p{color:var(--muted);font-size:17px;margin:0}"
-        ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-top:26px}"
-        ".card{border:1px solid var(--line);border-radius:14px;padding:18px;background:#fff;"
-        "display:flex;flex-direction:column;min-height:150px}"
-        ".card h3{margin:0 0 6px;font-size:17px}.card .d{color:var(--muted);font-size:14px;flex:1}"
-        ".card .row{display:flex;align-items:center;justify-content:space-between;margin-top:14px}"
-        ".price{font-weight:800;font-size:20px}"
-        ".btn{display:inline-block;background:var(--brand);color:#fff;padding:11px 20px;border-radius:10px;"
-        "font-weight:700;font-size:15px}.btn:hover{text-decoration:none;filter:brightness(1.05)}"
-        ".prod{max-width:680px}.prod h1{font-size:30px}.prod .lead{font-size:18px;color:var(--muted)}"
-        ".inside{border:1px solid var(--line);border-radius:12px;padding:16px 20px;background:#fff;margin:22px 0}"
-        ".inside h3{margin:0 0 8px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}"
-        ".buyrow{display:flex;align-items:center;gap:18px;margin-top:22px}"
-        ".ftr{border-top:1px solid var(--line);color:var(--muted);font-size:13px;background:#fff}"
-        ".ftr .in{max-width:920px;margin:0 auto;padding:22px}"
-        ".fine{color:var(--muted);font-size:13px;margin-top:14px}"
-        "article h2{color:var(--brand);margin-top:28px}"
+        ".hdr{border-bottom:1px solid var(--line);background:rgba(255,255,255,.85);"
+        "backdrop-filter:saturate(1.4) blur(8px);position:sticky;top:0;z-index:10}"
+        ".hdr .in{max-width:960px;margin:0 auto;padding:0 22px;display:flex;align-items:center;"
+        "justify-content:space-between;height:62px}"
+        ".brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;color:var(--ink)}"
+        ".brand:hover{text-decoration:none}"
+        ".mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,"
+        "var(--brand2),var(--brand));color:#fff;display:grid;place-items:center;font-size:15px;"
+        "font-weight:800;box-shadow:0 2px 8px rgba(10,125,90,.35)}"
+        ".nav{display:flex;gap:4px}"
+        ".nav a{padding:7px 12px;border-radius:8px;color:var(--muted);font-weight:600;font-size:14px}"
+        ".nav a:hover{background:#eef3f0;color:var(--ink);text-decoration:none}"
+        ".nav a.on{color:var(--brand);background:#eaf6f1}"
+        ".wrap{max-width:960px;margin:0 auto;padding:40px 22px 64px}"
+        ".hero{background:linear-gradient(160deg,#0f1f2e,#123a30);color:#fff;border-radius:20px;"
+        "padding:48px 40px;margin-bottom:8px;box-shadow:0 12px 40px rgba(15,31,46,.18)}"
+        ".hero h1{font-size:36px;line-height:1.15;margin:0 0 12px;letter-spacing:-.02em}"
+        ".hero p{color:#c9dbd3;font-size:18px;margin:0;max-width:60ch}"
+        ".hero .badges{margin-top:22px;display:flex;flex-wrap:wrap;gap:10px}"
+        ".pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);"
+        "color:#eafaf3;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600}"
+        "h2.sec{font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);"
+        "margin:38px 0 4px}"
+        ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;margin-top:20px}"
+        ".card{border:1px solid var(--line);border-radius:16px;padding:22px;background:var(--card);"
+        "display:flex;flex-direction:column;min-height:170px;transition:transform .12s,box-shadow .12s}"
+        ".card:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(15,31,46,.09)}"
+        ".card h3{margin:0 0 8px;font-size:18px;line-height:1.3}"
+        ".card .d{color:var(--muted);font-size:14px;flex:1}"
+        ".card .row{display:flex;align-items:center;justify-content:space-between;margin-top:18px}"
+        ".price{font-weight:800;font-size:22px}"
+        ".btn{display:inline-block;background:linear-gradient(135deg,var(--brand2),var(--brand));"
+        "color:#fff;padding:12px 22px;border-radius:11px;font-weight:700;font-size:15px;"
+        "box-shadow:0 4px 14px rgba(10,125,90,.28)}"
+        ".btn:hover{text-decoration:none;filter:brightness(1.06)}"
+        ".btn.lg{padding:15px 30px;font-size:17px}"
+        ".prod{max-width:720px}.prod h1{font-size:32px;letter-spacing:-.01em;margin:.2em 0}"
+        ".prod .lead{font-size:19px;color:var(--muted)}"
+        ".inside{border:1px solid var(--line);border-radius:14px;padding:20px 24px;background:var(--card);"
+        "margin:24px 0}.inside h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;"
+        "letter-spacing:.06em;color:var(--muted)}.inside ul{margin:0;padding-left:20px}"
+        ".inside li{margin:6px 0}"
+        ".buyrow{display:flex;align-items:center;gap:20px;margin-top:26px;flex-wrap:wrap}"
+        ".trust{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 4px}"
+        ".chip{display:inline-flex;align-items:center;gap:7px;background:#eaf6f1;color:#0a5f45;"
+        "padding:7px 13px;border-radius:999px;font-size:13px;font-weight:600}"
+        ".guide{max-width:720px}.guide h1{font-size:31px;letter-spacing:-.01em;line-height:1.2}"
+        ".guide h2{color:var(--ink);margin-top:34px;font-size:21px}"
+        ".guide p{margin:12px 0}"
+        ".cta{margin-top:34px;padding:22px 24px;background:linear-gradient(135deg,#eaf6f1,#f2faf6);"
+        "border:1px solid #d5ece2;border-radius:14px}"
+        ".cta p{margin:0}.disc{margin-top:26px;color:#9aa4ad;font-size:12px}"
+        ".crumb{color:var(--muted);font-size:14px;margin-bottom:6px}"
+        ".prose{max-width:720px}.prose p{margin:14px 0}"
+        ".faq{max-width:720px}.faq details{border:1px solid var(--line);border-radius:12px;"
+        "padding:6px 18px;margin:12px 0;background:var(--card)}"
+        ".faq summary{font-weight:700;cursor:pointer;padding:12px 0;font-size:16px}"
+        ".faq p{color:var(--muted);margin:0 0 14px}"
+        ".empty{text-align:center;padding:50px 20px;color:var(--muted)}"
+        ".ftr{border-top:1px solid var(--line);background:var(--card)}"
+        ".ftr .in{max-width:960px;margin:0 auto;padding:30px 22px;display:flex;gap:16px;"
+        "flex-wrap:wrap;align-items:center;justify-content:space-between;color:var(--muted);font-size:13px}"
+        ".ftr .fl a{margin-right:16px;color:var(--muted);font-weight:600}"
+        ".fine{color:var(--muted);font-size:13px;margin-top:16px}"
+        "@media(max-width:640px){.hero{padding:34px 24px}.hero h1{font-size:28px}"
+        ".nav a{padding:7px 9px}}"
         "</style></head><body>"
-        f"<header class='hdr'><div class='in'><a class='brand' href='/shop'>{store}</a>"
-        f"<nav class='nav'><a href='/shop'>Shop</a></nav></div></header>"
+        f"<header class='hdr'><div class='in'>"
+        f"<a class='brand' href='/shop'><span class='mark'>{initial}</span>{store}</a>"
+        f"<nav class='nav'>{nav}</nav></div></header>"
         f"<main class='wrap'>{body}</main>"
-        f"<footer class='ftr'><div class='in'>{store} · <a href='/shop'>All products</a>"
-        " · Instant delivery after checkout · 7-day refund if it's not useful."
+        f"<footer class='ftr'><div class='in'>"
+        f"<div class='fl'><a href='/shop'>Shop</a><a href='/guides'>Guides</a>"
+        "<a href='/about'>About</a><a href='/faq'>FAQ</a></div>"
+        f"<div>© {year} {store} · Instant delivery · 7-day refund</div>"
         "</div></footer></body></html>")
 
 
@@ -907,35 +965,44 @@ def create_app(config_path: str | None = None) -> Flask:
         o = orch()
         prods = o.ledger.products()
         store = e(_store_name())
+        hero = (
+            "<section class='hero'>"
+            f"<h1>Practical toolkits that save you hours</h1>"
+            "<p>Ready-to-use templates, checklists and playbooks — buy once, "
+            "download instantly, and put it to work today.</p>"
+            "<div class='badges'>"
+            "<span class='pill'>⚡ Instant download</span>"
+            "<span class='pill'>💳 One-time purchase</span>"
+            "<span class='pill'>↩︎ 7-day refund</span>"
+            "</div></section>")
         if not prods:
-            body = ("<section class='hero'><h1>%s</h1>"
-                    "<p>New practical toolkits and templates are on the way. "
-                    "Check back shortly.</p></section>" % store)
-            return _site_shell(_store_name(), body, meta="Practical digital toolkits and templates.")
+            body = hero + ("<div class='empty'><p>New toolkits are being prepared "
+                           "right now — check back shortly, or read our "
+                           "<a href='/guides'>free guides</a> in the meantime.</p></div>")
+            return _site_shell(f"{_store_name()} — practical toolkits & templates", body,
+                               meta="Ready-to-use digital toolkits, templates and checklists.",
+                               active="/shop")
         cards = []
         for p in prods:
             desc = (p.get("description") or "A focused, ready-to-use digital resource.").strip()
             cards.append(
                 "<div class='card'>"
                 f"<h3><a href='/product/{e(p['slug'])}'>{e(p['title'])}</a></h3>"
-                f"<div class='d'>{e(desc[:120])}</div>"
+                f"<div class='d'>{e(desc[:130])}</div>"
                 "<div class='row'>"
                 f"<span class='price'>${p['price']:.0f}</span>"
                 f"<a class='btn' href='/product/{e(p['slug'])}'>View</a>"
                 "</div></div>")
-        body = (
-            "<section class='hero'>"
-            f"<h1>{store}</h1>"
-            "<p>Ready-to-use toolkits, templates and checklists — instant download, "
-            "one-time purchase.</p></section>"
-            f"<section class='grid'>{''.join(cards)}</section>")
-        return _site_shell(_store_name(), body,
-                           meta="Ready-to-use digital toolkits, templates and checklists.")
+        body = hero + f"<h2 class='sec'>All products</h2><section class='grid'>{''.join(cards)}</section>"
+        return _site_shell(f"{_store_name()} — practical toolkits & templates", body,
+                           meta="Ready-to-use digital toolkits, templates and checklists.",
+                           active="/shop")
 
     @app.get("/product/<slug>")
     def product_landing(slug):
         import html as _html
-        p = orch().ledger.get_product(slug)
+        o = orch()
+        p = o.ledger.get_product(slug)
         if not p:
             return "Product not found", 404
         e = _html.escape
@@ -947,30 +1014,135 @@ def create_app(config_path: str | None = None) -> Flask:
         inside = ("<div class='inside'><h3>What's inside</h3><ul>" +
                   "".join(f"<li>{e(h)}</li>" for h in headings) +
                   "</ul></div>") if headings else ""
+        # Related guides that point at this product (internal linking + looks alive).
+        related = [g for g in o.ledger.content_pages()
+                   if g.get("product_slug") == slug][:4]
+        rel_html = ""
+        if related:
+            items = "".join(
+                f"<li><a href='/c/{e(g['slug'])}'>{e(g.get('title',''))}</a></li>"
+                for g in related)
+            rel_html = (f"<div class='inside'><h3>Related guides</h3><ul>{items}</ul></div>")
         body = (
             "<article class='prod'>"
-            f"<p><a href='/shop'>← All products</a></p>"
+            "<p class='crumb'><a href='/shop'>Shop</a> › "
+            f"{e(p['title'])}</p>"
             f"<h1>{e(p['title'])}</h1>"
             f"<p class='lead'>{e(desc)}</p>"
+            "<div class='trust'>"
+            "<span class='chip'>⚡ Instant download</span>"
+            "<span class='chip'>💳 Secure checkout</span>"
+            "<span class='chip'>↩︎ 7-day refund</span></div>"
             f"{inside}"
             "<div class='buyrow'>"
             f"<span class='price'>${p['price']:.0f}</span>"
-            f"<a class='btn' href='{e(p['pay_url'])}'>Buy now</a>"
+            f"<a class='btn lg' href='{e(p['pay_url'])}'>Buy now →</a>"
             "</div>"
             "<p class='fine'>Instant delivery after checkout. If it's not useful "
             "to you, reply to your receipt within 7 days for a full refund.</p>"
+            f"{rel_html}"
             "</article>")
-        return _site_shell(p["title"], body, meta=desc[:150])
+        return _site_shell(p["title"], body, meta=desc[:150], active="/shop")
+
+    @app.get("/guides")
+    def guides_index():
+        import html as _html
+        e = _html.escape
+        o = orch()
+        pages = o.ledger.content_pages()
+        store = e(_store_name())
+        hero = ("<section class='hero'><h1>Guides &amp; resources</h1>"
+                "<p>Free, practical write-ups on getting everyday work done faster — "
+                "no fluff, no sign-up.</p></section>")
+        if not pages:
+            body = hero + ("<div class='empty'><p>New guides are being published "
+                           "regularly. Check back soon.</p></div>")
+            return _site_shell(f"Guides — {_store_name()}", body,
+                               meta="Free practical guides and resources.", active="/guides")
+        cards = "".join(
+            "<div class='card'>"
+            f"<h3><a href='/c/{e(g['slug'])}'>{e(g.get('title',''))}</a></h3>"
+            f"<div class='d'>{e((g.get('meta','') or '')[:130])}</div>"
+            f"<div class='row'><span></span><a href='/c/{e(g['slug'])}'>Read →</a></div>"
+            "</div>"
+            for g in pages)
+        body = hero + f"<section class='grid'>{cards}</section>"
+        return _site_shell(f"Guides — {_store_name()}", body,
+                           meta="Free practical guides and resources.", active="/guides")
+
+    @app.get("/about")
+    def about_page():
+        store = _store_name()
+        import html as _html
+        s = _html.escape(store)
+        body = (
+            "<div class='prose'>"
+            f"<h1>About {s}</h1>"
+            f"<p>{s} makes small, focused digital toolkits — templates, checklists "
+            "and step-by-step playbooks — for people who'd rather reuse a good "
+            "system than rebuild one from scratch every time.</p>"
+            "<p>Every product is a one-time purchase with instant download. No "
+            "subscriptions, no accounts to manage, no upsells. If something isn't "
+            "useful to you, reply to your receipt within 7 days and we'll refund it.</p>"
+            "<h2 class='sec'>How it works</h2>"
+            "<p>1. Browse the <a href='/shop'>shop</a> and pick a toolkit. "
+            "2. Check out securely. 3. Get your download link right away. "
+            "That's it — it's yours to keep and reuse.</p>"
+            "<p>Questions? The <a href='/faq'>FAQ</a> covers the common ones.</p>"
+            "</div>")
+        return _site_shell(f"About — {store}", body,
+                           meta=f"About {store} — practical digital toolkits.", active="/about")
+
+    @app.get("/faq")
+    def faq_page():
+        store = _store_name()
+        qa = [
+            ("How do I get my purchase?",
+             "Right after checkout you'll get an instant download link on the "
+             "confirmation page and by email. There's no account to set up."),
+            ("What format are the files?",
+             "Each toolkit is a self-contained digital file you can open, copy and "
+             "reuse on your own device. The product page lists what's inside."),
+            ("Is it a subscription?",
+             "No. Everything is a one-time purchase. You pay once and keep it."),
+            ("What if it isn't useful to me?",
+             "Just reply to your receipt within 7 days and we'll refund you in full — "
+             "no back-and-forth."),
+            ("Is checkout secure?",
+             "Yes. Payments are processed by Stripe; we never see or store your card "
+             "details."),
+        ]
+        import html as _html
+        e = _html.escape
+        items = "".join(
+            f"<details><summary>{e(q)}</summary><p>{e(a)}</p></details>" for q, a in qa)
+        body = (f"<div class='faq'><h1>Frequently asked questions</h1>{items}"
+                "<p class='fine'>Still stuck? Reply to any receipt email and we'll help.</p></div>")
+        return _site_shell(f"FAQ — {store}", body,
+                           meta="Common questions about purchases, delivery and refunds.",
+                           active="/faq")
 
     @app.get("/c/<slug>")
     def content_page(slug):
+        import html as _html
         o = orch()
         p = o.ledger.get_content_page(slug)
         if not p:
             return "Not found", 404
         o.ledger.incr_page_metric(slug, "views")
         f = Path(p["file"])
-        return f.read_text(encoding="utf-8") if f.exists() else "Page missing", 404 if not f.exists() else 200
+        if not f.exists():
+            return "Page missing", 404
+        raw = f.read_text(encoding="utf-8")
+        # Content files are stored as article FRAGMENTS (see growth/content.py).
+        # Legacy files may be full HTML docs — extract their <body> so old pages
+        # still render inside the current site chrome instead of a bare document.
+        m = re.search(r"<body[^>]*>(.*)</body>", raw, re.IGNORECASE | re.DOTALL)
+        inner = m.group(1) if m else raw
+        base = request.host_url.rstrip("/")
+        return _site_shell(p.get("title", "Guide"), inner,
+                           meta=p.get("meta", ""),
+                           canonical=f"{base}/c/{_html.escape(slug)}", active="/guides")
 
     @app.get("/go/<slug>")
     def go(slug):
@@ -987,7 +1159,8 @@ def create_app(config_path: str | None = None) -> Flask:
     def sitemap():
         o = orch()
         base = request.host_url.rstrip("/")
-        urls = [f"{base}/product/{p['slug']}" for p in o.ledger.products()]
+        urls = [f"{base}/shop", f"{base}/guides", f"{base}/about", f"{base}/faq"]
+        urls += [f"{base}/product/{p['slug']}" for p in o.ledger.products()]
         urls += [f"{base}/c/{p['slug']}" for p in o.ledger.content_pages()]
         body = ("<?xml version='1.0' encoding='UTF-8'?>"
                 "<urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>"
