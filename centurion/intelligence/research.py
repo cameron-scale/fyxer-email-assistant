@@ -98,7 +98,9 @@ def _titlecase(text: str) -> str:
         elif i > 0 and low in _SMALL_WORDS:
             out.append(low)
         else:
-            out.append(w[:1].upper() + w[1:])
+            out.append("-".join(
+                (p.upper() if p.upper() in {"SOP", "AR", "PDF", "EOB", "CMS"}
+                 else p[:1].upper() + p[1:]) for p in w.split("-")))
     return " ".join(out)
 
 

@@ -61,6 +61,7 @@ class DigitalProductsStrategy(Strategy):
                 product = storefront.publish_product(
                     self.ledger, self.assets, stripe, topic,
                     public_url=public_url, brand=brand)
+                self.ledger.set_state("last_stripe_error", "")  # clear stale error on success
                 return ExecutionResult(True, cost=0.0, revenue=0.0,
                                        external_ref=product["pay_url"], reversible=True,
                                        detail=f"published '{product['title']}' @ ${product['price']:.0f}")

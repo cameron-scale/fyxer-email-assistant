@@ -170,7 +170,8 @@ class Ledger:
             # Clear derived caches so products/pages/bandit/rewards start clean.
             for k in ("payment_links", "content_pages", "growth_records",
                       "growth_draft_n", "pending_rewards", "bandit",
-                      "products", "compute_spent", "cycle_count"):
+                      "products", "compute_spent", "cycle_count",
+                      "last_stripe_error"):
                 conn.execute("DELETE FROM state WHERE key=?", (k,))
             conn.execute(
                 "INSERT INTO transactions (ts, strategy, type, amount, balance_after, "

@@ -21,6 +21,12 @@ def _slug(text: str, n: int = 5) -> str:
 _TC_SMALL = {"a", "an", "the", "for", "of", "and", "to", "in", "on", "with", "+"}
 
 
+def _cap_part(p: str) -> str:
+    if p.upper() in {"SOP", "AR", "PDF", "EOB", "CMS"}:
+        return p.upper()
+    return p[:1].upper() + p[1:] if p else p
+
+
 def _titlecase_words(text: str) -> str:
     words = (text or "").split()
     out = []
@@ -30,7 +36,8 @@ def _titlecase_words(text: str) -> str:
         elif i > 0 and w.lower() in _TC_SMALL:
             out.append(w.lower())
         else:
-            out.append(w[:1].upper() + w[1:])
+            # capitalize each hyphen-separated part: "new-client" -> "New-Client"
+            out.append("-".join(_cap_part(p) for p in w.split("-")))
     return " ".join(out)
 
 
