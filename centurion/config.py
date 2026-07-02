@@ -73,6 +73,8 @@ _ENV_OVERRIDES = {
     "CENTURION_CYCLE_INTERVAL_MINUTES": ("cycle_interval_minutes", float),
     "CENTURION_BLOCK_ALL_SPEND": ("block_all_spend",
                                   lambda v: str(v).lower() in ("1", "true", "yes")),
+    "CENTURION_LANE_B": ("lane_b_enabled",
+                         lambda v: str(v).lower() in ("1", "true", "yes")),
 }
 
 

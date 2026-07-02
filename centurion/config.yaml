@@ -53,6 +53,12 @@ niche: ""
 # human approval and never auto-published, so the agent can't put your name on
 # something you haven't seen. Overridable via CENTURION_BRAND.
 brand_identity: ""
+# Lane B = draft-and-approve outreach (email/LinkedIn/community). It needs YOU to
+# post it, so fully-autonomous mode leaves it OFF (no drafts to approve). Lane A
+# (owned-infra SEO) still runs hands-off. Set true / CENTURION_LANE_B=1 to bring
+# back the approve-and-send drafts — the fastest path to a first sale, but it
+# requires your taps. Auto-posting to third-party platforms is never done.
+lane_b_enabled: false
 
 # --- Language Engine ---
 # auto | local | template | stub

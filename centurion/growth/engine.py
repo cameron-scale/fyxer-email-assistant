@@ -3,7 +3,8 @@
 Lane A (autonomous, owned infra): generate/publish SEO pages linking to products,
 maintain the page set. Zero paid spend, no third-party identity at risk.
 Lane B (draft + approve): generate community/video/outreach drafts and QUEUE them
-for one-tap approval. Never auto-posts.
+for one-tap approval. Never auto-posts. Disabled entirely in fully-autonomous
+mode so nothing waits on the operator.
 
 Uses the Decision Core bandit over (template, intent) arms — Thompson sampling
 applied to content instead of ads. Emits structured records for every action.
@@ -21,7 +22,7 @@ from . import guard
 class GrowthEngine:
     def __init__(self, ledger, language, bandit, approvals, alerter=None,
                  max_pages_per_cycle: int = 2, max_drafts_per_cycle: int = 2,
-                 max_pages_per_day: int = 3):
+                 max_pages_per_day: int = 3, lane_b_enabled: bool = True):
         self.ledger = ledger
         self.planner = KeywordPlanner()
         self.factory = ContentFactory(language)
@@ -30,6 +31,10 @@ class GrowthEngine:
         self.alerter = alerter
         self.max_pages = max_pages_per_cycle
         self.max_drafts = max_drafts_per_cycle
+        # Lane B (draft-and-approve outreach) requires a human to post it — in
+        # fully-autonomous mode it's disabled so nothing waits on the operator.
+        # Lane A (owned-infra SEO) still runs and needs no approval.
+        self.lane_b_enabled = lane_b_enabled
         # Decouple SEO-page volume from cycle frequency: a hard daily cap keeps
         # publishing well below anything Google would read as scaled-content
         # abuse, no matter how often the agent cycles.
@@ -84,6 +89,12 @@ class GrowthEngine:
                 published += 1
 
         # ---- Lane B: draft + queue for approval (never auto-post) ----
+        # In fully-autonomous mode (lane_b_enabled=False) skip drafting entirely
+        # so nothing ever waits on the operator. Lane A above still runs. Auto-
+        # POSTING to third-party platforms is never an option (ToS + brand risk).
+        if not self.lane_b_enabled:
+            self._save_records(records)
+            return records
         drafted = 0
         for cluster in clusters:
             if drafted >= self.max_drafts:

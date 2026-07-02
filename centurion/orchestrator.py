@@ -120,7 +120,8 @@ class Orchestrator:
         # Growth module: SEO (Lane A autonomous) + draft-and-approve (Lane B).
         from integrations.twilio_client import AlertClient
         self.growth = GrowthEngine(self.ledger, self.language, self.bandit,
-                                   self.approvals, alerter=AlertClient())
+                                   self.approvals, alerter=AlertClient(),
+                                   lane_b_enabled=bool(self.cfg.get("lane_b_enabled", False)))
         self.strategies = self._build_strategies()
         self.cycle_count = int(self.ledger.get_state("cycle_count", "0") or 0)
 

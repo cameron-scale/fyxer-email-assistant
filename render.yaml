@@ -36,6 +36,9 @@ services:
         value: "template"    # no local model in the cloud; stay deterministic
       - key: CENTURION_NICHE
         value: "medical billing for small practices"   # a market you can reach
+      - key: CENTURION_LANE_B
+        value: "0"           # fully autonomous: no draft-and-approve queue. Set
+                             # to 1 to bring back approve-and-send outreach drafts.
       # CENTURION_BRAND (your company name) and CENTURION_BRIDGE_TOKEN are set
       # in the dashboard (sync:false) — not committed here.
       - key: CENTURION_BRAND
