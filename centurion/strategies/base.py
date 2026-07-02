@@ -66,9 +66,10 @@ class Strategy:
             self.config.get("scoring_weights"))
         funded = context.get("funded_capital", capital)
         lessons = context.get("lessons")
-        # Rotate the idea pool every few cycles and skip topics that already
-        # shipped, so the catalog GROWS instead of regenerating one product.
-        epoch = int(context.get("cycle_count", 0)) // 3
+        # Rotate the idea pool EACH cycle and skip topics that already shipped,
+        # so the broad catalog keeps growing into new niches instead of
+        # refreshing the same few products.
+        epoch = int(context.get("cycle_count", 0))
         opps = self.research.ideate(self.name, capital, n=6, lessons=lessons,
                                     epoch=epoch)
         existing = {p.get("title", "").lower() for p in self.ledger.products()}

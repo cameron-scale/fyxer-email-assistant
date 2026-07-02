@@ -22,7 +22,7 @@ from . import guard
 class GrowthEngine:
     def __init__(self, ledger, language, bandit, approvals, alerter=None,
                  max_pages_per_cycle: int = 2, max_drafts_per_cycle: int = 2,
-                 max_pages_per_day: int = 3, lane_b_enabled: bool = True):
+                 max_pages_per_day: int = 8, lane_b_enabled: bool = True):
         self.ledger = ledger
         self.planner = KeywordPlanner()
         self.factory = ContentFactory(language)
