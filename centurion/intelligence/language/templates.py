@@ -18,6 +18,22 @@ def _slug(text: str, n: int = 5) -> str:
     return "-".join(words[:n]) or "item"
 
 
+_TC_SMALL = {"a", "an", "the", "for", "of", "and", "to", "in", "on", "with", "+"}
+
+
+def _titlecase_words(text: str) -> str:
+    words = (text or "").split()
+    out = []
+    for i, w in enumerate(words):
+        if w.upper() in {"SOP", "AR", "PDF", "EOB", "CMS"}:
+            out.append(w.upper())
+        elif i > 0 and w.lower() in _TC_SMALL:
+            out.append(w.lower())
+        else:
+            out.append(w[:1].upper() + w[1:])
+    return " ".join(out)
+
+
 def _stable_pick(options: list[str], seed_text: str) -> str:
     h = int(hashlib.sha256(seed_text.encode()).hexdigest(), 16)
     return options[h % len(options)]
@@ -52,6 +68,13 @@ class TemplateProvider(LanguageProvider):
     def _field(self, key: str, topic: str, prompt: str) -> str:
         key_l = key.lower()
         if "title" in key_l or "headline" in key_l or "name" in key_l:
+            t = topic.strip()
+            # If the topic already reads as a finished product name, use it as-is
+            # (title-cased) — don't wrap it into "The … Toolkit" gibberish.
+            if re.search(r"\b(pack|kit|toolkit|checklist|sop|template|templates|"
+                         r"tracker|bundle|guide|script|scripts|playbook|planner|"
+                         r"worksheet|system|set|cheatsheet)s?\b", t, re.I):
+                return _titlecase_words(t)
             adj = _stable_pick(["Essential", "Practical", "Complete", "Pro"], topic)
             return f"The {adj} {topic.title()} Toolkit"
         if "summary" in key_l or "brief" in key_l:

@@ -15,9 +15,12 @@ class DigitalProductsStrategy(Strategy):
     typical_sale = 19.0
 
     def plan(self, opportunity: Opportunity) -> List[Action]:
-        # A clean, customer-facing topic from the raw idea (strip lens tag + the
-        # demand/competition annotation), used for the asset and the Stripe product.
-        topic = opportunity.brief.split("|")[0].split("]")[-1].strip() or opportunity.brief
+        # Clean, customer-facing product name (falls back to parsing the brief for
+        # older opportunities that predate the product_name field).
+        topic = (getattr(opportunity, "product_name", "") or "").strip()
+        if not topic:
+            topic = opportunity.brief.split("|")[0].split("]")[-1].strip() or opportunity.brief
+            topic = topic.split("—")[0].strip()
         self.assets.product_listing(topic, self.name)
         self.assets.landing_page(topic, self.name)
         actions = [Action(

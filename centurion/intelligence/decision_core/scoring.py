@@ -34,6 +34,8 @@ class Opportunity:
     time_to_revenue_days: float
     # opportunity type within a strategy, used as a bandit arm too
     opp_type: str = "default"
+    # clean, customer-facing product name (the creative rationale stays in brief)
+    product_name: str = ""
 
     def ev_per_dollar(self) -> float:
         if self.est_capital <= 0:

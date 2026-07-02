@@ -83,6 +83,25 @@ class ResearchSignal:
     source: str = "offline-prior"
 
 
+_SMALL_WORDS = {"a", "an", "the", "for", "of", "and", "to", "in", "on", "with"}
+
+
+def _titlecase(text: str) -> str:
+    """Title-case a product/format phrase, keeping small words lower (except the
+    first) and preserving common acronyms (SOP, AR, PDF)."""
+    words = (text or "").split()
+    out = []
+    for i, w in enumerate(words):
+        low = w.lower()
+        if w.upper() in {"SOP", "AR", "PDF", "EOB", "CMS"}:
+            out.append(w.upper())
+        elif i > 0 and low in _SMALL_WORDS:
+            out.append(low)
+        else:
+            out.append(w[:1].upper() + w[1:])
+    return " ".join(out)
+
+
 def _niche_audiences(niche: str) -> List[str]:
     """Expand a configured market niche into audience segments so ideation stays
     varied while every product aims at a market the operator can actually reach.
@@ -170,10 +189,10 @@ class ResearchEngine:
         for i in range(n):
             lens = LENSES[i % len(LENSES)]
             sig = signals[i % len(signals)]
-            idea = self._apply_lens(lens, sig, rng, prefer)
-            if any(a in idea.lower() for a in avoid):
+            name, rationale = self._apply_lens(lens, sig, rng, prefer)
+            if any(a in name.lower() for a in avoid):
                 # the agent steers clear of angles tied to prior failures
-                idea = f"{idea} (reworked to avoid a prior dead end)"
+                rationale = f"{rationale} (reworked to avoid a prior dead end)"
 
             # Cost/return estimates are spend-light by design. Capital scales
             # gently with available budget but is bounded so ideation never
@@ -184,37 +203,44 @@ class ResearchEngine:
                                + rng.uniform(8.0, 60.0), 2)
             opps.append(Opportunity(
                 strategy=strategy,
-                brief=f"[{lens}] {idea} | demand={sig.demand}, "
+                brief=f"[{lens}] {name} — {rationale} | demand={sig.demand}, "
                       f"competition={sig.competition}, price={sig.pricing}",
                 est_return=est_return,
                 est_capital=est_capital,
                 est_build_hours=round(rng.uniform(0.5, 6.0), 1),
                 time_to_revenue_days=round(rng.uniform(0.5, 12.0), 1),
                 opp_type=lens,
+                product_name=name,
             ))
         return opps
 
     def _apply_lens(self, lens: str, sig: ResearchSignal, rng: random.Random,
-                    prefer: List[str]) -> str:
+                    prefer: List[str]) -> tuple[str, str]:
+        """Return (product_name, rationale). The NAME is clean and customer-
+        facing (it becomes the product title); the RATIONALE is the internal
+        creative angle (logged in the brief, never shown to a buyer). The old
+        code used the verbose rationale AS the title, producing garbage like
+        'The Essential A New-Client Onboarding Sop Riding Ai Workflows Toolkit'.
+        """
         niche = sig.topic
         formats = self._format_pool()
-        audiences = self._audience_pool()
         fmt = rng.choice(formats)
-        if lens == "analogy":
-            other = rng.choice(audiences)
-            return f"Port the playbook that works for {other} into a {fmt} for {niche}"
+        name = _titlecase(fmt)
         if lens == "combination":
-            fmt2 = rng.choice(formats)
-            return f"Fuse a {fmt} with a {fmt2} so {niche} solve two problems in one buy"
+            fmt2 = rng.choice([f for f in formats if f != fmt] or formats)
+            name = f"{_titlecase(fmt)} + {_titlecase(fmt2)} Bundle"
+            return name, f"bundle two needs of {niche} into one purchase"
         if lens == "first-principles":
-            return f"Strip the need of {niche} to its core and rebuild it as a lean {fmt}"
+            return name, f"stripped-down, no-fluff {fmt} for {niche}"
         if lens == "constraint-flip":
-            return f"A {fmt} for {niche} that assumes zero budget and ten free minutes"
+            name = f"5-Minute {_titlecase(fmt)}"
+            return name, f"a {fmt} that assumes zero budget and ten free minutes"
         if lens == "trend-riding":
-            hot = prefer[0] if prefer else "AI workflows"
-            return f"A {fmt} riding {hot}, aimed squarely at {niche}"
+            return name, f"a modern {fmt} aimed at {niche}"
+        if lens == "analogy":
+            return name, f"proven pattern ported into a {fmt} for {niche}"
         # pain-mining
-        return f"A {fmt} that kills the single sharpest frustration of {niche}"
+        return name, f"a {fmt} that kills the sharpest frustration of {niche}"
 
     def brief_for(self, opp: Opportunity) -> str:
         """Use the Language Engine to turn a raw idea into a tighter brief.
