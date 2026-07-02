@@ -85,10 +85,16 @@ class RiskManager:
 
     # --- funded capital reference ---
     def funded_capital(self) -> float:
-        funded = self.ledger.funded_capital()
-        if funded <= 0:
-            funded = float(self.cfg.get("funded_capital", 100.0))
-        return funded
+        # Honor an EXPLICIT baseline (including $0 = "nothing deposited yet") set
+        # by the operator. Only fall back to the config default when no baseline
+        # has ever been set, so "$0" stays $0 on the dashboard and in the caps.
+        v = self.ledger.get_state("funded_capital")
+        if v is not None:
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                pass
+        return float(self.cfg.get("funded_capital", 100.0))
 
     def _action_fraction(self) -> float:
         """Per-action cap expressed as a fraction of capital (default 10%)."""

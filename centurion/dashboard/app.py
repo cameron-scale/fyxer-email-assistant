@@ -588,8 +588,8 @@ def create_app(config_path: str | None = None) -> Flask:
             amount = round(float(body.get("amount", 10)), 2)
         except (TypeError, ValueError):
             return jsonify(error="bad amount"), 400
-        if not (1 <= amount <= 10000):
-            return jsonify(error="amount must be between $1 and $10,000"), 400
+        if not (0 <= amount <= 10000):
+            return jsonify(error="amount must be between $0 and $10,000"), 400
         led = orch().ledger
         from ledger import SEED_DESCRIPTION
         has_activity = any(t.get("description") != SEED_DESCRIPTION
@@ -662,7 +662,7 @@ def create_app(config_path: str | None = None) -> Flask:
             amount = round(float(body.get("amount")), 2)
         except (TypeError, ValueError):
             return jsonify(error="bad amount"), 400
-        if amount <= 0 or amount > 1_000_000:
+        if amount < 0 or amount > 1_000_000:
             return jsonify(error="amount must be between 0 and 1,000,000"), 400
         led = orch().ledger
         has_activity = any(

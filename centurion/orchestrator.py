@@ -213,11 +213,14 @@ class Orchestrator:
             self._operate_live_assets(rng, report)
             return self._finish_cycle(report)
 
+        # NOTE: capital at/below the floor stops SPENDING (RiskManager.check_spend
+        # enforces this on every paid action), but it must NOT stop building FREE
+        # products or collecting revenue — a collect-only machine at $0 should keep
+        # listing $0-cost products and taking money. So we fall through to the
+        # normal cycle instead of halting; only spends get blocked.
         if self.risk.capital_exhausted():
-            report.notes.append("Capital at/below floor: clean stop on spending; "
-                                "operating and reporting on live assets only.")
-            self._operate_live_assets(rng, report)
-            return self._finish_cycle(report)
+            report.notes.append("Capital at/below floor: paid spending blocked; "
+                                "still building free assets and collecting.")
 
         try:
             self._decide_and_act(rng, report)
