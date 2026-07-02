@@ -112,7 +112,7 @@ export default function ConnectScreen({ goBack, navigate }) {
     if (!backendReady) {
       Alert.alert(
         'Add your server first',
-        'To connect Outlook, paste your backend URL in Settings → "Backend server URL".',
+        'The server is starting up. Please wait a moment and try again.',
         [{ text: 'Open Settings', onPress: () => navigate && navigate('Settings') }, { text: 'OK' }]
       );
       return;
@@ -164,12 +164,12 @@ export default function ConnectScreen({ goBack, navigate }) {
         <Section title="Connect a mailbox" />
         <ProviderCard
           icon="logo-google" color="#EA4335" title="Gmail"
-          subtitle={accounts.gmail ? 'Connected · AI summaries on' : backendReady ? 'Tap to sign in' : 'Set server URL below'}
+          subtitle={accounts.gmail ? 'Connected · AI summaries on' : backendReady ? 'Tap to sign in' : 'Connecting…'}
           connected={accounts.gmail} busy={busy === 'google'} onPress={handleGmail} onDisconnect={() => disconnect('gmail')}
         />
         <ProviderCard
           icon="mail" color="#0A84FF" title="Outlook / Microsoft 365"
-          subtitle={accounts.outlook ? 'Connected · AI summaries on' : backendReady ? 'Tap to sign in' : 'Set server URL below'}
+          subtitle={accounts.outlook ? 'Connected · AI summaries on' : backendReady ? 'Tap to sign in' : 'Connecting…'}
           connected={accounts.outlook} busy={busy === 'outlook'} onPress={handleOutlook} onDisconnect={() => disconnect('outlook')}
         />
         <ProviderCard
@@ -251,14 +251,6 @@ export default function ConnectScreen({ goBack, navigate }) {
           <Row icon="checkmark-circle" color="#2E7D32" title="Focused inbox" right={<Toggle value={prefs.focusedInbox !== false} onChange={(v) => setPrefs({ focusedInbox: v })} />} />
           <Row icon="notifications" color="#B45309" title="Notifications" right={<Toggle value={prefs.notifications !== false} onChange={(v) => setPrefs({ notifications: v })} />} />
           <Row icon="play-circle" color={colors.blue} title="Replay tutorial" onPress={startTour} last />
-        </View>
-
-        {/* Advanced */}
-        <Section title="Backend server URL" />
-        <View style={styles.group}>
-          <TextInput style={styles.input} value={prefs.serverUrl} onChangeText={(t) => setPrefs({ serverUrl: t.trim() })}
-            placeholder="https://your-server.onrender.com" placeholderTextColor={colors.textFaint}
-            autoCapitalize="none" autoCorrect={false} keyboardType="url" />
         </View>
 
         <View style={styles.privacy}>
