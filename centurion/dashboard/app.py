@@ -183,6 +183,59 @@ def _hhmmss(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
 
 
+def _store_name() -> str:
+    return os.environ.get("CENTURION_STORE_NAME", "").strip() or "Toolkit Shop"
+
+
+def _site_shell(title: str, body: str, *, meta: str = "", canonical: str = "") -> str:
+    """Wrap page body in a clean, branded site layout (header + footer) so the
+    public pages read like a real shop, not a bare centered page."""
+    import html as _h
+    store = _h.escape(_store_name())
+    metatag = f"<meta name='description' content=\"{_h.escape(meta[:150])}\">" if meta else ""
+    canontag = f"<link rel='canonical' href='{_h.escape(canonical)}'>" if canonical else ""
+    return (
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        f"<title>{_h.escape(title)}</title>{metatag}{canontag}"
+        "<style>"
+        ":root{--ink:#12202e;--muted:#5b6b7c;--line:#e6ebf0;--brand:#0a7d5a;--bg:#fbfcfd}"
+        "*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Segoe UI,Inter,Arial,"
+        "sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}"
+        "a{color:var(--brand);text-decoration:none}a:hover{text-decoration:underline}"
+        ".hdr{border-bottom:1px solid var(--line);background:#fff}"
+        ".hdr .in,.wrap{max-width:920px;margin:0 auto;padding:0 22px}"
+        ".hdr .in{display:flex;align-items:center;justify-content:space-between;height:60px}"
+        ".brand{font-weight:800;font-size:18px;color:var(--ink)}"
+        ".nav a{margin-left:18px;color:var(--muted);font-weight:600;font-size:14px}"
+        ".wrap{padding-top:36px;padding-bottom:60px}"
+        ".hero{padding:26px 0 6px}.hero h1{font-size:32px;margin:0 0 8px}"
+        ".hero p{color:var(--muted);font-size:17px;margin:0}"
+        ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-top:26px}"
+        ".card{border:1px solid var(--line);border-radius:14px;padding:18px;background:#fff;"
+        "display:flex;flex-direction:column;min-height:150px}"
+        ".card h3{margin:0 0 6px;font-size:17px}.card .d{color:var(--muted);font-size:14px;flex:1}"
+        ".card .row{display:flex;align-items:center;justify-content:space-between;margin-top:14px}"
+        ".price{font-weight:800;font-size:20px}"
+        ".btn{display:inline-block;background:var(--brand);color:#fff;padding:11px 20px;border-radius:10px;"
+        "font-weight:700;font-size:15px}.btn:hover{text-decoration:none;filter:brightness(1.05)}"
+        ".prod{max-width:680px}.prod h1{font-size:30px}.prod .lead{font-size:18px;color:var(--muted)}"
+        ".inside{border:1px solid var(--line);border-radius:12px;padding:16px 20px;background:#fff;margin:22px 0}"
+        ".inside h3{margin:0 0 8px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}"
+        ".buyrow{display:flex;align-items:center;gap:18px;margin-top:22px}"
+        ".ftr{border-top:1px solid var(--line);color:var(--muted);font-size:13px;background:#fff}"
+        ".ftr .in{max-width:920px;margin:0 auto;padding:22px}"
+        ".fine{color:var(--muted);font-size:13px;margin-top:14px}"
+        "article h2{color:var(--brand);margin-top:28px}"
+        "</style></head><body>"
+        f"<header class='hdr'><div class='in'><a class='brand' href='/shop'>{store}</a>"
+        f"<nav class='nav'><a href='/shop'>Shop</a></nav></div></header>"
+        f"<main class='wrap'>{body}</main>"
+        f"<footer class='ftr'><div class='in'>{store} · <a href='/shop'>All products</a>"
+        " · Instant delivery after checkout · 7-day refund if it's not useful."
+        "</div></footer></body></html>")
+
+
 def _product_headings(product: dict) -> list:
     """Pull the deliverable's real <h2> section headings so the landing page
     describes what's actually in the file — not a hardcoded claim."""
@@ -845,6 +898,40 @@ def create_app(config_path: str | None = None) -> Flask:
         return jsonify(error=type(e).__name__, message=str(e),
                        path=request.path, trace=tb[-1800:]), 500
 
+    @app.get("/shop")
+    def shop_home():
+        # Public storefront. Lives at /shop so it never collides with the operator
+        # dashboard SPA served at "/". Product pages link here for a real-store feel.
+        import html as _html
+        e = _html.escape
+        o = orch()
+        prods = o.ledger.products()
+        store = e(_store_name())
+        if not prods:
+            body = ("<section class='hero'><h1>%s</h1>"
+                    "<p>New practical toolkits and templates are on the way. "
+                    "Check back shortly.</p></section>" % store)
+            return _site_shell(_store_name(), body, meta="Practical digital toolkits and templates.")
+        cards = []
+        for p in prods:
+            desc = (p.get("description") or "A focused, ready-to-use digital resource.").strip()
+            cards.append(
+                "<div class='card'>"
+                f"<h3><a href='/product/{e(p['slug'])}'>{e(p['title'])}</a></h3>"
+                f"<div class='d'>{e(desc[:120])}</div>"
+                "<div class='row'>"
+                f"<span class='price'>${p['price']:.0f}</span>"
+                f"<a class='btn' href='/product/{e(p['slug'])}'>View</a>"
+                "</div></div>")
+        body = (
+            "<section class='hero'>"
+            f"<h1>{store}</h1>"
+            "<p>Ready-to-use toolkits, templates and checklists — instant download, "
+            "one-time purchase.</p></section>"
+            f"<section class='grid'>{''.join(cards)}</section>")
+        return _site_shell(_store_name(), body,
+                           meta="Ready-to-use digital toolkits, templates and checklists.")
+
     @app.get("/product/<slug>")
     def product_landing(slug):
         import html as _html
@@ -857,29 +944,23 @@ def create_app(config_path: str | None = None) -> Flask:
         # "What's inside" derived from the deliverable's REAL section headings —
         # never a hardcoded claim the file might not back up.
         headings = _product_headings(p)
-        inside = ("<h3>What's inside</h3><ul>" +
-                  "".join(f"<li>{e(h)}</li>" for h in headings) + "</ul>") if headings else ""
-        return (
-            "<!doctype html><html><head><meta charset='utf-8'>"
-            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-            f"<title>{e(p['title'])}</title>"
-            f"<meta name='description' content=\"{e(desc[:150])}\">"
-            "<style>body{font-family:system-ui,Arial,sans-serif;max-width:620px;margin:0 auto;"
-            "padding:40px;line-height:1.6;color:#13202c;text-align:center}"
-            "ul{text-align:left;display:inline-block;margin:14px auto}"
-            ".buy{display:inline-block;margin-top:18px;background:#0b6;color:#fff;padding:14px 28px;"
-            "border-radius:10px;text-decoration:none;font-weight:700;font-size:18px}"
-            ".p{font-size:34px;font-weight:800;margin:8px 0}"
-            ".fine{color:#7a8699;font-size:13px;margin-top:16px}</style></head><body>"
+        inside = ("<div class='inside'><h3>What's inside</h3><ul>" +
+                  "".join(f"<li>{e(h)}</li>" for h in headings) +
+                  "</ul></div>") if headings else ""
+        body = (
+            "<article class='prod'>"
+            f"<p><a href='/shop'>← All products</a></p>"
             f"<h1>{e(p['title'])}</h1>"
-            f"<p>{e(desc)}</p>"
+            f"<p class='lead'>{e(desc)}</p>"
             f"{inside}"
-            f"<div class='p'>${p['price']:.0f}</div>"
-            f"<a class='buy' href='{e(p['pay_url'])}'>Buy now</a>"
+            "<div class='buyrow'>"
+            f"<span class='price'>${p['price']:.0f}</span>"
+            f"<a class='btn' href='{e(p['pay_url'])}'>Buy now</a>"
+            "</div>"
             "<p class='fine'>Instant delivery after checkout. If it's not useful "
             "to you, reply to your receipt within 7 days for a full refund.</p>"
-            "</body></html>"
-        )
+            "</article>")
+        return _site_shell(p["title"], body, meta=desc[:150])
 
     @app.get("/c/<slug>")
     def content_page(slug):
