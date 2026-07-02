@@ -14,12 +14,12 @@ from typing import Any, Dict
 
 from intelligence.language.provider import LanguageProvider
 
-# Educational-only disclaimer carried on every deliverable — the medical-billing
-# niche is YMYL, and a local model can be confidently wrong about payer rules.
+# Neutral, niche-agnostic disclaimer carried on every deliverable, so nothing
+# reads as professional (legal/medical/financial) advice regardless of topic.
 DISCLAIMER = (
-    "This resource is educational only and is not billing, coding, legal, or "
-    "financial advice. Verify everything against current payer policies and "
-    "official code sets before acting on it.")
+    "This is a general educational resource provided as-is, with no guarantees. "
+    "Use your own judgment and verify anything important for your situation "
+    "before relying on it.")
 
 
 def _esc(s: Any) -> str:

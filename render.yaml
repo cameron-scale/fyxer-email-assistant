@@ -35,7 +35,9 @@ services:
       - key: CENTURION_LANGUAGE_PROVIDER
         value: "template"    # no local model in the cloud; stay deterministic
       - key: CENTURION_NICHE
-        value: "medical billing for small practices"   # a market you can reach
+        value: ""            # broad mode: rotate across general digital-product
+                             # niches and let the bandit find what sells. Set a
+                             # specific market here to target one you can reach.
       - key: CENTURION_LANE_B
         value: "0"           # fully autonomous: no draft-and-approve queue. Set
                              # to 1 to bring back approve-and-send outreach drafts.

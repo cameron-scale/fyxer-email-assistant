@@ -14,9 +14,9 @@ from typing import List, Optional
 
 from . import guard
 
-# Educational-only line for YMYL niches (billing/coding is not professional advice).
-PAGE_DISCLAIMER = ("Educational only — not billing, coding, legal, or financial "
-                   "advice. Verify against current payer policy before acting.")
+# Neutral, niche-agnostic educational line (kept generic so it fits any topic).
+PAGE_DISCLAIMER = ("General information provided as-is, with no guarantees — "
+                   "use your own judgment and verify anything important.")
 
 
 def _e(s) -> str:
