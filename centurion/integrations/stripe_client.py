@@ -90,13 +90,19 @@ class StripeClient:
                             idem: Optional[str] = None,
                             redirect_url: Optional[str] = None,
                             metadata: Optional[dict] = None) -> PaymentLink:
-        idem = idem or self.idempotency_key("plink", product_name, f"{amount:.2f}")
+        base = idem or self.idempotency_key("plink", product_name, f"{amount:.2f}")
         if self.mock:
-            return PaymentLink(id=f"mock_plink_{idem[:12]}",
-                               url=f"https://mock.stripe/pay/{idem[:12]}",
+            return PaymentLink(id=f"mock_plink_{base[:12]}",
+                               url=f"https://mock.stripe/pay/{base[:12]}",
                                amount=amount, mock=True)
+        # Make the Price idempotent on (name, amount) so re-publishing the SAME
+        # product reuses the SAME price object instead of minting a new price.id
+        # each time. Stripe rejects an idempotency key reused with different
+        # params, so keys MUST be a function of the params they accompany.
+        cents = int(round(amount * 100))
         price = self._stripe.Price.create(
-            unit_amount=int(round(amount * 100)), currency="usd",
+            idempotency_key=self.idempotency_key("price", product_name, str(cents)),
+            unit_amount=cents, currency="usd",
             product_data={"name": product_name})
         params = {"line_items": [{"price": price.id, "quantity": 1}]}
         if redirect_url:
@@ -107,7 +113,10 @@ class StripeClient:
             # Stripe copies payment-link metadata onto each Checkout Session it
             # creates, so the webhook can classify the payment (sale vs deposit).
             params["metadata"] = dict(metadata)
-        link = self._stripe.PaymentLink.create(idempotency_key=idem, **params)
+        # Tie the PaymentLink key to the actual price.id (+ redirect), so identical
+        # inputs are a safe retry and any parameter change gets a fresh key.
+        link_idem = self.idempotency_key("plink", base, price.id, redirect_url or "")
+        link = self._stripe.PaymentLink.create(idempotency_key=link_idem, **params)
         return PaymentLink(id=link.id, url=link.url, amount=amount, mock=False)
 
     def get_charge(self, charge_id: str) -> ChargeRecord:
