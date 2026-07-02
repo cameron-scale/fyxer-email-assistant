@@ -191,8 +191,11 @@ def _product_headings(product: dict) -> list:
         text = Path(product["file"]).read_text(encoding="utf-8")
     except Exception:
         return []
+    import html as _html
     heads = re.findall(r"<h2[^>]*>(.*?)</h2>", text, re.IGNORECASE | re.DOTALL)
-    clean = [re.sub(r"<[^>]+>", "", h).strip() for h in heads]
+    # Strip tags AND unescape entities (so "Templates &amp; checklist" becomes
+    # "Templates & checklist" — the caller re-escapes exactly once for display).
+    clean = [_html.unescape(re.sub(r"<[^>]+>", "", h)).strip() for h in heads]
     return [h for h in clean if h][:6]
 
 
