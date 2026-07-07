@@ -19,8 +19,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ActivityIndicator } from 'react-native';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
+import { buildReviewGroups } from '../lib/reviewGroups';
 
 // ── Mock data ───────────────────────────────────────────────────────────────
 
@@ -212,63 +214,78 @@ export default function BulkTriageScreen({ goBack, navigate, params }) {
   const store = useStore();
   const hasSeenOnboarding = store?.prefs?.hasSeenOnboarding;
 
+  const { reviewEmails, reviewScanning, scanReview, applyReviewAction, vips, prefs } = store;
+
   // Onboarding gate. Runs as an effect so we never call navigate during render.
   useEffect(() => {
     if (!hasSeenOnboarding) navigate && navigate('Onboarding');
   }, [hasSeenOnboarding, navigate]);
-  if (!hasSeenOnboarding) return null;
+
+  // Scan the real inbox once when the screen opens so every step works off real
+  // mail (real groups, real counts, real previews) instead of sample data.
+  useEffect(() => { if (hasSeenOnboarding && scanReview) scanReview(); }, [hasSeenOnboarding]); // eslint-disable-line
+
+  // Build the review groups from the scanned mail, scored with the user's own
+  // signals (VIPs, sender labels, learned-important, kept senders).
+  const groups = useMemo(
+    () => buildReviewGroups(reviewEmails || [], {
+      vips,
+      categories: prefs?.categories,
+      knownImportant: prefs?.knownImportant,
+      senderLabels: prefs?.senderLabels,
+      keptSenders: prefs?.keptSenders,
+    }),
+    [reviewEmails, vips, prefs?.categories, prefs?.knownImportant, prefs?.senderLabels, prefs?.keptSenders],
+  );
 
   // step: 'intro' | 'scanning' | 'review' | 'confirm' | 'done'
   const [step, setStep] = useState('intro');
-  // decisions: { [bucketId]: actionKey }  (only 'archive'|'snooze'|'keep'|'review')
+  // decisions: { [groupId]: actionKey }  (only 'archive'|'snooze'|'keep'|'review')
   const [decisions, setDecisions] = useState({});
 
-  const decidedIds = Object.keys(decisions);
-  const decidedBuckets = BUCKETS.filter((b) => decisions[b.id]);
-  const undecidedBuckets = BUCKETS.filter((b) => !decisions[b.id]);
+  if (!hasSeenOnboarding) return null;
 
-  const handledEmails = useMemo(
-    () => decidedBuckets.reduce((sum, b) => sum + b.count, 0),
-    [decidedBuckets],
-  );
+  const decidedIds = Object.keys(decisions);
+  const decidedBuckets = groups.filter((b) => decisions[b.id]);
+  const undecidedBuckets = groups.filter((b) => !decisions[b.id]);
+
+  const handledEmails = decidedBuckets.reduce((sum, b) => sum + b.count, 0);
 
   // Per-action email tallies for the "Done" stat grid.
-  const tally = useMemo(() => {
-    const t = { archive: 0, snooze: 0, keep: 0, review: 0 };
-    decidedBuckets.forEach((b) => {
-      t[decisions[b.id]] += b.count;
-    });
-    return t;
-  }, [decidedBuckets, decisions]);
+  const tally = { archive: 0, snooze: 0, keep: 0, review: 0 };
+  decidedBuckets.forEach((b) => { tally[decisions[b.id]] += b.count; });
 
-  const setDecision = (bucketId, action) =>
-    setDecisions((d) => ({ ...d, [bucketId]: action }));
-  const clearDecision = (bucketId) =>
-    setDecisions((d) => {
-      const next = { ...d };
-      delete next[bucketId];
-      return next;
-    });
+  const setDecision = (groupId, action) => setDecisions((d) => ({ ...d, [groupId]: action }));
+  const clearDecision = (groupId) => setDecisions((d) => { const next = { ...d }; delete next[groupId]; return next; });
+
+  // Actually move the mail: apply each decided group's action to its real emails.
+  const applyAll = () => {
+    decidedBuckets.forEach((b) => applyReviewAction(b.emails.map((e) => e.id), decisions[b.id]));
+    setStep('done');
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <View pointerEvents="none" style={styles.scrim} />
       {step === 'intro' && (
-        <IntroStep goBack={goBack} onStart={() => setStep('scanning')} />
+        <IntroStep goBack={goBack} groups={groups} scanning={reviewScanning} onStart={() => setStep('scanning')} />
       )}
       {step === 'scanning' && (
         <ScanningStep
+          busy={reviewScanning}
           onCancel={goBack}
           onDone={() => setStep('review')}
         />
       )}
       {step === 'review' && (
         <ReviewStep
+          groups={groups}
           decisions={decisions}
           setDecision={setDecision}
           clearDecision={clearDecision}
           decidedCount={decidedIds.length}
           handledEmails={handledEmails}
+          navigate={navigate}
           onBack={goBack}
           onApply={() => setStep('confirm')}
         />
@@ -279,7 +296,7 @@ export default function BulkTriageScreen({ goBack, navigate, params }) {
           decidedBuckets={decidedBuckets}
           undecidedBuckets={undecidedBuckets}
           onBack={() => setStep('review')}
-          onConfirm={() => setStep('done')}
+          onConfirm={applyAll}
         />
       )}
       {step === 'done' && (
@@ -295,7 +312,11 @@ export default function BulkTriageScreen({ goBack, navigate, params }) {
 
 // ── Intro ────────────────────────────────────────────────────────────────────
 
-function IntroStep({ goBack, onStart }) {
+function IntroStep({ goBack, onStart, groups = [], scanning }) {
+  const scanned = groups.reduce((s, b) => s + b.count, 0);
+  const archivable = groups
+    .filter((b) => b.defaultAction === 'archive')
+    .reduce((s, b) => s + b.count, 0);
   const steps = [
     'We scan your inbox and group similar mail together.',
     'You review each group and pick an action: archive, snooze, keep, or review.',
@@ -322,10 +343,10 @@ function IntroStep({ goBack, onStart }) {
           </View>
           <View style={styles.flex}>
             <Text style={styles.archivingTitle}>
-              {fmt(ARCHIVING_SOON)} emails archiving soon
+              {scanning && !archivable ? 'Scanning…' : `${fmt(archivable)} emails can be archived`}
             </Text>
             <Text style={styles.archivingSub}>
-              99%+ confident these can go — tap to review before they archive
+              Low-value bulk mail we can clear — you review each group first
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.onDarkDim} />
@@ -333,8 +354,12 @@ function IntroStep({ goBack, onStart }) {
 
         {/* Hero */}
         <View style={styles.hero}>
-          <Text style={styles.heroCount}>{fmt(TOTAL_UNREAD)}</Text>
-          <Text style={styles.heroLabel}>unread emails</Text>
+          {scanning && !scanned ? (
+            <ActivityIndicator color={colors.blue} style={{ marginVertical: 10 }} />
+          ) : (
+            <Text style={styles.heroCount}>{fmt(scanned)}</Text>
+          )}
+          <Text style={styles.heroLabel}>emails to sort</Text>
           <Text style={styles.heroTitle}>Clear your inbox fast</Text>
         </View>
 
@@ -379,12 +404,13 @@ const RING_STROKE = 12;
 const RING_R = (RING_SIZE - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_R;
 
-function ScanningStep({ onCancel, onDone }) {
+function ScanningStep({ busy, onCancel, onDone }) {
   const progress = useRef(new Animated.Value(0)).current;
-  const scanTimeout = useRef(null);
   const [pct, setPct] = useState(0);
-  const [done, setDone] = useState(false);
+  const [animDone, setAnimDone] = useState(false);
   const [msgIndex, setMsgIndex] = useState(0);
+  // Only advance once BOTH the ring animation has finished AND the real scan is done.
+  const done = animDone && !busy;
 
   useEffect(() => {
     const id = progress.addListener(({ value }) => {
@@ -395,14 +421,7 @@ function ScanningStep({ onCancel, onDone }) {
       duration: 2500,
       easing: Easing.inOut(Easing.cubic),
       useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) {
-        setDone(true);
-        const t = setTimeout(() => onDone && onDone(), 750);
-        // Stored on the closure; cleared via component unmount below if needed.
-        scanTimeout.current = t;
-      }
-    });
+    }).start(({ finished }) => { if (finished) setAnimDone(true); });
 
     const msgTimer = setInterval(() => {
       setMsgIndex((i) => (i + 1) % SCAN_MESSAGES.length);
@@ -411,9 +430,13 @@ function ScanningStep({ onCancel, onDone }) {
     return () => {
       progress.removeListener(id);
       clearInterval(msgTimer);
-      if (scanTimeout.current) clearTimeout(scanTimeout.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (done) { const t = setTimeout(() => onDone && onDone(), 500); return () => clearTimeout(t); }
+    return undefined;
+  }, [done]); // eslint-disable-line
 
   const strokeDashoffset = progress.interpolate({
     inputRange: [0, 1],
@@ -421,7 +444,7 @@ function ScanningStep({ onCancel, onDone }) {
   });
 
   const ringColor = done ? GREEN : colors.blue;
-  const emailsScanned = Math.round((pct / 100) * TOTAL_UNREAD);
+  const shownPct = busy ? Math.min(pct, 95) : pct;
 
   return (
     <View style={styles.flex}>
@@ -456,17 +479,15 @@ function ScanningStep({ onCancel, onDone }) {
               <Ionicons name="checkmark-circle" size={48} color={GREEN} />
             ) : (
               <>
-                <Text style={styles.ringPct}>{pct}%</Text>
-                <Text style={styles.ringCount}>
-                  {fmt(emailsScanned)} scanned
-                </Text>
+                <Text style={styles.ringPct}>{shownPct}%</Text>
+                <Text style={styles.ringCount}>Reading your mail</Text>
               </>
             )}
           </View>
         </View>
 
         <Text style={styles.scanMsg}>
-          {done ? 'Found 8 groups ready to review' : SCAN_MESSAGES[msgIndex]}
+          {done ? 'Groups ready to review' : SCAN_MESSAGES[msgIndex]}
         </Text>
       </View>
 
@@ -486,22 +507,37 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 // ── Review ───────────────────────────────────────────────────────────────────
 
 function ReviewStep({
+  groups = [],
   decisions,
   setDecision,
   clearDecision,
   decidedCount,
   handledEmails,
+  navigate,
   onBack,
   onApply,
 }) {
-  const totalBuckets = BUCKETS.length;
-  const totalEmails = BUCKETS.reduce((s, b) => s + b.count, 0);
-  const groupPct = Math.round((decidedCount / totalBuckets) * 100);
-  const emailPct = Math.round((handledEmails / totalEmails) * 100);
-  const readyEmails = BUCKETS.filter(
+  const totalBuckets = groups.length;
+  const totalEmails = groups.reduce((s, b) => s + b.count, 0);
+  const groupPct = totalBuckets ? Math.round((decidedCount / totalBuckets) * 100) : 0;
+  const emailPct = totalEmails ? Math.round((handledEmails / totalEmails) * 100) : 0;
+  const readyEmails = groups.filter(
     (b) => decisions[b.id] === 'archive' || decisions[b.id] === 'snooze',
   ).reduce((s, b) => s + b.count, 0);
   const canApply = decidedCount > 0;
+
+  if (!groups.length) {
+    return (
+      <View style={styles.flex}>
+        <Header title="Review groups" onBack={onBack} />
+        <View style={[styles.scanWrap, { paddingHorizontal: 30 }]}>
+          <Ionicons name="checkmark-done-circle-outline" size={54} color={GREEN} />
+          <Text style={[styles.scanMsg, { marginTop: 14 }]}>Nothing to bulk-review right now</Text>
+          <Text style={styles.emptySub}>Your recent mail is already important or personal — it stays in your inbox.</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.flex}>
@@ -540,10 +576,11 @@ function ReviewStep({
           </Text>
         </View>
 
-        {BUCKETS.map((b) => (
+        {groups.map((b) => (
           <BucketCard
             key={b.id}
             bucket={b}
+            navigate={navigate}
             decision={decisions[b.id]}
             onDecide={(action) => setDecision(b.id, action)}
             onUndo={() => clearDecision(b.id)}
@@ -573,11 +610,13 @@ function ReviewStep({
   );
 }
 
-function BucketCard({ bucket, decision, onDecide, onUndo }) {
+function BucketCard({ bucket, decision, onDecide, onUndo, navigate }) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const previews = useMemo(() => buildPreviews(bucket), [bucket]);
-  const highConf = bucket.confidence >= 99;
-  const showWarning = !!bucket.warning || bucket.confidence < 99;
+  const [seeAllOpen, setSeeAllOpen] = useState(false);
+  const previews = bucket.previews || [];
+  const highConf = bucket.confidence != null && bucket.confidence >= 99;
+  const showWarning = !!bucket.warning || !highConf;
+  const confLabel = bucket.confidence != null ? `${bucket.confidence}% confident` : 'Review each one';
 
   const handleAction = (key) => {
     if (key === 'more') {
@@ -623,7 +662,7 @@ function BucketCard({ bucket, decision, onDecide, onUndo }) {
               { color: highConf ? GREEN : CAT_COLORS.amber },
             ]}
           >
-            {bucket.confidence}% confident
+            {confLabel}
           </Text>
         </View>
         <View style={styles.recBadge}>
@@ -665,9 +704,39 @@ function BucketCard({ bucket, decision, onDecide, onUndo }) {
       {previews.length > 4 && (
         <Text style={styles.scrollHint}>Scroll to see more ↓</Text>
       )}
-      <Pressable>
+      <Pressable onPress={() => setSeeAllOpen(true)} hitSlop={8}>
         <Text style={styles.seeAll}>See all {fmt(bucket.count)} emails</Text>
       </Pressable>
+
+      {/* Full list of the group's real emails — tap one to open it. */}
+      <Modal visible={seeAllOpen} animationType="slide" onRequestClose={() => setSeeAllOpen(false)}>
+        <SafeAreaView style={styles.seeAllSafe}>
+          <View style={styles.seeAllHeader}>
+            <Pressable onPress={() => setSeeAllOpen(false)} hitSlop={10}>
+              <Ionicons name="close" size={24} color={colors.onDark} />
+            </Pressable>
+            <Text style={styles.seeAllTitle} numberOfLines={1}>{bucket.name}</Text>
+            <Text style={styles.seeAllCount}>{fmt(bucket.count)}</Text>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+            {(bucket.emails || []).map((e) => (
+              <Pressable
+                key={e.id}
+                style={styles.seeAllRow}
+                onPress={() => {
+                  setSeeAllOpen(false);
+                  if (navigate) navigate('Thread', { id: e.id });
+                }}
+              >
+                <Text style={styles.seeAllSender} numberOfLines={1}>
+                  {e.priority?.senderName || e.priority?.senderEmail || 'Unknown'}
+                </Text>
+                <Text style={styles.seeAllSubject} numberOfLines={1}>{e.subject || '(no subject)'}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Action buttons — always all five */}
       <View style={styles.actionRow}>
@@ -1199,6 +1268,14 @@ const styles = StyleSheet.create({
   previewDate: { color: colors.onDarkFaint, fontSize: 10 },
   scrollHint: { color: colors.onDarkFaint, fontSize: 10, textAlign: 'center', marginTop: 4 },
   seeAll: { color: colors.blue, fontSize: font.small, fontWeight: '600', marginTop: space.sm },
+  seeAllSafe: { flex: 1, backgroundColor: colors.bg },
+  seeAllHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.onDarkBorder },
+  seeAllTitle: { flex: 1, color: colors.onDark, fontSize: 17, fontWeight: '700' },
+  seeAllCount: { color: colors.onDarkDim, fontSize: 14, fontWeight: '600' },
+  seeAllRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.onDarkBorder },
+  seeAllSender: { color: colors.onDark, fontSize: 15, fontWeight: '700' },
+  seeAllSubject: { color: colors.onDarkDim, fontSize: 13.5, marginTop: 2 },
+  emptySub: { color: colors.onDarkDim, fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 20 },
 
   // Actions
   actionRow: { flexDirection: 'row', marginTop: space.md, gap: 6 },

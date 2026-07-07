@@ -98,6 +98,9 @@ export function StoreProvider({ children }) {
 
   // Sent / Drafts folders (fetched on demand from Graph), kept separate from inbox.
   const [folders, setFolders] = useState({ sent: [], drafts: [] });
+  // Bulk Triage: a real scan of inbox mail grouped into review groups.
+  const [reviewEmails, setReviewEmails] = useState([]);
+  const [reviewScanning, setReviewScanning] = useState(false);
   const [folderLoading, setFolderLoading] = useState(false);
 
   // Per-account mailbox totals from Graph (so the badge matches Outlook even
@@ -1026,6 +1029,40 @@ export function StoreProvider({ children }) {
     } catch (e) { /* leave previous */ } finally { setFolderLoading(false); }
   }, [mailAccounts, activeAccountId, outlookRefresh, prefs.serverUrl, summarizeBatch]);
 
+  // --- Bulk Triage: scan real inbox mail and apply a group's action in bulk ---
+  // Pull a deeper batch than the normal inbox page so grouping has real volume to
+  // work with, tag by account, and stash it for the review screen to group.
+  const scanReview = useCallback(async () => {
+    const targets = accountsToLoad();
+    if (!targets.length) { setReviewEmails([]); return []; }
+    setReviewScanning(true);
+    try {
+      const results = await Promise.all(targets.map(async (acc) => {
+        try {
+          const provider = acc.type || 'outlook';
+          const want = provider === 'outlook' ? 150 : (provider === 'icloud' ? 100 : 50);
+          const { emails: fetched } = await fetchInbox(prefs.serverUrl, acc.refreshToken, want, 'inbox', 0, null, provider);
+          return (fetched || []).map((e) => ({ ...e, accountId: acc.id, accountEmail: acc.email }));
+        } catch (e) { return []; }
+      }));
+      const merged = results.flat();
+      setReviewEmails(merged);
+      return merged;
+    } finally { setReviewScanning(false); }
+  }, [accountsToLoad, prefs.serverUrl]);
+
+  // Apply one action to a whole group of emails at once (no per-item snackbar).
+  // archive → out to Archive; snooze → hidden for 30 days; keep/review → left alone.
+  const applyReviewAction = useCallback((ids, action) => {
+    const list = (ids || []).filter(Boolean);
+    if (!list.length || action === 'keep' || action === 'review') return;
+    list.forEach((id) => {
+      if (action === 'snooze') { setOverride(id, { snoozedUntil: Date.now() + 30 * 24 * 3600 * 1000 }); }
+      else { setOverride(id, { status: 'archived' }); persistAction(id, 'archive'); }
+    });
+    if (action === 'archive') hideIds(list);
+  }, [setOverride, persistAction, hideIds]);
+
   // Whole-mailbox search via Graph (finds old mail the device never loaded).
   const runSearch = useCallback(async (q) => {
     const query = (q || '').trim();
@@ -1266,6 +1303,10 @@ export function StoreProvider({ children }) {
     folders,
     folderLoading,
     loadFolder,
+    reviewEmails,
+    reviewScanning,
+    scanReview,
+    applyReviewAction,
     updateAvatar,
     searchEmails,
     searching,
