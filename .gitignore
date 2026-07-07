@@ -1,0 +1,9 @@
+node_modules/
+chatbot/.env
+.env
+.DS_Store
+
+# Private knowledge — loaded by Selene locally, never committed.
+# The repo is public: keep personal, client, legal, and infrastructure
+# details in this folder only.
+chatbot/knowledge/private/

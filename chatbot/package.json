@@ -1,0 +1,15 @@
+{
+  "name": "selene-chatbot",
+  "version": "1.0.0",
+  "description": "Selene — Scale MBS's local AI assistant with a talking avatar, voice, and subtitles",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0"
+  }
+}
