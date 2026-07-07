@@ -1,0 +1,409 @@
+// DetailScreen.js — ScaleMail email reader: colored hero band, white subject bar
+// with a category tag, a serif "letter" body, and a Brisk TL;DR callout. Replying
+// opens a full-screen formal composer (ReplyScreen), not an inline chat bubble.
+
+import React from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, Pressable, SafeAreaView, Linking, Alert, ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { WebView } from 'react-native-webview';
+import * as WebBrowser from 'expo-web-browser';
+import { colors, space, font, radius } from '../theme';
+import { useStore } from '../store';
+import { bandFor } from '../lib/bands';
+import { useTourTarget } from '../lib/tour';
+import { quickReplies, isBackendConfigured, rsvpEvent, fetchAttachment } from '../lib/backend';
+
+function fmtBytes(n = 0) {
+  if (!n) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1048576).toFixed(1)} MB`;
+}
+function attachIcon(type = '', name = '') {
+  const t = `${type} ${name}`.toLowerCase();
+  if (t.includes('pdf')) return 'document-text';
+  if (/(png|jpe?g|gif|webp|image)/.test(t)) return 'image';
+  if (/(zip|rar|7z)/.test(t)) return 'file-tray-full';
+  if (/(xls|sheet|csv)/.test(t)) return 'grid';
+  if (/(doc|word)/.test(t)) return 'document';
+  return 'attach';
+}
+import SnoozeSheet from '../components/SnoozeSheet';
+import RelationshipSheet from '../components/RelationshipSheet';
+import NextStepsCard from '../components/NextStepsCard';
+
+// Wrap raw email HTML in a responsive page for the WebView.
+function emailDocument(html) {
+  return `<!doctype html><html><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<style>` +
+    `html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden;` +
+    `-webkit-text-size-adjust:100%;font-family:-apple-system,Segoe UI,Arial,sans-serif;` +
+    `font-size:15px;line-height:1.5;color:#1d1d1f;word-break:break-word;overflow-wrap:break-word}` +
+    `*{max-width:100%!important;box-sizing:border-box}` +
+    `img{max-width:100%!important;height:auto!important}` +
+    `table{width:100%!important;max-width:100%!important;table-layout:fixed!important}` +
+    `td,th{word-break:break-word}a{color:#0071E3}` +
+    `</style></head><body>${html}</body></html>`;
+}
+
+function initials(name = '') {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Aurora palette for an open email, from its category.
+const BAND_PALETTE = {
+  Urgent: 'urgent', 'Action Needed': 'clients', Meeting: 'meeting',
+  Client: 'clients', Newsletter: 'default', FYI: 'default',
+};
+
+export default function DetailScreen({ params, goBack, navigate }) {
+  const { emails, searchEmails, folderEmails, findEmail, archive, snooze, snoozeUntil, markRead, toggleVip, loadFullBody, setPalette, prefs, outlookRefresh, mailAccounts } = useStore();
+  // The opened email may live in the inbox, a search result, or a browsed folder.
+  const email = findEmail(params.id);
+  const [rsvpBusy, setRsvpBusy] = React.useState(false);
+  const [rsvpDone, setRsvpDone] = React.useState(null);
+  const [attBusy, setAttBusy] = React.useState(null);
+
+  // Download an attachment and open it (best-effort — opens in the browser).
+  const openAttachment = async (a) => {
+    if (!email) return;
+    setAttBusy(a.id);
+    try {
+      const acct = (mailAccounts || []).find((x) => x.id === email.accountId);
+      const rt = acct?.refreshToken || outlookRefresh;
+      const provider = acct?.type || (email.account === 'gmail' ? 'google' : 'outlook');
+      const { base64, contentType } = await fetchAttachment(prefs.serverUrl, rt, email.id, a.id, provider);
+      if (!base64) throw new Error('Empty attachment');
+      const uri = `data:${a.contentType || contentType || 'application/octet-stream'};base64,${base64}`;
+      try { await WebBrowser.openBrowserAsync(uri); } catch (e) { await Linking.openURL(uri); }
+    } catch (e) {
+      Alert.alert('Could not open', e.message || 'This attachment could not be opened here.');
+    } finally { setAttBusy(null); }
+  };
+  const [webHeight, setWebHeight] = React.useState(360);
+  const [replies, setReplies] = React.useState([]);
+  const [showSnooze, setShowSnooze] = React.useState(false);
+  const [showRel, setShowRel] = React.useState(false);
+  const actionsRef = useTourTarget('detail.actions');
+  const replyRef = useTourTarget('detail.reply');
+
+  // One-tap smart replies (demo emails get static ones so the tour shows them).
+  // Only fetch for mail that plausibly needs a reply — saves AI cost on bulk mail.
+  React.useEffect(() => {
+    if (!email) return;
+    if (email.demo) { setReplies(['Sounds good, I’ll review it today.', 'Can we push to next week?']); return; }
+    const actionable = ['Urgent', 'Action Needed', 'Client', 'Meeting'].includes(email.priority?.category);
+    if (!isBackendConfigured(prefs?.serverUrl) || prefs?.privateMode === true || (email.account !== 'outlook' && email.account !== 'gmail') || !actionable) { setReplies([]); return; }
+    let alive = true;
+    quickReplies(prefs.serverUrl, { id: email.id, subject: email.subject, body: email.body, senderName: email.priority?.senderName })
+      .then((r) => { if (alive) setReplies(r.replies || []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    if (email && email.read === false) markRead(email.id);
+  }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Shift the aurora to match this email; restore default on leave.
+  React.useEffect(() => {
+    if (!email) return undefined;
+    const band = bandFor(email);
+    setPalette(email.priority?.isVip ? 'starred' : (BAND_PALETTE[band.key] || 'default'));
+    return () => setPalette('default');
+  }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // RSVP to a meeting-invite email straight into the Outlook calendar.
+  const doRsvp = async (response) => {
+    if (!email?.invite?.eventId) return;
+    setRsvpBusy(true);
+    try {
+      await rsvpEvent(prefs.serverUrl, outlookRefresh, email.invite.eventId, response);
+      setRsvpDone(response);
+    } catch (e) {
+      Alert.alert('Could not RSVP', e.message || 'Please try again.');
+    } finally { setRsvpBusy(false); }
+  };
+
+  // The inbox list only carries a short preview; fetch the full body on open.
+  React.useEffect(() => {
+    if (email && loadFullBody) loadFullBody(email.id);
+  }, [email?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!email) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.nav}>
+          <Pressable style={styles.back} onPress={goBack} hitSlop={10}>
+            <Ionicons name="chevron-back" size={20} color={colors.blue} />
+            <Text style={styles.backText}>Inbox</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.gone}>This message was moved. 👋</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const p = email.priority;
+  const band = bandFor(email);
+  const act = (fn) => { fn(email.id); goBack(); };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      {/* Nav bar */}
+      <View style={styles.nav}>
+        <Pressable style={styles.back} onPress={goBack} hitSlop={10}>
+          <Ionicons name="chevron-back" size={20} color={colors.blue} />
+          <Text style={styles.backText}>Inbox</Text>
+        </Pressable>
+        <View ref={actionsRef} collapsable={false} style={styles.actions}>
+          <Pressable style={styles.actionIcon} onPress={() => toggleVip(p.senderEmail)}>
+            <Ionicons name={p.isVip ? 'star' : 'star-outline'} size={18} color={p.isVip ? '#FF9F0A' : colors.ink2} />
+          </Pressable>
+          <Pressable style={styles.actionIcon} onPress={() => setShowSnooze(true)}>
+            <Ionicons name="time-outline" size={18} color={colors.ink2} />
+          </Pressable>
+          <Pressable style={styles.actionIcon} onPress={() => act(archive)}>
+            <Ionicons name="archive-outline" size={18} color={colors.ink2} />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Colored hero */}
+      <LinearGradient colors={band.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+        <Pressable style={styles.heroInitial} onPress={() => setShowRel(true)}>
+          <Text style={styles.heroInitialText}>{initials(p.senderName)}</Text>
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.heroName} numberOfLines={1}>{p.senderName}</Text>
+          <Text style={styles.heroAddr} numberOfLines={1}>{p.senderEmail}</Text>
+        </View>
+      </LinearGradient>
+
+      {/* Subject + tags */}
+      <View style={styles.subjectBar}>
+        <Text style={styles.subject}>{email.subject}</Text>
+        <View style={styles.tagsRow}>
+          <View style={[styles.tag, { backgroundColor: band.tagBg }]}>
+            <Text style={[styles.tagText, { color: band.tagColor }]}>{band.label}</Text>
+          </View>
+          {p.isVip && (
+            <View style={[styles.tag, { backgroundColor: '#FFF8E1' }]}>
+              <Text style={[styles.tagText, { color: '#C77D00' }]}>⭐ VIP</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* One-tap smart replies */}
+      {replies.length > 0 && (
+        <View style={styles.repliesRow}>
+          <Ionicons name="sparkles" size={13} color={colors.blue} />
+          {replies.map((r, i) => (
+            <Pressable key={i} style={styles.replyPill} onPress={() => navigate('Reply', { id: email.id, prefill: r })}>
+              <Text style={styles.replyPillText} numberOfLines={1}>{r}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Body */}
+      <ScrollView style={styles.bodyScroll} contentContainerStyle={styles.letter} showsVerticalScrollIndicator={false}>
+        <View style={styles.tldrCard}>
+          <View style={styles.tldrHead}>
+            <Ionicons name={p.aiSummarized ? 'sparkles' : 'document-text-outline'} size={13} color={p.aiSummarized ? colors.blue : colors.ink3} />
+            <Text style={[styles.tldrLabel, !p.aiSummarized && { color: colors.ink3 }]}>{p.aiSummarized ? `Scale Mail summary · ${p.reason}` : 'Preview'}</Text>
+          </View>
+          <Text style={styles.tldrText}>{p.tldr}</Text>
+        </View>
+
+        {/* Join meeting button when a Zoom/Teams/Meet/Webex link is detected */}
+        {!!email.meeting?.url && (
+          <Pressable style={styles.joinBtn} onPress={() => Linking.openURL(email.meeting.url)}>
+            <Ionicons name="videocam" size={18} color="#fff" />
+            <Text style={styles.joinText}>Join {email.meeting.provider}</Text>
+            <Ionicons name="open-outline" size={15} color="rgba(255,255,255,0.8)" />
+          </Pressable>
+        )}
+
+        {/* Inline RSVP for meeting-invite emails — writes to the Outlook calendar */}
+        {!!email.invite?.eventId && !email.invite.isOrganizer && (() => {
+          const answered = rsvpDone
+            || (['accepted', 'declined', 'tentativelyAccepted'].includes(email.invite.response) ? email.invite.response : null);
+          const LABEL = { accept: 'Going', accepted: 'Going', decline: 'Declined', declined: 'Declined', tentative: 'Maybe', tentativelyAccepted: 'Maybe' };
+          return (
+            <View style={styles.rsvpCard}>
+              <View style={styles.rsvpHead}>
+                <Ionicons name="calendar" size={16} color={colors.blue} />
+                <Text style={styles.rsvpTitle}>Meeting invitation</Text>
+                {answered && <Text style={styles.rsvpStatus}>{LABEL[answered] || 'Responded'}</Text>}
+              </View>
+              {rsvpBusy ? (
+                <ActivityIndicator color={colors.blue} style={{ marginTop: 10 }} />
+              ) : !answered ? (
+                <View style={styles.rsvpBtns}>
+                  <Pressable style={[styles.rsvpBtn, styles.rsvpAccept]} onPress={() => doRsvp('accept')}><Text style={styles.rsvpAcceptText}>Accept</Text></Pressable>
+                  <Pressable style={styles.rsvpBtn} onPress={() => doRsvp('tentative')}><Text style={styles.rsvpBtnText}>Maybe</Text></Pressable>
+                  <Pressable style={styles.rsvpBtn} onPress={() => doRsvp('decline')}><Text style={styles.rsvpBtnText}>Decline</Text></Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={() => setRsvpDone(null)}><Text style={styles.rsvpChange}>Change response</Text></Pressable>
+              )}
+            </View>
+          );
+        })()}
+
+        {email.bodyHtml ? (
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: emailDocument(email.bodyHtml) }}
+            style={{ height: webHeight, backgroundColor: 'transparent' }}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            injectedJavaScript={'(function(){function fit(){try{var b=document.body,vw=window.innerWidth,sw=Math.max(b.scrollWidth,document.documentElement.scrollWidth);if(sw>vw+2){b.style.transformOrigin="0 0";b.style.zoom=(vw/sw);}}catch(e){}try{window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));}catch(e){}}setTimeout(fit,60);setTimeout(fit,400);})();true;'}
+            onMessage={(e) => { const h = Number(e.nativeEvent.data); if (h && h > 40) setWebHeight(h + 24); }}
+            onShouldStartLoadWithRequest={(r) => {
+              if (r.url === 'about:blank' || r.url.startsWith('data:')) return true;
+              Linking.openURL(r.url).catch(() => {}); // open links in the real browser
+              return false;
+            }}
+          />
+        ) : (
+          (email.body || '').split('\n\n').map((para, i) => (
+            <Text key={i} style={[styles.para, i === 0 && styles.salutation]}>{para}</Text>
+          ))
+        )}
+
+        {/* AI recommendation: only for mail that plausibly needs action (saves cost
+            — newsletters / FYI don't get a recommendation). */}
+        {isBackendConfigured(prefs?.serverUrl) && ['Urgent', 'Action Needed', 'Client', 'Meeting'].includes(p.category) && (
+          <NextStepsCard serverUrl={prefs.serverUrl} id={email.id} subject={email.subject} body={email.body} senderName={p.senderName} />
+        )}
+
+        {/* Attachments */}
+        {Array.isArray(email.attachments) && email.attachments.length > 0 && (
+          <View style={styles.attachWrap}>
+            <Text style={styles.attachHead}>{email.attachments.length} attachment{email.attachments.length === 1 ? '' : 's'}</Text>
+            {email.attachments.map((a) => (
+              <Pressable key={a.id} style={styles.attachRow} onPress={() => openAttachment(a)}>
+                <View style={styles.attachIcon}><Ionicons name={attachIcon(a.contentType, a.name)} size={20} color={colors.blue} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.attachName} numberOfLines={1}>{a.name}</Text>
+                  <Text style={styles.attachMeta}>{fmtBytes(a.size)}{a.contentType ? ` · ${a.contentType.split('/').pop().toUpperCase()}` : ''}</Text>
+                </View>
+                {attBusy === a.id ? <ActivityIndicator color={colors.blue} /> : <Ionicons name="download-outline" size={20} color={colors.ink4} />}
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Reply bar — opens the full-screen composer */}
+      <View ref={replyRef} collapsable={false} style={styles.replyBar}>
+        <Pressable style={styles.replyBtn} onPress={() => navigate('Reply', { id: email.id })}>
+          <Ionicons name="arrow-undo" size={18} color="#fff" />
+          <Text style={styles.replyText}>Reply</Text>
+        </Pressable>
+      </View>
+
+      <SnoozeSheet
+        visible={showSnooze}
+        email={email}
+        serverUrl={prefs?.serverUrl}
+        onClose={() => setShowSnooze(false)}
+        onSnooze={(ts, label) => { setShowSnooze(false); snoozeUntil(email.id, ts, label); goBack(); }}
+      />
+      <RelationshipSheet
+        visible={showRel}
+        name={p.senderName}
+        email={p.senderEmail}
+        serverUrl={prefs?.serverUrl}
+        refreshToken={outlookRefresh}
+        demo={email.demo}
+        onClose={() => setShowRel(false)}
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.surface },
+  nav: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.hairline,
+  },
+  back: { flexDirection: 'row', alignItems: 'center' },
+  backText: { color: colors.blue, fontSize: 16, fontWeight: '600' },
+  actions: { flexDirection: 'row', gap: 8 },
+  actionIcon: {
+    width: 36, height: 36, borderRadius: 10, backgroundColor: colors.surface2,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  hero: { height: 110, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 22 },
+  heroInitial: {
+    width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  heroInitialText: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  heroName: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: -0.4 },
+  heroAddr: { color: 'rgba(255,255,255,0.62)', fontSize: 12, marginTop: 3 },
+  subjectBar: { paddingHorizontal: 22, paddingTop: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.hairline },
+  subject: { fontSize: 19, fontWeight: '700', color: colors.ink, letterSpacing: -0.5, lineHeight: 25, marginBottom: 8 },
+  tagsRow: { flexDirection: 'row', gap: 6 },
+  tag: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 6 },
+  tagText: { fontSize: 10.5, fontWeight: '700' },
+  bodyScroll: { flex: 1, backgroundColor: colors.surface },
+  letter: { padding: 24 },
+  tldrCard: { backgroundColor: colors.blueLight, borderRadius: 14, padding: 14, marginBottom: 20 },
+  tldrHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  tldrLabel: { color: colors.blue, fontWeight: '700', fontSize: 12 },
+  tldrText: { color: colors.ink2, fontSize: 14, lineHeight: 20 },
+  repliesRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingHorizontal: 20, paddingBottom: 12 },
+  replyPill: {
+    backgroundColor: colors.blueLight, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14,
+    maxWidth: '85%',
+  },
+  replyPillText: { color: colors.blue, fontWeight: '700', fontSize: 13 },
+  joinBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#2D8CFF', borderRadius: 12, paddingVertical: 13, marginBottom: 18,
+    shadowColor: '#2D8CFF', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+  },
+  joinText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  rsvpCard: { backgroundColor: colors.surface2, borderRadius: 14, padding: 14, marginBottom: 18, borderWidth: 1, borderColor: colors.hairline },
+  rsvpHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  rsvpTitle: { fontSize: 14, fontWeight: '700', color: colors.ink, flex: 1 },
+  rsvpStatus: { fontSize: 13, fontWeight: '700', color: '#1E9E63' },
+  rsvpBtns: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  rsvpBtn: { flex: 1, alignItems: 'center', borderRadius: 10, paddingVertical: 9, backgroundColor: colors.surface3 },
+  rsvpBtnText: { fontSize: 13.5, fontWeight: '700', color: colors.ink2 },
+  rsvpAccept: { backgroundColor: '#1E9E63' },
+  rsvpAcceptText: { fontSize: 13.5, fontWeight: '700', color: '#fff' },
+  rsvpChange: { marginTop: 10, fontSize: 13, fontWeight: '600', color: colors.blue },
+  attachWrap: { marginTop: 20, borderTopWidth: 1, borderTopColor: colors.hairline, paddingTop: 14 },
+  attachHead: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: colors.ink4, marginBottom: 10 },
+  attachRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface2, borderRadius: 12, padding: 12, marginBottom: 8 },
+  attachIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.blueLight, alignItems: 'center', justifyContent: 'center' },
+  attachName: { fontSize: 14, fontWeight: '600', color: colors.ink },
+  attachMeta: { fontSize: 12, color: colors.ink3, marginTop: 1 },
+  para: { fontFamily: 'Georgia', fontSize: 16, lineHeight: 27, color: colors.ink2, marginBottom: 18 },
+  salutation: { color: colors.ink },
+  replyBar: {
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28,
+    borderTopWidth: 1, borderTopColor: colors.hairline, backgroundColor: colors.surface,
+  },
+  replyBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: colors.blue, borderRadius: radius.md, paddingVertical: 15,
+    shadowColor: colors.blue, shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
+  },
+  replyText: { color: '#fff', fontSize: font.title, fontWeight: '800' },
+  gone: { color: colors.ink3, textAlign: 'center', marginTop: 80, fontSize: 15 },
+});

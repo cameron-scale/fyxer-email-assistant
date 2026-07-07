@@ -1,0 +1,44 @@
+{
+  "name": "brisk",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
+    "expo": "^54.0.35",
+    "expo-asset": "~12.0.13",
+    "expo-auth-session": "~7.0.11",
+    "expo-crypto": "~15.0.9",
+    "expo-font": "~14.0.12",
+    "expo-image-manipulator": "~14.0.8",
+    "expo-image-picker": "~17.0.11",
+    "expo-linear-gradient": "~15.0.8",
+    "expo-local-authentication": "~17.0.8",
+    "expo-secure-store": "~15.0.8",
+    "expo-splash-screen": "^57.0.1",
+    "expo-status-bar": "~3.0.9",
+    "expo-updates": "~29.0.18",
+    "expo-web-browser": "~15.0.11",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-svg": "15.12.1",
+    "react-native-webview": "13.15.0"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "jest"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ]
+  },
+  "private": true,
+  "devDependencies": {
+    "jest": "~29.7.0",
+    "jest-expo": "~54.0.17"
+  }
+}

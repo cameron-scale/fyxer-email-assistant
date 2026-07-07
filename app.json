@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "Scale Mail",
+    "slug": "brisk",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "brisk",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0C0F1E",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.brisk.inbox",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.brisk.inbox",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1020",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-secure-store",
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#0C0F1E"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Scale Mail uses your photos so you can add a headshot or logo to your email signature."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9aa7a1ca-aa4e-4597-8eb9-1b1dc575e6f8"
+      }
+    },
+    "owner": "scale-cam",
+    "runtimeVersion": "exposdk:54.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/9aa7a1ca-aa4e-4597-8eb9-1b1dc575e6f8"
+    }
+  }
+}
