@@ -1049,21 +1049,31 @@ export function StoreProvider({ children }) {
   const askMailQuestion = useCallback(async (q) => {
     const query = (q || '').trim();
     if (!query) { setSearchResults(null); setChatAnswer(null); return; }
-    if (!outlookRefresh) return;
+    // Use the active mailbox (or the first linked one) so AI search works for a
+    // Gmail-only user too — not just Outlook. Pass the provider so the server
+    // searches the right backend.
+    const list = mailAccountsRef.current || [];
+    const acct = list.find((a) => a.id === activeAccountId && a.refreshToken)
+      || list.find((a) => a.refreshToken) || null;
+    const token = acct?.refreshToken || outlookRefresh;
+    const provider = acct?.type || 'outlook';
+    if (!token) { setChatAnswer('Connect an email account to use AI search.'); setSearchResults([]); return; }
     setSearching(true);
     setChatAnswer(null);
     try {
-      const { answer, emails: found } = await askMail(prefs.serverUrl, outlookRefresh, query);
-      setSearchResults(found || []);
+      const { answer, emails: found } = await askMail(prefs.serverUrl, token, query, provider);
+      // Stamp the account so tapping a result opens it against the right mailbox.
+      const stamped = (found || []).map((e) => ({ ...e, accountId: e.accountId || acct?.id, account: e.account || provider }));
+      setSearchResults(stamped);
       setChatAnswer(answer || '');
-      summarizeBatch(found || []);
+      summarizeBatch(stamped);
     } catch (e) {
       setError(e.message || 'Could not ask');
       setSearchResults([]);
     } finally {
       setSearching(false);
     }
-  }, [outlookRefresh, prefs.serverUrl, summarizeBatch]);
+  }, [activeAccountId, outlookRefresh, prefs.serverUrl, summarizeBatch]);
 
   // Auto-load the inbox once on launch when a saved Outlook session is restored,
   // so mail appears without needing a manual pull-to-refresh.

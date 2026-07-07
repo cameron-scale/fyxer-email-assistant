@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, SafeAreaView, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
+  View, Text, StyleSheet, Pressable, SafeAreaView, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, space, font, radius } from '../theme';
@@ -60,8 +60,12 @@ export default function ReplyScreen({ params, goBack }) {
   const [subject, setSubject] = useState(
     email ? (/^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`) : ''
   );
-  const [bodyHeight, setBodyHeight] = useState(240); // grows with content so the page (not the field) scrolls
   const [quoteExpanded, setQuoteExpanded] = useState(false);
+  const { height: winH } = useWindowDimensions();
+  // A tall, comfortable writing area that scrolls INTERNALLY. This is what keeps
+  // the caret in view while typing: an auto-growing field can't track the cursor,
+  // so long replies used to scroll off-screen / hide behind the suggestions box.
+  const composeH = Math.max(240, Math.round(winH * 0.42));
 
   const writeWithAi = async () => {
     setAiBusy(true);
@@ -223,14 +227,15 @@ export default function ReplyScreen({ params, goBack }) {
             ))}
           </View>
 
-          {/* Formal body — auto-grows so the PAGE scrolls, not the field */}
+          {/* Formal body — a fixed-height field that scrolls internally so the
+              caret always stays visible (never hidden behind the box below). */}
           <TextInput
-            style={[styles.bodyInput, { height: Math.max(240, bodyHeight) }]}
+            style={[styles.bodyInput, { height: composeH }]}
             value={body}
             onChangeText={setBody}
             multiline
-            scrollEnabled={false}
-            onContentSizeChange={(e) => setBodyHeight(e.nativeEvent.contentSize.height)}
+            scrollEnabled
+            textAlignVertical="top"
             placeholder="Write your reply…"
             placeholderTextColor={colors.ink4}
             autoFocus

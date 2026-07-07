@@ -123,8 +123,8 @@ export function searchMail(serverUrl, refreshToken, q) {
 }
 
 // AI chat over mail ("pull all emails about X"). Returns { answer, emails }.
-export function askMail(serverUrl, refreshToken, q) {
-  return post(serverUrl, '/ask', { refreshToken, q });
+export function askMail(serverUrl, refreshToken, q, provider = 'outlook') {
+  return post(serverUrl, '/ask', { refreshToken, q, provider });
 }
 
 // Learn from an email the user KEEPS (rescued from auto-archive). The AI reads it

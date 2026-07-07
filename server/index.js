@@ -229,7 +229,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-45',
+    version: 'debug-46',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -455,7 +455,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-45', recentCallbacks }));
+app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-46', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -469,7 +469,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', debugAuth, (_req, res) => {
   res.json({
-    version: 'debug-45',
+    version: 'debug-46',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,
@@ -1404,67 +1404,122 @@ app.post('/me/photo/get', async (req, res) => {
 });
 
 // ── AI chat over your mail: "pull all emails about X" ────────────────────────
+// Filler words to drop so a natural-language request ("show me all the emails
+// from Brianna about the contract") becomes useful search terms ("Brianna contract").
+const ASK_STOP = new Set(['all', 'emails', 'email', 'mail', 'message', 'messages', 'in', 'from', 'the', 'show', 'find', 'pull', 'search', 'look', 'looking', 'get', 'me', 'my', 'about', 'regarding', 're', 'any', 'please', 'that', 'those', 'these', 'they', 'them', 'are', 'was', 'were', 'is', 'be', 'been', 'for', 'of', 'to', 'a', 'an', 'and', 'or', 'with', 'this', 'give', 'list', 'everything', 'every', 'where', 'what', 'which', 'who', 'when', 'did', 'do', 'does', 'have', 'has', 'had', 'sent', 'received', 'i', 'we', 'you']);
+function askTerms(query) {
+  return query.split(/\s+/).map((w) => w.replace(/[^\w@.'-]/g, '')).filter((w) => w.length > 1 && !ASK_STOP.has(w.toLowerCase()));
+}
+
+// Search Outlook (Graph) for candidate emails. Runs a phrase search AND a broad
+// OR-of-terms search, then merges — much better recall than a single strict phrase.
+async function askSearchOutlook(accessToken, query, terms) {
+  const SELECT = 'subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification';
+  const map = (m) => ({
+    id: m.id, account: 'outlook',
+    from: m.from?.emailAddress ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>` : '',
+    subject: m.subject || '(no subject)',
+    body: stripHtml(m.bodyPreview || ''), preview: stripHtml(m.bodyPreview || ''),
+    date: m.receivedDateTime || new Date().toISOString(),
+    read: !!m.isRead, flagged: m.flag?.flagStatus === 'flagged', inferred: m.inferenceClassification || null,
+  });
+  const byId = new Map();
+  const run = async (searchExpr) => {
+    try {
+      const url = `${GRAPH}/me/messages?$search=${encodeURIComponent(searchExpr)}&$top=25&$select=${SELECT}`;
+      const r = await graphGet(url, accessToken);
+      const d = await r.json();
+      if (r.ok) (d.value || []).map(map).forEach((e) => { if (!byId.has(e.id)) byId.set(e.id, e); });
+    } catch (e) { /* best-effort */ }
+  };
+  if (terms.length) {
+    await run(`"${query.trim()}"`);                                  // exact phrase (highest precision)
+    await run(terms.map((t) => `"${t}"`).join(' OR '));              // any term (highest recall)
+  }
+  return { candidates: [...byId.values()], searched: terms.length > 0 };
+}
+
+// Search Gmail for candidate emails using its native query syntax.
+async function askSearchGmail(accessToken, terms) {
+  if (!terms.length) return { candidates: [], searched: false };
+  const q = terms.join(' OR ');
+  const listRes = await gmailGet(`/messages?maxResults=25&q=${encodeURIComponent(q)}`, accessToken);
+  const list = await listRes.json();
+  if (!listRes.ok) throw new Error(list.error?.message || 'Gmail search failed');
+  const ids = (list.messages || []).map((m) => m.id);
+  const candidates = (await Promise.all(ids.map(async (id) => {
+    try {
+      const r = await gmailGet(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, accessToken);
+      const m = await r.json();
+      if (!r.ok) return null;
+      return {
+        id, account: 'google',
+        from: gmailHeader(m.payload, 'From') || '',
+        subject: gmailHeader(m.payload, 'Subject') || '(no subject)',
+        body: m.snippet || '', preview: m.snippet || '',
+        date: new Date(Number(m.internalDate) || Date.now()).toISOString(),
+        read: !(m.labelIds || []).includes('UNREAD'), flagged: (m.labelIds || []).includes('STARRED'),
+      };
+    } catch (e) { return null; }
+  }))).filter(Boolean);
+  return { candidates, searched: true };
+}
+
 app.post('/ask', async (req, res) => {
   try {
     const { refreshToken, q } = req.body || {};
+    const provider = String(req.body?.provider || 'outlook').toLowerCase();
     const query = String(q || '').trim();
     if (!query) return res.json({ answer: '', emails: [] });
     if (!ANTHROPIC_API_KEY) return res.status(400).json({ error: 'AI not configured (set ANTHROPIC_API_KEY).' });
-    const { accessToken } = await accessTokenFromRefresh(refreshToken);
-    const SELECT = 'subject,from,toRecipients,bodyPreview,receivedDateTime,isRead,flag,inferenceClassification';
-    const mapMsg = (m) => ({
-      id: m.id,
-      account: 'outlook',
-      from: m.from?.emailAddress ? `${m.from.emailAddress.name} <${m.from.emailAddress.address}>` : '',
-      subject: m.subject || '(no subject)',
-      body: stripHtml(m.bodyPreview || ''),
-      preview: stripHtml(m.bodyPreview || ''),
-      date: m.receivedDateTime || new Date().toISOString(),
-      read: !!m.isRead,
-      flagged: m.flag?.flagStatus === 'flagged',
-      inferred: m.inferenceClassification || null,
-    });
-    // Strip filler words so a natural-language request becomes useful search terms.
-    const STOP = new Set(['all', 'emails', 'email', 'mail', 'in', 'from', 'the', 'show', 'find', 'pull', 'get', 'me', 'my', 'about', 'any', 'please', 'that', 'are', 'is', 'for', 'of', 'to', 'a', 'an', 'with', 'this', 'give', 'list', 'everything', 'every']);
-    const terms = query.split(/\s+/).filter((w) => w.length > 1 && !STOP.has(w.toLowerCase())).join(' ').trim();
-
-    let all = [];
-    if (terms) {
-      const url = `${GRAPH}/me/messages?$search=${encodeURIComponent(`"${terms}"`)}&$top=40&$select=${SELECT}`;
-      const r = await graphGet(url, accessToken);
-      const data = await r.json();
-      if (r.ok) all = (data.value || []).map(mapMsg);
+    if (provider === 'icloud') {
+      return res.json({ answer: 'AI search isn’t available for iCloud accounts yet. Use the search box to find mail by keyword.', emails: [] });
     }
-    // Nothing matched (or a broad request like "all emails in 2024") → use recent mail
-    // so the assistant can still answer/filter instead of dead-ending.
-    if (!all.length) {
-      const ru = `${GRAPH}/me/messages?$top=50&$orderby=receivedDateTime desc&$select=${SELECT}`;
-      const rr = await graphGet(ru, accessToken);
-      const rd = await rr.json();
-      if (rr.ok) all = (rd.value || []).map(mapMsg);
-    }
-    if (!all.length) return res.json({ answer: `I couldn't find any emails matching "${query}".`, emails: [] });
 
-    const items = all.map((e) => ({ id: e.id, from: e.from, subject: e.subject, date: e.date, preview: e.body.slice(0, 200) }));
+    const terms = askTerms(query);
+    let candidates = [];
+    let searched = false;
+    if (provider === 'google') {
+      const acc = await googleAccessFromRefresh(refreshToken);
+      ({ candidates, searched } = await askSearchGmail(acc.accessToken, terms));
+    } else {
+      const { accessToken } = await accessTokenFromRefresh(refreshToken);
+      ({ candidates, searched } = await askSearchOutlook(accessToken, query, terms));
+    }
+
+    if (!candidates.length) {
+      const answer = searched
+        ? `I couldn't find any emails matching "${query}".`
+        : `Tell me what to look for (a sender, company, or topic) and I'll find it.`;
+      record({ stage: 'ask_ok', provider, matched: 0, picked: 0 });
+      return res.json({ answer, emails: [] });
+    }
+
+    const items = candidates.map((e) => ({ id: e.id, from: e.from, subject: e.subject, date: e.date, preview: (e.body || '').slice(0, 240) }));
     const msg = await anthropic().messages.create({
       model: AI_MODEL,
       max_tokens: 900,
       system:
-        'You help the user query their email. You are given their request and a JSON list ' +
-        'of candidate emails (id, from, subject, date, preview) returned by a search. Answer ' +
-        'the request concisely based ONLY on these, and pick the ids that are genuinely ' +
-        'relevant. Reply ONLY JSON (no code fences): {"answer":"2-4 sentence answer","ids":' +
-        '["id",...]}. If the request is just to "pull"/"show"/"find" emails, give a one-line ' +
-        'answer and include all relevant ids.',
+        'You help the user find and understand emails. You are given their request and a JSON ' +
+        'list of candidate emails (id, from, subject, date, preview) returned by a keyword search. ' +
+        'The search casts a WIDE net, so some candidates will be irrelevant — your job is to keep ' +
+        'ONLY the emails that genuinely match what the user asked for (by sender, topic, and content), ' +
+        'and drop the rest. Be strict: it is better to return fewer, correct emails than to include ' +
+        'unrelated ones. If NONE of the candidates truly match, return an empty ids list and say so. ' +
+        'Order the ids from most to least relevant. Reply ONLY JSON (no code fences): ' +
+        '{"answer":"1-3 sentence answer","ids":["id",...]}.',
       messages: [{ role: 'user', content: `Request: ${query}\n\nCandidate emails:\n${JSON.stringify(items)}` }],
     });
     let text = (msg.content || []).map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
     text = text.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/i, '').trim();
     const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    const ids = new Set(parsed.ids || []);
-    const picked = ids.size ? all.filter((e) => ids.has(e.id)) : all;
+    const order = (parsed.ids || []).filter((id) => candidates.some((e) => e.id === id));
+    // Keep the AI's chosen order and DROP anything it didn't pick — that's what stops
+    // unrelated emails from showing up. If it picked nothing, return no emails.
+    const byId = new Map(candidates.map((e) => [e.id, e]));
+    const picked = order.map((id) => byId.get(id)).filter(Boolean);
     bumpUsage('asks');
-    record({ stage: 'ask_ok', matched: all.length, picked: picked.length });
+    record({ stage: 'ask_ok', provider, matched: candidates.length, picked: picked.length });
     res.json({ answer: parsed.answer || '', emails: picked });
   } catch (e) {
     record({ stage: 'ask_error', message: e.message });

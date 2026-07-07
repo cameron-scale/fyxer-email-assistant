@@ -25,6 +25,7 @@ function emailDocument(html) {
 // Measure height AND shrink any email wider than the screen so banners/images
 // that use fixed pixel widths fit instead of running off the right edge.
 const FIT_JS = `(function(){
+  var last=0;
   function fit(){
     try{
       var b=document.body, vw=window.innerWidth;
@@ -37,10 +38,25 @@ const FIT_JS = `(function(){
       // empty gap below the body.
       var rect = document.body.getBoundingClientRect();
       var h = Math.ceil(Math.max(rect.bottom, document.documentElement.getBoundingClientRect().height));
-      window.ReactNativeWebView.postMessage(String(h));
+      // Only post when the height actually changed, so we don't spin the bridge.
+      if(h && Math.abs(h-last) > 1){ last=h; window.ReactNativeWebView.postMessage(String(h)); }
     }catch(e){}
   }
-  setTimeout(fit,60); setTimeout(fit,450);
+  // Re-measure whenever the layout changes: as fonts/images/tables finish loading
+  // the body grows, and without this the WebView stays at its first (too-short)
+  // height and the email looks cut off until you leave and come back.
+  try{ if(window.ResizeObserver){ new ResizeObserver(fit).observe(document.body); } }catch(e){}
+  try{
+    var imgs=document.images||[];
+    for(var i=0;i<imgs.length;i++){
+      if(!imgs[i].complete){ imgs[i].addEventListener('load',fit); imgs[i].addEventListener('error',fit); }
+    }
+  }catch(e){}
+  document.addEventListener('DOMContentLoaded',fit);
+  window.addEventListener('load',fit);
+  // Safety net of delayed passes for anything the observers miss (very slow images,
+  // web fonts, remote CSS).
+  [0,120,300,600,1000,1800,3000].forEach(function(t){ setTimeout(fit,t); });
 })(); true;`;
 
 function partyName(s, me) {

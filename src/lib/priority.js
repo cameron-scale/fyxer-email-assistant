@@ -156,24 +156,47 @@ export function scoreEmail(email, options = {}) {
   let score = 0;
   const reasons = [];
 
+  // --- Detect promotional / automated mail FIRST -----------------------------
+  // This has to come before the importance boosts: marketing blasts routinely
+  // contain "invoice", "review", "confirm", "your order" or a rhetorical "?" and
+  // would otherwise score HIGH off those words. By deciding up-front whether the
+  // message is promotional, we can withhold those boosts from bulk mail — which is
+  // exactly the "unimportant email ranked high" problem. VIP / learned-important /
+  // explicitly-classified senders are never treated as promotional.
+  const noiseHits = countMatches(haystack, NOISE_WORDS);
+  const brandSender = isBrandSender(sender) && !isVip && !isKnown;
+  const noisySender = (NOISE_SENDER_HINTS.some((h) => senderStr.includes(h)) || brandSender) && !isVip && !isKnown;
+  const promo = (noiseHits > 0 || noisySender || inferredOther) && !isVip && !isKnown;
+
   // --- Signals that push importance UP ---
+  // Genuine urgency counts only when the message isn't a promo shouting a fake
+  // deadline ("act now", "expires today").
   const urgentHits = countMatches(haystack, URGENT_WORDS);
-  if (urgentHits) {
+  if (urgentHits && !promo) {
     score += 45 + urgentHits * 6;
     reasons.push('Sounds time-sensitive');
   }
 
   const importantHits = countMatches(haystack, IMPORTANT_WORDS);
-  if (importantHits) {
+  if (importantHits && !promo) {
     score += 14 + importantHits * 5;
     reasons.push('Looks like it needs an action');
   }
 
-  // A direct question usually wants a reply.
+  // A direct question usually wants a reply — but not when it's marketing.
   const isQuestion = `${email.subject} ${text}`.includes('?');
-  if (isQuestion) {
+  if (isQuestion && !promo) {
     score += 12;
     reasons.push('Asks a question');
+  }
+
+  // Part of an ongoing conversation you're in (Re:/Fwd:) — these are almost always
+  // more important than a fresh cold email, and were previously ranked too low.
+  const subjRaw = String(email.subject || '').trim();
+  const isReply = /^\s*(re|fw|fwd|aw|antwort|tr|rv)\s*:/i.test(subjRaw);
+  if (isReply && !promo) {
+    score += 22;
+    reasons.push('Part of a conversation you’re in');
   }
 
   // VIP senders you've taught Brisk about always float to the top.
@@ -187,7 +210,7 @@ export function scoreEmail(email, options = {}) {
   }
 
   // Addressed to you personally (a greeting near the top) — lightweight check.
-  if (text && /\b(hi|hey|hello|dear)\b/i.test(text.slice(0, 60))) {
+  if (text && !promo && /\b(hi|hey|hello|dear)\b/i.test(text.slice(0, 60))) {
     score += 6;
   }
 
@@ -201,9 +224,6 @@ export function scoreEmail(email, options = {}) {
   }
 
   // --- Signals that push importance DOWN (noise) ---
-  const noiseHits = countMatches(haystack, NOISE_WORDS);
-  const brandSender = isBrandSender(sender) && !isVip && !isKnown;
-  const noisySender = (NOISE_SENDER_HINTS.some((h) => senderStr.includes(h)) || brandSender) && !isVip && !isKnown;
   if (noiseHits) {
     score -= 20 + noiseHits * 8;
   }
@@ -218,10 +238,11 @@ export function scoreEmail(email, options = {}) {
     reasons.push('Looks automated / promotional');
   }
 
-  // A real person (name with a space, not a no-reply address) gets a nudge up.
+  // A real person (name with a space, not a no-reply address) gets a nudge up —
+  // stronger now so a plain, keyword-free note from a human isn't buried.
   const looksHuman = /\s/.test(sender.name.trim()) && !noisySender;
-  if (looksHuman) {
-    score += 10;
+  if (looksHuman && !promo) {
+    score += 15;
     reasons.push('From a real person');
   }
 

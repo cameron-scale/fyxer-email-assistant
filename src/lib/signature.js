@@ -319,10 +319,13 @@ export function blocksToHtml(sig) {
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
 export function signatureHtml(sig) {
-  if (!hasSignature(sig) && !(sig && sig.blocks && sig.blocks.length)) return '';
+  if (!sig) return '';
   // A manually-edited block signature wins, then an AI-designed one, then templates.
+  // These are checked BEFORE hasSignature() so an AI design that only populated
+  // `html` (without the structured name/company fields) still renders in sent mail.
   if (sig.blocks && sig.blocks.length) return blocksToHtml(sig);
   if (sig.html) return sig.html;
+  if (!hasSignature(sig)) return '';
   const accent = sig.accent || '#0071E3';
   const src = photoSource(sig);
   const t = templateKey(sig);
