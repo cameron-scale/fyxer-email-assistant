@@ -2409,3 +2409,18 @@ app.listen(PORT, () => {
   if (!ENC_KEY) console.warn('[WARN] SERVER_ENC_KEY is unset — sensitive data (OAuth handoffs, AI caches) will NOT persist to disk, so a process recycle mid-login shows "sign-in link expired". Set it before production.');
   if (!APP_API_KEY) console.warn('[WARN] APP_API_KEY is unset — the backend accepts requests without the app key. Set it (and EXPO_PUBLIC_APP_KEY in the app) before production.');
 });
+
+// Keep-alive: Render's free tier spins the server down after ~15 min of no
+// inbound traffic, which is why the FIRST inbox load after a quiet spell takes
+// 30–60s (a cold start) before any mail appears. Pinging our own public URL every
+// ~10 minutes counts as inbound traffic and keeps the instance warm, so opening
+// the app is fast. Only runs when Render provides the public URL, and never in a
+// disabled state. (For production, a paid instance removes cold starts entirely.)
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || '';
+if (SELF_URL && process.env.KEEP_ALIVE !== 'off') {
+  const ping = () => {
+    fetch(`${SELF_URL.replace(/\/$/, '')}/health`).catch(() => {});
+  };
+  setInterval(ping, 10 * 60 * 1000).unref?.();
+  console.log(`[keep-alive] pinging ${SELF_URL}/health every 10m to avoid cold starts`);
+}
