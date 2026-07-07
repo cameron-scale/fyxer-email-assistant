@@ -280,14 +280,17 @@ export default function ThreadScreen({ goBack, navigate, params }) {
         </Pressable>
       </Modal>
 
-      {loading ? <ActivityIndicator color={colors.blue} style={{ marginTop: 30 }} /> : (
-        <ScrollView contentContainerStyle={styles.body2} showsVerticalScrollIndicator={false}>
-          {/* AI summary / recommended next steps — above the body for a quick gist */}
+      <ScrollView contentContainerStyle={styles.body2} showsVerticalScrollIndicator={false}>
+          {/* AI summary / recommended next steps — above the body for a quick gist.
+              Rendered immediately (using the email we already have) so the AI call
+              runs in PARALLEL with the thread fetch instead of waiting for it. */}
           {isBackendConfigured(prefs?.serverUrl) && latest && (
             <View style={{ marginBottom: 16 }}>
               <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} note={senderNote} />
             </View>
           )}
+          {loading ? <ActivityIndicator color={colors.blue} style={{ marginTop: 30 }} /> : (
+          <>
           {list.map((m, i) => <Message key={m.id || i} msg={m} defaultOpen={i === 0} me={myEmails} />)}
 
           {/* Join meeting */}
@@ -332,8 +335,9 @@ export default function ThreadScreen({ goBack, navigate, params }) {
           )}
 
           <View style={{ height: 100 }} />
+          </>
+          )}
         </ScrollView>
-      )}
 
       {seed && latest && (
         <Pressable style={styles.replyBar} onPress={() => navigate('Reply', { id: seed.id })}>

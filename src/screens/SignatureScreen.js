@@ -411,7 +411,22 @@ export default function SignatureScreen({ goBack, navigate }) {
           )}
 
           {/* Canva-style manual editor */}
-          <Pressable style={styles.editBtn} onPress={() => { setPrefs({ sig, signature: sig.name || prefs.signature }); navigate && navigate('SignatureEditor'); }}>
+          <Pressable style={styles.editBtn} onPress={() => {
+            const go = () => { setPrefs({ sig, signature: sig.name || prefs.signature }); navigate && navigate('SignatureEditor'); };
+            // An AI design is arbitrary HTML we can't decompose into blocks, so the
+            // manual editor rebuilds a simpler version. Make that an explicit choice
+            // rather than a silent downgrade of a design the user liked.
+            if (sig.html) {
+              Alert.alert(
+                'Switch to the manual editor?',
+                'The block editor builds a simpler, hand-editable signature from your details. It can’t recreate your AI design exactly, and saving there replaces the AI design. Your AI design stays saved unless you tap Save inside the editor.',
+                [
+                  { text: 'Keep AI design', style: 'cancel' },
+                  { text: 'Open editor', onPress: go },
+                ],
+              );
+            } else { go(); }
+          }}>
             <Ionicons name="construct-outline" size={16} color="#fff" />
             <Text style={styles.editBtnText} numberOfLines={1}>Edit manually</Text>
           </Pressable>

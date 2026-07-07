@@ -7,19 +7,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { nextSteps } from '../lib/backend';
 
+// Session cache so reopening an email shows its next steps INSTANTLY instead of
+// re-calling the AI every time (which was slow and re-billed). Keyed by message id
+// + any sender note, since the note changes the recommendation.
+const cache = new Map();
+const keyOf = (id, note) => `${id}::${note || ''}`;
+
 export default function NextStepsCard({ serverUrl, id, subject, body, senderName, note, dark }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = keyOf(id, note);
+  const [data, setData] = useState(() => cache.get(cacheKey) || null);
+  const [loading, setLoading] = useState(() => !cache.has(cacheKey));
 
   useEffect(() => {
+    if (cache.has(cacheKey)) { setData(cache.get(cacheKey)); setLoading(false); return undefined; }
     let alive = true;
     setLoading(true);
-    nextSteps(serverUrl, { id, subject, body, senderName, note })
-      .then((r) => { if (alive) setData(r); })
+    // Cap the body we send so the AI call stays fast on long emails.
+    const trimmed = typeof body === 'string' && body.length > 6000 ? body.slice(0, 6000) : body;
+    nextSteps(serverUrl, { id, subject, body: trimmed, senderName, note })
+      .then((r) => { cache.set(cacheKey, r); if (alive) setData(r); })
       .catch(() => {})
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [id, subject, note]); // eslint-disable-line
+  }, [cacheKey, subject]); // eslint-disable-line
 
   if (!loading && !(data && (data.recommendation || (data.steps || []).length))) return null;
 
