@@ -36,6 +36,8 @@ export default function ReplyScreen({ params, goBack }) {
   const email = findEmail(params.id);
   const p = email?.priority;
   const backendReady = isBackendConfigured(prefs.serverUrl);
+  // Private AI mode pauses the AI writing features but never blocks sending.
+  const aiReady = backendReady && prefs.privateMode !== true;
   // Resolve the reply's account/token/provider the same way send() does below, so
   // a Gmail- or iCloud-only user can still reply — not just Outlook accounts.
   const replyAcct = (mailAccounts || []).find((a) => a.id === email?.accountId);
@@ -213,7 +215,7 @@ export default function ReplyScreen({ params, goBack }) {
           </View>
           <Text style={styles.helper}>Start from a draft</Text>
           <View style={styles.chips}>
-            {backendReady && (
+            {aiReady && (
               <Pressable onPress={writeWithAi} style={styles.aiChip} disabled={aiBusy}>
                 {aiBusy ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -248,7 +250,7 @@ export default function ReplyScreen({ params, goBack }) {
           />
 
           {/* AI writing suggestions */}
-          {backendReady && (
+          {aiReady && (
             <ComposeAssistant
               serverUrl={prefs.serverUrl}
               getBody={() => body}

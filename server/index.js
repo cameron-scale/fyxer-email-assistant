@@ -87,6 +87,11 @@ app.use((req, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');
   res.set('X-Frame-Options', 'DENY');
   res.set('Referrer-Policy', 'no-referrer');
+  // Force HTTPS for a year (Render terminates TLS in front of us). Browsers that
+  // have seen this header will refuse to ever downgrade a request to plain HTTP.
+  res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // This API serves no interactive pages that need device sensors.
+  res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
 
@@ -125,7 +130,10 @@ const APP_API_KEY = (process.env.APP_API_KEY || '').trim();
 function isPublicPath(p, method) {
   if (p === '/' || p === '/health' || p === '/usage') return true;
   if (p.startsWith('/auth/')) return true;             // OAuth happens in a browser
-  if (p.startsWith('/debug')) return true;             // already behind DEBUG_TOKEN
+  // Debug PAGES are viewed in a browser (can't send x-app-key) and are already
+  // behind DEBUG_TOKEN. POSTs to /debug (the app's client-log) come from the app,
+  // which always attaches the key — so require it there like everywhere else.
+  if (p.startsWith('/debug') && method === 'GET') return true;
   if (p.startsWith('/img/') && method === 'GET') return true; // mail clients fetch signature images
   if (p.startsWith('/calendar/ics')) return true;      // calendar feed URLs
   return false;
@@ -229,7 +237,7 @@ app.get('/', (_req, res) => res.send('Scale Mail server is running ✅'));
 app.get('/health', (_req, res) =>
   res.json({
     ok: true,
-    version: 'debug-46',
+    version: 'debug-47',
     microsoft: Boolean(MS_CLIENT_ID && MS_CLIENT_SECRET),
     google: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     ai: Boolean(ANTHROPIC_API_KEY),
@@ -455,7 +463,7 @@ function record(entry) {
   recentCallbacks.unshift({ at: new Date().toISOString(), ...entry });
   recentCallbacks.length = Math.min(recentCallbacks.length, 12);
 }
-app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-46', recentCallbacks }));
+app.get('/debug/log', debugAuth, (_req, res) => res.json({ version: 'debug-47', recentCallbacks }));
 
 // ── Live monitoring ──────────────────────────────────────────────────────────
 // A snapshot of recent client-side events the app reports.
@@ -469,7 +477,7 @@ app.post('/debug/client-log', (req, res) => {
 
 app.get('/debug/status', debugAuth, (_req, res) => {
   res.json({
-    version: 'debug-46',
+    version: 'debug-47',
     instance: INSTANCE_ID,
     uptimeSec: Math.round((Date.now() - SERVER_STARTED) / 1000),
     memoryMB: Math.round((process.memoryUsage().rss / 1048576) * 10) / 10,

@@ -144,7 +144,7 @@ export default function ComposeSheet({ onClose }) {
           <Text style={styles.sig}>{`\n${prefs.signature}`}</Text>
         )}
 
-        {isBackendConfigured(prefs.serverUrl) && (
+        {isBackendConfigured(prefs.serverUrl) && prefs.privateMode !== true && (
           <Pressable style={styles.voiceBtn} onPress={polish} disabled={polishing}>
             {polishing ? <ActivityIndicator size="small" color={colors.blue} /> : (
               <>
@@ -155,7 +155,7 @@ export default function ComposeSheet({ onClose }) {
           </Pressable>
         )}
 
-        {isBackendConfigured(prefs.serverUrl) && (
+        {isBackendConfigured(prefs.serverUrl) && prefs.privateMode !== true && (
           <ComposeAssistant
             serverUrl={prefs.serverUrl}
             getBody={() => body}

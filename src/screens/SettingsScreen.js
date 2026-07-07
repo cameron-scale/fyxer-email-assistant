@@ -4,8 +4,9 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView,
-  KeyboardAvoidingView, Platform, Switch,
+  KeyboardAvoidingView, Platform, Switch, Alert,
 } from 'react-native';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, space, font, radius, gradients } from '../theme';
@@ -25,6 +26,27 @@ export default function SettingsScreen({ navigate, goBack }) {
   const activeAccount = (mailAccounts || []).find((a) => a.id === activeAccountId) || (mailAccounts || [])[0];
   const profileName = prefs?.sig?.name || activeAccount?.name || folderMeta?.displayName || null;
   const profileEmail = prefs?.sig?.email || activeAccount?.email || folderMeta?.email || null;
+
+  // Turn the Face ID lock on only after proving this device can actually unlock —
+  // otherwise a phone with no biometrics AND no passcode would lock the user out.
+  const toggleAppLock = async (on) => {
+    if (!on) { setPrefs({ appLock: false }); return; }
+    try {
+      const [hw, enrolled] = await Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.isEnrolledAsync(),
+      ]);
+      const secLevel = await LocalAuthentication.getEnrolledLevelAsync().catch(() => 1);
+      if (!(hw && enrolled) && !(secLevel > 0)) {
+        Alert.alert('Set up a passcode first', 'App Lock needs Face ID, Touch ID, or a device passcode. Add one in your phone’s Settings, then try again.');
+        return;
+      }
+      const res = await LocalAuthentication.authenticateAsync({ promptMessage: 'Confirm to enable App Lock' });
+      if (res.success) setPrefs({ appLock: true });
+    } catch (e) {
+      Alert.alert('Could not enable App Lock', e.message || 'Please try again.');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -46,6 +68,43 @@ export default function SettingsScreen({ navigate, goBack }) {
             {profileEmail ? <Text style={styles.profileEmail}>{profileEmail}</Text> : null}
           </View>
         </View>
+
+        {/* Security */}
+        <Text style={styles.sectionLabel}>Security</Text>
+        <View style={styles.group}>
+          <View style={[styles.row, styles.rowBorder]}>
+            <View style={[styles.rowIcon, { backgroundColor: '#E8F5E9' }]}>
+              <Ionicons name="lock-closed" size={16} color="#2E7D32" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>App Lock (Face ID)</Text>
+            </View>
+            <Switch
+              value={prefs.appLock === true}
+              onValueChange={toggleAppLock}
+              trackColor={{ true: colors.blue, false: '#D1D1D6' }}
+            />
+          </View>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: '#FDECEA' }]}>
+              <Ionicons name="eye-off" size={16} color="#C62828" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Private AI mode</Text>
+            </View>
+            <Switch
+              value={prefs.privateMode === true}
+              onValueChange={(v) => setPrefs({ privateMode: v })}
+              trackColor={{ true: colors.blue, false: '#D1D1D6' }}
+            />
+          </View>
+        </View>
+        <Text style={styles.help}>
+          App Lock requires Face ID or your passcode every time Scale Mail opens.
+          Private AI mode keeps email content on this phone — AI summaries, search and
+          writing help are paused, and nothing is sent to the AI. Built for privileged
+          and NDA-protected mail.
+        </Text>
 
         {/* Signature builder */}
         <Text style={styles.sectionLabel}>Email signature</Text>

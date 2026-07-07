@@ -284,7 +284,7 @@ export default function ThreadScreen({ goBack, navigate, params }) {
           {/* AI summary / recommended next steps — above the body for a quick gist.
               Rendered immediately (using the email we already have) so the AI call
               runs in PARALLEL with the thread fetch instead of waiting for it. */}
-          {isBackendConfigured(prefs?.serverUrl) && latest && (
+          {isBackendConfigured(prefs?.serverUrl) && prefs?.privateMode !== true && latest && (
             <View style={{ marginBottom: 16 }}>
               <NextStepsCard dark serverUrl={prefs.serverUrl} id={latest.id} subject={seed?.subject} body={latest.body} senderName={parseSender(latest.from || '').name} note={senderNote} />
             </View>

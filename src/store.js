@@ -28,7 +28,7 @@ export const SORTS = {
 // How many fresh emails to auto-summarize per load (bounds AI cost).
 const SUMMARIZE_CAP = 50; // AI summaries generated per request / per box page
 
-const DEFAULT_PREFS = { tone: 'professional', signature: '', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, hiddenIds: {}, watched: [], pinnedIds: {}, autoArchive: true, archiveNoticeSeen: false };
+const DEFAULT_PREFS = { tone: 'professional', signature: '', serverUrl: DEFAULT_SERVER_URL, sig: null, categories: [], photoGallery: [], avatarUri: null, groupThreads: true, tabs: DEFAULT_TABS, tabHintSeen: false, learnedInbox: false, knownImportant: [], archiveKept: [], archiveStaged: {}, senderNotes: {}, senderLabels: {}, keptSenders: {}, hiddenIds: {}, watched: [], pinnedIds: {}, autoArchive: true, archiveNoticeSeen: false, appLock: false, privateMode: false };
 
 // Normalize a subject for "same conversation" matching (drop Re:/Fwd:, lowercase).
 const watchSubjectNorm = (s) => String(s || '').toLowerCase()
@@ -550,7 +550,8 @@ export function StoreProvider({ children }) {
       return next;
     });
     // AI: read the kept email and learn why (best-effort, never blocks the UI).
-    if (e && addr && isBackendConfigured(prefs.serverUrl)) {
+    // Skipped in Private AI mode — the local kept-sender counting above still runs.
+    if (e && addr && !privateModeRef.current && isBackendConfigured(prefs.serverUrl)) {
       learnFromKeep(prefs.serverUrl, {
         from: e.from, subject: e.subject,
         preview: e.aiSummary || e.priority?.tldr || e.preview || e.body || '',
@@ -653,9 +654,16 @@ export function StoreProvider({ children }) {
     return { synced: false };
   }, [outlookRefresh, prefs.serverUrl, setPrefs]);
 
+  // Private AI mode: when on, NO email content leaves the phone for the AI.
+  // Kept in a ref so long-lived callbacks (summarize, ask, learn) always see the
+  // live value without re-creating on every prefs change.
+  const privateModeRef = useRef(false);
+  useEffect(() => { privateModeRef.current = prefs.privateMode === true; }, [prefs.privateMode]);
+
   // Summarize a batch of emails — but ONLY ones we haven't cached yet, capped, so
   // reloading the inbox is free and the bill stays small.
   const summarizeBatch = useCallback(async (list) => {
+    if (privateModeRef.current) return; // Private AI mode: content stays on-device
     // Only fill gaps: skip already-summarized AND anything already requested this
     // session, so each message is summarized exactly once (no flickering text).
     const todo = list.filter((e) => (
@@ -1086,6 +1094,11 @@ export function StoreProvider({ children }) {
   const askMailQuestion = useCallback(async (q) => {
     const query = (q || '').trim();
     if (!query) { setSearchResults(null); setChatAnswer(null); return; }
+    if (privateModeRef.current) {
+      setChatAnswer('Private AI mode is on — AI search is paused so nothing leaves this phone. Use regular search, or turn Private AI mode off in Settings.');
+      setSearchResults([]);
+      return;
+    }
     // Use the active mailbox (or the first linked one) so AI search works for a
     // Gmail-only user too — not just Outlook. Pass the provider so the server
     // searches the right backend.

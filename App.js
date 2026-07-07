@@ -32,6 +32,7 @@ import TabBar from './src/components/TabBar';
 import UndoSnackbar from './src/components/UndoSnackbar';
 import OnboardingTour from './src/components/OnboardingTour';
 import LearnInboxOverlay from './src/components/LearnInboxOverlay';
+import AppLock from './src/components/AppLock';
 import { DEMO_URGENT_ID } from './src/lib/demo';
 import { TAB_DEFS } from './src/lib/tabs';
 import BottomSheet from './src/components/BottomSheet';
@@ -178,6 +179,9 @@ function AppShell() {
 
       {/* Full-screen "learn my inbox" overlay (ring → frosted "Inbox ready") */}
       <LearnInboxOverlay />
+
+      {/* Face ID / passcode gate — rendered last so it covers EVERYTHING. */}
+      <AppLock />
     </View>
   );
 }

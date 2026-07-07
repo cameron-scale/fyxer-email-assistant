@@ -100,7 +100,7 @@ export default function DetailScreen({ params, goBack, navigate }) {
     if (!email) return;
     if (email.demo) { setReplies(['Sounds good, I’ll review it today.', 'Can we push to next week?']); return; }
     const actionable = ['Urgent', 'Action Needed', 'Client', 'Meeting'].includes(email.priority?.category);
-    if (!isBackendConfigured(prefs?.serverUrl) || (email.account !== 'outlook' && email.account !== 'gmail') || !actionable) { setReplies([]); return; }
+    if (!isBackendConfigured(prefs?.serverUrl) || prefs?.privateMode === true || (email.account !== 'outlook' && email.account !== 'gmail') || !actionable) { setReplies([]); return; }
     let alive = true;
     quickReplies(prefs.serverUrl, { id: email.id, subject: email.subject, body: email.body, senderName: email.priority?.senderName })
       .then((r) => { if (alive) setReplies(r.replies || []); })
