@@ -7,32 +7,45 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Animated, StyleSheet, Pressable, View, Dimensions, KeyboardAvoidingView, Platform,
+  Animated, StyleSheet, Pressable, View, useWindowDimensions, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { colors, radius } from '../theme';
 
-const { height: SCREEN_H } = Dimensions.get('window');
-
 export default function BottomSheet({ visible, onClose, heightPct = 0.9, children }) {
   const [mounted, setMounted] = useState(visible);
-  const sheetH = Math.round(SCREEN_H * heightPct);
-  const translateY = useRef(new Animated.Value(sheetH)).current;
+  // Read the live window height (not a module-load constant) so the sheet is sized
+  // correctly regardless of when this module first loaded or device rotation.
+  const { height: winH } = useWindowDimensions();
+  const sheetH = Math.round(winH * heightPct);
+  // Start fully below the screen. We reset this to `sheetH` every time we open, so
+  // the slide-up always plays even on the very first open.
+  const translateY = useRef(new Animated.Value(winH)).current;
   const backdrop = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }),
-        Animated.timing(backdrop, { toValue: 1, duration: 240, useNativeDriver: true }),
-      ]).start();
-    } else if (mounted) {
+      // Reset to the off-screen start position, then animate up on the NEXT frame —
+      // after the sheet view has actually mounted. Starting a native-driven
+      // animation in the same tick as the mount can be dropped in Expo Go, which
+      // left the sheet stuck off-screen (backdrop dimmed but nothing popped up).
+      translateY.setValue(sheetH);
+      const raf = requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4, speed: 14 }),
+          Animated.timing(backdrop, { toValue: 1, duration: 240, useNativeDriver: true }),
+        ]).start();
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+    if (mounted) {
       Animated.parallel([
         Animated.timing(translateY, { toValue: sheetH, duration: 240, useNativeDriver: true }),
         Animated.timing(backdrop, { toValue: 0, duration: 220, useNativeDriver: true }),
-      ]).start(() => setMounted(false));
+      ]).start(({ finished }) => { if (finished) setMounted(false); });
     }
-  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+    return undefined;
+  }, [visible, sheetH]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!mounted) return null;
 
@@ -42,7 +55,7 @@ export default function BottomSheet({ visible, onClose, heightPct = 0.9, childre
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'android' ? 'height' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.kav}
         pointerEvents="box-none"
       >

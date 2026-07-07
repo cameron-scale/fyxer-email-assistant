@@ -4,8 +4,11 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, TextInput, Alert, ScrollView, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Modal,
+  KeyboardAvoidingView, Platform, Modal, InputAccessoryView, Keyboard,
 } from 'react-native';
+
+// iOS floating bar above the keyboard so it can always be dismissed.
+const KB_ID = 'composeSheetBar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { useStore } from '../store';
@@ -118,12 +121,14 @@ export default function ComposeSheet({ onClose }) {
       <View style={styles.field}>
         <Text style={styles.label}>To</Text>
         <TextInput style={styles.input} value={to} onChangeText={setTo}
-          placeholder="Name or email" placeholderTextColor={colors.ink4} autoCapitalize="none" />
+          placeholder="Name or email" placeholderTextColor={colors.ink4} autoCapitalize="none"
+          inputAccessoryViewID={Platform.OS === 'ios' ? KB_ID : undefined} />
       </View>
       <View style={styles.field}>
         <Text style={styles.label}>Re</Text>
         <TextInput style={styles.input} value={subject} onChangeText={setSubject}
-          placeholder="Subject" placeholderTextColor={colors.ink4} />
+          placeholder="Subject" placeholderTextColor={colors.ink4}
+          inputAccessoryViewID={Platform.OS === 'ios' ? KB_ID : undefined} />
       </View>
 
       <ScrollView style={styles.bodyWrap} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets contentInsetAdjustmentBehavior="always" contentContainerStyle={{ paddingBottom: 120 }}>
@@ -133,6 +138,7 @@ export default function ComposeSheet({ onClose }) {
           placeholder="Write your message… (tip: tap the keyboard 🎤 to dictate)" placeholderTextColor={colors.ink4}
           multiline scrollEnabled={false}
           onContentSizeChange={(e) => setBodyHeight(e.nativeEvent.contentSize.height)}
+          inputAccessoryViewID={Platform.OS === 'ios' ? KB_ID : undefined}
         />
         {!!(prefs.signature && prefs.signature.trim()) && (
           <Text style={styles.sig}>{`\n${prefs.signature}`}</Text>
@@ -184,6 +190,18 @@ export default function ComposeSheet({ onClose }) {
           <Pressable style={styles.schedCancel} onPress={() => setScheduleOpen(false)}><Text style={styles.schedCancelText}>Cancel</Text></Pressable>
         </View>
       </Modal>
+
+      {/* Floating "Done" bar above the keyboard — the way to hide it. */}
+      {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID={KB_ID}>
+          <View style={styles.kbBar}>
+            <Pressable onPress={() => Keyboard.dismiss()} style={styles.kbDone} hitSlop={10}>
+              <Ionicons name="chevron-down" size={18} color={colors.blue} />
+              <Text style={styles.kbDoneText}>Done</Text>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      )}
     </View>
   );
 }
@@ -218,6 +236,12 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 14, fontWeight: '500', color: colors.ink4, minWidth: 24 },
   input: { flex: 1, fontSize: 15, color: colors.ink },
+  kbBar: {
+    backgroundColor: colors.surface2, borderTopWidth: 1, borderTopColor: colors.hairline,
+    flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 7,
+  },
+  kbDone: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4, paddingHorizontal: 8 },
+  kbDoneText: { color: colors.blue, fontSize: 16, fontWeight: '700' },
   bodyWrap: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
   body: { fontFamily: 'Georgia', fontSize: 16, lineHeight: 26, color: colors.ink2, minHeight: 160, textAlignVertical: 'top' },
   sig: { fontFamily: 'Georgia', fontSize: 15, color: colors.ink3, lineHeight: 24 },

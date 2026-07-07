@@ -5,9 +5,12 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, SafeAreaView, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, useWindowDimensions,
+  View, Text, StyleSheet, Pressable, SafeAreaView, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, useWindowDimensions, InputAccessoryView, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+// iOS floating bar above the keyboard so there's always a way to dismiss it.
+const KB_ID = 'replyComposerBar';
 import { colors, space, font, radius } from '../theme';
 import { useStore } from '../store';
 import { suggestReplies } from '../lib/drafts';
@@ -183,6 +186,7 @@ export default function ReplyScreen({ params, goBack }) {
               style={styles.fieldInput} value={toEmail} onChangeText={setToEmail}
               placeholder="name@email.com" placeholderTextColor={colors.ink4}
               autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
+              inputAccessoryViewID={Platform.OS === 'ios' ? KB_ID : undefined}
             />
           </View>
           <View style={styles.field}>
@@ -190,6 +194,7 @@ export default function ReplyScreen({ params, goBack }) {
             <TextInput
               style={styles.fieldInput} value={subject} onChangeText={setSubject}
               placeholder="Subject" placeholderTextColor={colors.ink4}
+              inputAccessoryViewID={Platform.OS === 'ios' ? KB_ID : undefined}
             />
           </View>
 
@@ -239,6 +244,7 @@ export default function ReplyScreen({ params, goBack }) {
             placeholder="Write your reply…"
             placeholderTextColor={colors.ink4}
             autoFocus
+            inputAccessoryViewID={Platform.OS === 'ios' ? KB_ID : undefined}
           />
 
           {/* AI writing suggestions */}
@@ -277,6 +283,18 @@ export default function ReplyScreen({ params, goBack }) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Floating "Done" bar above the keyboard — the way to hide it. */}
+      {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID={KB_ID}>
+          <View style={styles.kbBar}>
+            <Pressable onPress={() => Keyboard.dismiss()} style={styles.kbDone} hitSlop={10}>
+              <Ionicons name="chevron-down" size={18} color={colors.blue} />
+              <Text style={styles.kbDoneText}>Done</Text>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      )}
     </SafeAreaView>
   );
 }
@@ -340,6 +358,12 @@ const styles = StyleSheet.create({
   quoteHead: { fontSize: 12, color: colors.ink4, marginBottom: 8 },
   quoteBody: { fontFamily: 'Georgia', fontSize: 14, lineHeight: 22, color: colors.ink3 },
   quoteToggle: { color: colors.blue, fontSize: 13, fontWeight: '700', marginTop: 8 },
+  kbBar: {
+    backgroundColor: colors.surface2, borderTopWidth: 1, borderTopColor: colors.hairline,
+    flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 7,
+  },
+  kbDone: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4, paddingHorizontal: 8 },
+  kbDoneText: { color: colors.blue, fontSize: 16, fontWeight: '700' },
   gone: { color: colors.ink3, textAlign: 'center', marginTop: 80, fontSize: 15 },
   send: { backgroundColor: colors.blue, borderRadius: radius.md, paddingVertical: 14, margin: 20, alignItems: 'center' },
   sendText: { color: '#fff', fontWeight: '800', fontSize: font.title },
