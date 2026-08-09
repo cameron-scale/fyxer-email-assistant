@@ -1,0 +1,386 @@
+<title>PlatePath — Route Intelligence Console (Demo)</title>
+<meta name="description" content="Interactive demo: trace a verified vehicle's route with time codes and per-segment speed — and watch the consent gate block an unverified plate." />
+<style>
+  :root {
+    /* Dark-committed instrument console. Every color is explicit so the page
+       holds on any host ground. Neutrals are biased slightly toward cyan. */
+    --bg: #070b14;
+    --bg-grid: #0d1526;
+    --panel: #0f1626;
+    --panel-2: #131d31;
+    --line: #1b2740;
+    --line-2: #26355a;
+    --text: #e6edf7;
+    --muted: #8ea3bd;
+    --faint: #5f728f;
+    --accent: #22d3ee;
+    --accent-dim: #0e7f8f;
+    /* semantic speed ramp — NOT the accent */
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --over: #ef4444;
+    --stopped: #64748b;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 20px 18px 72px; }
+
+  /* header */
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 21px; letter-spacing: -0.01em; }
+  .brand .sat { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px;
+    background: radial-gradient(circle at 30% 30%, #164e5a, #0a1a24); border: 1px solid var(--line-2); }
+  .brand .sat b { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .brand small { font-family: var(--mono); font-size: 11px; color: var(--muted); font-weight: 500; letter-spacing: .02em; }
+  .tagline { color: var(--muted); font-size: 13px; max-width: 380px; }
+
+  .banner {
+    margin: 18px 0 22px; padding: 13px 16px; border-radius: 12px;
+    background: linear-gradient(90deg, rgba(34,211,238,.08), rgba(34,211,238,.02));
+    border: 1px solid var(--line-2); color: var(--muted); font-size: 13.5px;
+  }
+  .banner b { color: var(--text); }
+
+  /* console layout */
+  .console { display: grid; grid-template-columns: 300px 1fr; gap: 18px; }
+  @media (max-width: 900px) { .console { grid-template-columns: 1fr; } }
+
+  .rail h2, .stage h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 0 0 10px; font-weight: 600; }
+  .accounts { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 18px; }
+  .acct { font-family: var(--ui); font-size: 12.5px; padding: 7px 11px; border-radius: 999px; cursor: pointer;
+    background: var(--panel); color: var(--muted); border: 1px solid var(--line); transition: .15s; text-transform: capitalize; }
+  .acct:hover { border-color: var(--line-2); color: var(--text); }
+  .acct[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: var(--panel-2); box-shadow: 0 0 0 1px var(--accent-dim) inset; }
+
+  .rail .who { font-size: 12px; color: var(--muted); margin: -8px 0 14px; }
+
+  .veh { width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 13px; margin-bottom: 9px; cursor: pointer; color: var(--text); transition: .15s; }
+  .veh:hover { border-color: var(--line-2); }
+  .veh[aria-selected="true"] { border-color: var(--accent); background: var(--panel-2); }
+  .veh .r { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .plate { font-family: var(--mono); font-weight: 600; letter-spacing: .05em; font-size: 14px; }
+  .nick { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 3px 7px; border-radius: 6px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .badge.ok { background: rgba(34,197,94,.14); color: #4ade80; }
+  .badge.lock { background: rgba(239,68,68,.14); color: #fca5a5; }
+  .veh .locknote { color: #fca5a5; font-size: 11.5px; margin-top: 8px; font-family: var(--mono); }
+
+  /* stage */
+  .stage { min-width: 0; }
+  .empty, .locked { border: 1px solid var(--line); border-radius: 16px; padding: 30px; background: var(--panel); }
+  .empty h1 { font-size: 22px; margin: 0 0 8px; }
+  .empty p, .locked p { color: var(--muted); margin: 6px 0; font-size: 14px; }
+  .locked { border-color: rgba(239,68,68,.35); background: linear-gradient(180deg, rgba(239,68,68,.07), rgba(239,68,68,.01)); }
+  .locked h1 { font-size: 21px; margin: 0 0 10px; display: flex; align-items: center; gap: 9px; }
+  .locked .why { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: rgba(0,0,0,.25); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+  .totals { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .stat { flex: 1 1 auto; min-width: 96px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; }
+  .stat.warn { border-color: rgba(239,68,68,.4); }
+  .stat .v { font-family: var(--mono); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat.warn .v { color: #fca5a5; }
+  .stat .l { color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+
+  .maprow { position: relative; }
+  svg.map { width: 100%; height: auto; display: block; border-radius: 14px; border: 1px solid var(--line); background: var(--bg-grid); }
+  .controls { display: flex; align-items: center; gap: 12px; margin: 11px 2px 4px; flex-wrap: wrap; }
+  .play { display: inline-flex; align-items: center; gap: 8px; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line-2); border-radius: 10px; padding: 8px 14px; font-family: var(--ui); font-size: 13.5px; cursor: pointer; transition: .15s; }
+  .play:hover { border-color: var(--accent); }
+  .play .tri { color: var(--accent); font-size: 12px; }
+  .readout { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .readout b { color: var(--text); }
+  .legend { display: flex; gap: 15px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-left: auto; }
+  .legend i { display: inline-block; width: 15px; height: 5px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+
+  .tablewrap { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .thead, .trow { display: grid; grid-template-columns: 78px 1fr 92px 74px 84px 90px; align-items: center; }
+  .thead { background: var(--panel); color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; padding: 9px 14px; }
+  .tbody { max-height: 300px; overflow-y: auto; }
+  .trow { padding: 8px 14px; border-top: 1px solid var(--line); font-size: 13.5px; cursor: pointer; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .trow:hover { background: var(--panel-2); }
+  .trow[aria-selected="true"] { background: rgba(34,211,238,.10); box-shadow: inset 3px 0 0 var(--accent); }
+  .trow .sp.over { color: #fca5a5; font-weight: 600; }
+  .pill { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .03em; padding: 2px 7px; border-radius: 6px; justify-self: start; }
+  .pill.ok { background: rgba(34,197,94,.14); color: #4ade80; }
+  .pill.warn { background: rgba(245,158,11,.16); color: #fbbf24; }
+  .pill.over { background: rgba(239,68,68,.18); color: #fca5a5; }
+  .pill.stopped { background: rgba(100,116,139,.2); color: #cbd5e1; }
+
+  footer { margin-top: 28px; color: var(--faint); font-size: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
+  footer b { color: var(--muted); }
+  a { color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="sat"><b></b></span>
+      <span>PlatePath <small>route intelligence console</small></span>
+    </div>
+    <div class="tagline">Trace a vehicle you've <b style="color:var(--text)">verified you own</b> — its route, time codes, and speed in every section. USA, all 50 states.</div>
+  </header>
+
+  <div class="banner">
+    <b>What this is.</b> The legal, buildable version of the idea. Public traffic cams can't read plates or be scanned nationwide, and tracking a plate you merely typed in is stalking — so PlatePath tracks only vehicles whose ownership you've <b>verified</b>, from consented telematics. Everything below is live demo data. Switch accounts and pick a vehicle. Try the unverified plate to see the gate.
+  </div>
+
+  <div class="console">
+    <aside class="rail">
+      <h2>Account</h2>
+      <div class="accounts" id="accounts"></div>
+      <div class="who" id="who"></div>
+      <h2>Registered vehicles</h2>
+      <div id="veh-list"></div>
+    </aside>
+
+    <section class="stage" id="stage"></section>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Engine (ported from packages/shared — same math the API and apps run)
+// ---------------------------------------------------------------------------
+const EARTH_MI = 3958.7613, rad = d => d*Math.PI/180;
+function haversine(a, b){
+  const dLat=rad(b.lat-a.lat), dLng=rad(b.lng-a.lng);
+  const h=Math.sin(dLat/2)**2 + Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLng/2)**2;
+  return 2*EARTH_MI*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+function bearing(a,b){
+  const y=Math.sin(rad(b.lng-a.lng))*Math.cos(rad(b.lat));
+  const x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat))-Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lng-a.lng));
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function mulberry32(seed){let a=seed>>>0;return()=>{a|=0;a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+
+const DRIVE=[
+  {lat:30.2100,lng:-97.8600,mph:20,limit:30,label:'Home'},
+  {lat:30.2180,lng:-97.8480,mph:34,limit:35},
+  {lat:30.2240,lng:-97.8350,mph:41,limit:40,dwell:45,label:'Red light'},
+  {lat:30.2360,lng:-97.8150,mph:68,limit:65,label:'On-ramp I-35'},
+  {lat:30.2520,lng:-97.7930,mph:82,limit:65,label:'Highway'},
+  {lat:30.2660,lng:-97.7760,mph:63,limit:65},
+  {lat:30.2720,lng:-97.7530,mph:30,limit:35,label:'Exit'},
+  {lat:30.2685,lng:-97.7420,mph:18,limit:25,label:'Downtown'},
+  {lat:30.2669,lng:-97.7390,mph:0,limit:25,label:'Arrived'},
+];
+function generateDrive(startIso, seed){
+  const rnd=mulberry32(seed), jit=()=>(rnd()-0.5)*0.00018, out=[];
+  let t=Date.parse(startIso), N=DRIVE.length;
+  const push=(lat,lng,limit)=>out.push({ts:new Date(t).toISOString(),lat:lat+jit(),lng:lng+jit(),limit});
+  push(DRIVE[0].lat,DRIVE[0].lng,DRIVE[0].limit);
+  for(let i=0;i<N-1;i++){
+    const a=DRIVE[i],b=DRIVE[i+1];
+    const miles=haversine(a,b), mph=Math.max(4,a.mph), legSec=(miles/mph)*3600, steps=Math.max(1,Math.round(legSec/20));
+    for(let s=1;s<=steps;s++){const f=s/steps;t+=(legSec/steps)*1000;push(a.lat+(b.lat-a.lat)*f,a.lng+(b.lng-a.lng)*f,b.limit);}
+    if(b.dwell){const ds=Math.round(b.dwell/20);for(let s=0;s<ds;s++){t+=20000;push(b.lat,b.lng,b.limit);}}
+  }
+  return out;
+}
+function buildTrack(pings,{margin=5}={}){
+  const p=pings.slice().sort((x,y)=>Date.parse(x.ts)-Date.parse(y.ts));
+  const segs=[]; let maxS=0,dist=0,moveSec=0,speeding=0,stops=0;
+  for(let i=1;i<p.length;i++){
+    const from=p[i-1],to=p[i], dur=(Date.parse(to.ts)-Date.parse(from.ts))/1000; if(dur<=0)continue;
+    const legMi=haversine(from,to), gap=dur>300; let sp=legMi/(dur/3600);
+    const plaus=sp<=130, limit=to.limit, over=plaus&&limit!=null&&sp>limit+margin;
+    segs.push({index:i-1,from,to,mi:legMi,dur,mph:Math.round(sp*10)/10,head:Math.round(bearing(from,to)),over,limit,gap});
+    if(!gap){ if(plaus){dist+=legMi;moveSec+=dur;if(sp>maxS)maxS=sp;} if(over)speeding++; if(sp<1.5)stops++; }
+  }
+  const elapsed=p.length>=2?(Date.parse(p[p.length-1].ts)-Date.parse(p[0].ts))/1000:0;
+  return {pings:p,segments:segs,totals:{
+    distanceMi:Math.round(dist*100)/100, movingSec:Math.round(moveSec),
+    avgMph:moveSec>0?Math.round((dist/(moveSec/3600))*10)/10:0, maxMph:Math.round(maxS*10)/10,
+    stops, speeding, elapsedSec:Math.round(elapsed), startTs:p[0]?.ts||''
+  }};
+}
+function speedBand(s){ if(s.gap)return'gap'; if(s.mph<1.5)return'stopped'; if(s.limit==null)return'ok';
+  const o=s.mph-s.limit; return o<=5?'ok':o<=12?'warn':'over'; }
+function timeCode(startTs,ts){ let s=Math.max(0,Math.round((Date.parse(ts)-Date.parse(startTs))/1000));
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60,pad=n=>String(n).padStart(2,'0');
+  return h>0?`${h}:${pad(m)}:${pad(sec)}`:`${m}:${pad(sec)}`; }
+function makeViewport(pts,w,h,pad=26){
+  const lats=pts.map(p=>p.lat),lngs=pts.map(p=>p.lng);
+  const minLat=Math.min(...lats),maxLat=Math.max(...lats),minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
+  const cos=Math.cos((minLat+maxLat)/2*Math.PI/180)||1;
+  const spanLng=Math.max(1e-6,(maxLng-minLng)*cos),spanLat=Math.max(1e-6,maxLat-minLat);
+  const iw=w-pad*2,ih=h-pad*2,scale=Math.min(iw/spanLng,ih/spanLat);
+  const ox=pad+(iw-spanLng*scale)/2, oy=pad+(ih-spanLat*scale)/2;
+  return {project:p=>({x:ox+(p.lng-minLng)*cos*scale, y:oy+(maxLat-p.lat)*scale})};
+}
+const BAND={gap:'transparent',stopped:'#64748b',ok:'#22c55e',warn:'#f59e0b',over:'#ef4444'};
+
+// ---------------------------------------------------------------------------
+// Demo data (mirrors packages/shared/src/mockData.ts)
+// ---------------------------------------------------------------------------
+const OWNERS=[
+  {id:'family',role:'family',name:'The Rivera Family'},
+  {id:'fleet',role:'fleet',name:'Lone Star HVAC'},
+  {id:'dealer',role:'dealer',name:'Capital Auto Credit'},
+  {id:'agency',role:'agency',name:'County Sheriff — Auto Theft Unit'},
+];
+const VEHICLES=[
+  {id:'teen',owner:'family',plate:'RVR 1423',state:'TX',nick:"Maya's Civic · consented teen driver",verified:true,seed:42},
+  {id:'unver',owner:'family',plate:'ABC 1234',state:'CA',nick:'Unclaimed plate — demo of the block',verified:false,reason:'NOT_VERIFIED'},
+  {id:'van',owner:'fleet',plate:'LSH 8890',state:'TX',nick:'Service Van 4 · driver disclosed',verified:true,seed:7},
+  {id:'lot',owner:'dealer',plate:'DLR 0007',state:'TX',nick:'Stock #4471 · lienholder verified',verified:true,seed:15},
+  {id:'stolen',owner:'agency',plate:'STL 5521',state:'TX',nick:'Recovery case #24-1180 · lawful process',verified:true,seed:23},
+];
+const LABELS=DRIVE.filter(w=>w.label).map(w=>({lat:w.lat,lng:w.lng,label:w.label}));
+
+// ---------------------------------------------------------------------------
+// State + render
+// ---------------------------------------------------------------------------
+let curOwner='family', curVeh=null, track=null, selSeg=null, playing=false, raf=0;
+const $=id=>document.getElementById(id);
+
+function renderAccounts(){
+  $('accounts').innerHTML=OWNERS.map(o=>
+    `<button class="acct" data-o="${o.id}" aria-pressed="${o.id===curOwner}">${o.role}</button>`).join('');
+  $('accounts').querySelectorAll('.acct').forEach(b=>b.onclick=()=>{curOwner=b.dataset.o;curVeh=null;track=null;selSeg=null;stopPlay();renderAll();});
+  const o=OWNERS.find(o=>o.id===curOwner); $('who').textContent=o.name;
+}
+function renderVehicles(){
+  const list=VEHICLES.filter(v=>v.owner===curOwner);
+  $('veh-list').innerHTML=list.map(v=>`
+    <div class="veh" data-v="${v.id}" role="button" tabindex="0" aria-selected="${curVeh===v.id}">
+      <div class="r"><span class="plate">${v.plate} · ${v.state}</span>
+        <span class="badge ${v.verified?'ok':'lock'}">${v.verified?'Verified':'Pending'}</span></div>
+      <div class="nick">${v.nick}</div>
+      ${v.verified?'':`<div class="locknote">🔒 locked — ${v.reason}</div>`}
+    </div>`).join('');
+  $('veh-list').querySelectorAll('.veh').forEach(el=>{
+    const open=()=>selectVehicle(el.dataset.v);
+    el.onclick=open; el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}};
+  });
+}
+function selectVehicle(id){
+  curVeh=id; selSeg=null; stopPlay();
+  const v=VEHICLES.find(x=>x.id===id);
+  track = v.verified ? buildTrack(generateDrive('2026-08-09T14:02:00Z', v.seed)) : null;
+  renderVehicles(); renderStage();
+}
+
+function renderStage(){
+  const stage=$('stage'), v=VEHICLES.find(x=>x.id===curVeh);
+  if(!v){ stage.innerHTML=`<div class="empty"><h1>Pick a vehicle to trace</h1>
+    <p>You're viewing as a <b style="color:var(--text)">${OWNERS.find(o=>o.id===curOwner).role}</b> account. Select any vehicle in the left rail to see its route with time codes and per-section speed.</p>
+    <p style="color:var(--faint)">Tip: open the California plate under the Family account to see the anti-stalking gate refuse a location.</p></div>`; return; }
+  if(!v.verified){ stage.innerHTML=`<div class="locked"><h1>🔒 Location history is locked</h1>
+    <p>Ownership of <b style="color:var(--text);font-family:var(--mono)">${v.plate}</b> is not verified, so no location will ever be shown.</p>
+    <div class="why"><b style="color:var(--text)">Why this matters:</b> typing a plate into a box is not proof you own the car, and owning a car is not the driver's consent. PlatePath requires <b>proof of control</b> (a paired device that reports from the vehicle, a reviewed registration, a lienholder record, or lawful process) <b>and</b> driver disclosure before a single point is returned. This is exactly what stops the "track my ex's plate" abuse — and what keeps the app out of stalkerware territory that Apple and Google ban.</div></div>`; return; }
+
+  const t=track,to=t.totals;
+  stage.innerHTML=`
+    <h2>${v.plate} · ${v.state} — ${new Date(t.totals.startTs).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</h2>
+    <div class="totals">
+      <div class="stat"><div class="v">${to.distanceMi}</div><div class="l">Miles</div></div>
+      <div class="stat"><div class="v">${to.avgMph}</div><div class="l">Avg mph</div></div>
+      <div class="stat ${to.maxMph>80?'warn':''}"><div class="v">${to.maxMph}</div><div class="l">Top mph</div></div>
+      <div class="stat ${to.speeding>0?'warn':''}"><div class="v">${to.speeding}</div><div class="l">Speeding legs</div></div>
+      <div class="stat"><div class="v">${to.stops}</div><div class="l">Stops</div></div>
+      <div class="stat"><div class="v">${timeCode(to.startTs,t.pings[t.pings.length-1].ts)}</div><div class="l">Duration</div></div>
+    </div>
+    <div class="maprow"><svg class="map" id="svg" viewBox="0 0 760 440" role="img" aria-label="Route colored by speed"></svg></div>
+    <div class="controls">
+      <button class="play" id="play"><span class="tri">▶</span> Play route</button>
+      <span class="readout" id="readout">Tap a segment, or press play to trace the drive.</span>
+      <span class="legend">
+        <span><i style="background:#22c55e"></i>at/under</span>
+        <span><i style="background:#f59e0b"></i>6–12 over</span>
+        <span><i style="background:#ef4444"></i>12+ over</span>
+        <span><i style="background:#64748b"></i>stopped</span>
+      </span>
+    </div>
+    <div class="tablewrap">
+      <div class="thead"><span>Time</span><span>Section</span><span>Speed</span><span>Limit</span><span>Distance</span><span>Status</span></div>
+      <div class="tbody" id="tbody"></div>
+    </div>`;
+  drawMap(); renderTable();
+  $('play').onclick=togglePlay;
+}
+
+function drawMap(mk){
+  const t=track, w=760,h=440, vp=makeViewport(t.pings,w,h);
+  let s=`<rect x="0" y="0" width="${w}" height="${h}" rx="14" fill="#0d1526"/>`;
+  for(let i=1;i<10;i++) s+=`<line x1="${w/10*i}" y1="0" x2="${w/10*i}" y2="${h}" stroke="#1b2740" stroke-width="1"/>`;
+  for(let i=1;i<6;i++) s+=`<line x1="0" y1="${h/6*i}" x2="${w}" y2="${h/6*i}" stroke="#1b2740" stroke-width="1"/>`;
+  for(const seg of t.segments){ if(seg.gap)continue; const a=vp.project(seg.from),b=vp.project(seg.to);
+    const sel=selSeg===seg.index;
+    s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${BAND[speedBand(seg)]}" stroke-width="${sel?8:5}" stroke-linecap="round" opacity="${selSeg==null||sel?1:.5}" data-seg="${seg.index}" style="cursor:pointer"/>`; }
+  const p0=vp.project(t.pings[0]), pN=vp.project(t.pings[t.pings.length-1]);
+  s+=`<circle cx="${p0.x}" cy="${p0.y}" r="7" fill="#22d3ee" stroke="#070b14" stroke-width="2"/><text x="${p0.x+11}" y="${p0.y+4}" fill="#e6edf7" font-size="12" font-family="ui-monospace, monospace">Start</text>`;
+  s+=`<circle cx="${pN.x}" cy="${pN.y}" r="7" fill="#a78bfa" stroke="#070b14" stroke-width="2"/><text x="${pN.x+11}" y="${pN.y+4}" fill="#e6edf7" font-size="12" font-family="ui-monospace, monospace">End</text>`;
+  for(const l of LABELS){ const p=vp.project(l); s+=`<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="#8ea3bd"/><text x="${p.x+6}" y="${p.y-6}" fill="#8ea3bd" font-size="10.5">${l.label}</text>`; }
+  if(mk) s+=`<circle cx="${mk.x}" cy="${mk.y}" r="6" fill="#fff"><animate attributeName="r" values="6;9;6" dur="1s" repeatCount="indefinite"/></circle>`;
+  $('svg').innerHTML=s;
+  $('svg').querySelectorAll('[data-seg]').forEach(el=>el.onclick=()=>{selSeg=+el.dataset.seg;drawMap();renderTable();syncReadout();});
+}
+function renderTable(){
+  const rows=track.segments.filter(s=>!s.gap).map(s=>{
+    const band=speedBand(s);
+    return `<div class="trow" data-seg="${s.index}" role="button" tabindex="0" aria-selected="${selSeg===s.index}">
+      <span>${timeCode(track.totals.startTs,s.to.ts)}</span>
+      <span style="font-family:var(--ui);color:var(--muted)">#${s.index+1}</span>
+      <span class="sp ${s.over?'over':''}">${s.mph.toFixed(0)} mph</span>
+      <span style="color:var(--muted)">${s.limit??'—'}</span>
+      <span style="color:var(--muted)">${s.mi.toFixed(2)} mi</span>
+      <span class="pill ${band}">${band}</span></div>`;}).join('');
+  $('tbody').innerHTML=rows;
+  $('tbody').querySelectorAll('.trow').forEach(el=>{
+    const sel=()=>{selSeg=+el.dataset.seg;drawMap();renderTable();syncReadout();el.scrollIntoView({block:'nearest'});};
+    el.onclick=sel; el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();sel();}};
+  });
+}
+function syncReadout(){
+  if(selSeg==null)return; const s=track.segments[selSeg];
+  $('readout').innerHTML=`t+<b>${timeCode(track.totals.startTs,s.to.ts)}</b> · <b>${s.mph.toFixed(0)} mph</b>${s.limit?` in a ${s.limit} zone`:''} · heading ${s.head}° · ${s.mi.toFixed(2)} mi`;
+}
+
+// playback: animate a marker along the route, reading out time code + speed
+function togglePlay(){ playing?stopPlay():startPlay(); }
+function startPlay(){
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  playing=true; $('play').innerHTML='<span class="tri">▮▮</span> Pause';
+  const t=track, w=760,h=440, vp=makeViewport(t.pings,w,h);
+  const first=Date.parse(t.pings[0].ts), last=Date.parse(t.pings[t.pings.length-1].ts), span=last-first;
+  const SPEED=60; // 60x real time
+  let clock=first;
+  const step=()=>{
+    if(!playing)return;
+    clock += (reduce?span/30:1000/60*SPEED);
+    if(clock>=last){ clock=last; }
+    // find current segment by time
+    let seg=t.segments.find(s=>Date.parse(s.from.ts)<=clock && Date.parse(s.to.ts)>=clock) || t.segments[t.segments.length-1];
+    const f=(clock-Date.parse(seg.from.ts))/Math.max(1,(Date.parse(seg.to.ts)-Date.parse(seg.from.ts)));
+    const a=vp.project(seg.from), b=vp.project(seg.to);
+    selSeg=seg.index; drawMap({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
+    const band=speedBand(seg);
+    $('readout').innerHTML=`t+<b>${timeCode(t.totals.startTs,new Date(clock).toISOString())}</b> · <b style="color:${BAND[band]==='transparent'?'var(--text)':BAND[band]}">${seg.mph.toFixed(0)} mph</b>${seg.limit?` / ${seg.limit} limit`:''}`;
+    if(clock>=last){ stopPlay(); renderTable(); return; }
+    raf=requestAnimationFrame(step);
+  };
+  raf=requestAnimationFrame(step);
+}
+function stopPlay(){ playing=false; cancelAnimationFrame(raf); const pb=$('play'); if(pb)pb.innerHTML='<span class="tri">▶</span> Play route'; }
+
+function renderAll(){ renderAccounts(); renderVehicles(); renderStage(); }
+$('foot').innerHTML='<b>Demo notes.</b> Data is synthetic (no real people, plates, or vehicles); the route, speeds, and time codes are computed by the same engine that ships in <b>packages/shared</b> and is served by the reference API. The consent gate you see refusing the unverified plate is the real control path — there is no code that returns a location for an unverified vehicle. Public traffic cameras are <b>not</b> used or usable for this; see the accompanying feasibility & legal briefing.';
+renderAll();
+</script>

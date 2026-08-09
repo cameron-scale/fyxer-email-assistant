@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "PlatePath",
+    "slug": "platepath",
+    "scheme": "platepath",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.platepath.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "PlatePath shows the live location and route of vehicles you own and have verified.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "With your consent, PlatePath records trips for vehicles you drive so the owner can see route and speed. You can pause sharing anytime.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "googleMapsApiKey": "REPLACE_WITH_IOS_GOOGLE_MAPS_KEY"
+      }
+    },
+    "android": {
+      "package": "com.platepath.app",
+      "config": {
+        "googleMaps": { "apiKey": "REPLACE_WITH_ANDROID_GOOGLE_MAPS_KEY" }
+      }
+    },
+    "plugins": ["expo-location"]
+  }
+}
