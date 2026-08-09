@@ -1,0 +1,21 @@
+{
+  "name": "platepath",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PlatePath — consent-based vehicle location & route intelligence for families, fleets, dealers, and law enforcement (USA, all 50 states).",
+  "workspaces": [
+    "packages/shared",
+    "packages/api",
+    "packages/web",
+    "packages/mobile"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types packages/shared/test/engine.test.ts",
+    "api": "node --experimental-strip-types packages/api/src/server.ts",
+    "projections": "node --experimental-strip-types packages/shared/test/print-projection.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@platepath/api",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PlatePath API — zero-dependency reference server (built-in http). Production target: Fastify + Postgres/PostGIS.",
+  "dependencies": {
+    "@platepath/shared": "*"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/server.ts"
+  }
+}

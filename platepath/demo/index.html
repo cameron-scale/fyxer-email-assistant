@@ -1,0 +1,461 @@
+<title>PlatePath — Operations Console (Demo)</title>
+<meta name="description" content="Consent-based vehicle route intelligence — a public-safety-style operations console: dark map, checkpoint pins, camera tiles, and an alerts feed. Only vehicles you've verified are identified." />
+<style>
+  :root {
+    /* Public-safety operations console. Dark-committed; every color explicit.
+       Emerald primary, charcoal panels with a faint green bias, semantic pins. */
+    --brandbar: #10402f;
+    --brandbar-2: #0b2c20;
+    --bg: #0a0f0d;
+    --map: #0b1512;
+    --panel: #111815;
+    --panel-2: #16211c;
+    --line: #1f2a25;
+    --line-2: #2b3a32;
+    --text: #e9efeb;
+    --muted: #92a89d;
+    --faint: #67796f;
+    --accent: #22c55e;
+    --accent-deep: #16a34a;
+    /* semantic pins / speed ramp */
+    --red: #ef4444; --amber: #f59e0b; --green: #22c55e; --blue: #3b82f6; --purple: #8b5cf6; --slate: #64748b;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--ui); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+  /* ---- top emerald bar ---- */
+  .topbar { display: flex; align-items: center; gap: 22px; padding: 0 16px; height: 54px;
+    background: linear-gradient(180deg, var(--brandbar), var(--brandbar-2)); border-bottom: 1px solid #0a241a; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 17px; letter-spacing: -0.01em; color: #fff; }
+  .brand .mark { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
+    background: radial-gradient(circle at 32% 30%, #2fe08a, #12734a); color: #052617; font-weight: 900; font-size: 15px; }
+  .topnav { display: flex; gap: 2px; }
+  .topnav button { background: transparent; border: none; color: #b9cfc4; font-family: var(--ui); font-size: 14px; padding: 8px 13px; border-radius: 8px; cursor: pointer; }
+  .topnav button:hover { color: #fff; background: rgba(255,255,255,.06); }
+  .topnav button[aria-current="true"] { color: #fff; font-weight: 600; background: rgba(255,255,255,.10); }
+  .topright { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .acctsel select { background: rgba(0,0,0,.28); color: #eaf3ee; border: 1px solid #2b5a46; border-radius: 8px; padding: 7px 10px; font-size: 13px; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: #1f5a41; color: #d6f5e6; display: grid; place-items: center; font-size: 13px; font-weight: 700; text-transform: uppercase; }
+
+  /* ---- search bar row ---- */
+  .searchbar { display: flex; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); align-items: center; }
+  .searchbar .dd { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 12px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .searchbar .sinput { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 0 12px; }
+  .searchbar input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 14px; padding: 9px 0; outline: none; }
+  .searchbar .glass { color: var(--faint); }
+  .ghost { background: transparent; color: var(--accent); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer; }
+  .ghost:hover { border-color: var(--accent); }
+
+  /* ---- workspace ---- */
+  .workspace { display: grid; grid-template-columns: 320px 1fr; gap: 0; height: calc(100vh - 54px - 57px); min-height: 560px; }
+  @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; height: auto; } }
+  .rail { border-right: 1px solid var(--line); overflow-y: auto; padding: 14px; background: var(--bg); }
+  .rail h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 4px 0 10px; display: flex; align-items: center; gap: 7px; font-weight: 600; }
+  .rail h3 .warn { color: var(--red); }
+  .rail section + section { margin-top: 20px; }
+
+  .veh { width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; padding: 11px 12px; margin-bottom: 8px; cursor: pointer; color: var(--text); transition: .12s; }
+  .veh:hover { border-color: var(--line-2); }
+  .veh[aria-selected="true"] { border-color: var(--accent); background: var(--panel-2); box-shadow: 0 0 0 1px var(--accent-deep) inset; }
+  .veh .r { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .plate { font-family: var(--mono); font-weight: 600; letter-spacing: .05em; font-size: 14px; }
+  .nick { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .chip { font-family: var(--mono); font-size: 10px; padding: 3px 7px; border-radius: 6px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .chip.ok { background: rgba(34,197,94,.15); color: #6ee7a0; }
+  .chip.lock { background: rgba(239,68,68,.15); color: #fca5a5; }
+  .veh .locknote { color: #fca5a5; font-size: 11.5px; margin-top: 7px; font-family: var(--mono); }
+
+  /* alert cards (public-safety style) */
+  .alert { display: block; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-left-width: 4px; border-radius: 9px; padding: 10px 11px; margin-bottom: 8px; cursor: pointer; color: var(--text); }
+  .alert:hover { border-color: var(--line-2); }
+  .alert .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .atype { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 3px 8px; border-radius: 5px; color: #fff; }
+  .alert .title { font-size: 13.5px; margin: 7px 0 2px; }
+  .alert .sub { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .rail-empty { color: var(--faint); font-size: 12.5px; padding: 6px 2px; }
+
+  /* ---- stage ---- */
+  .stage { position: relative; overflow: auto; padding: 16px; }
+  .empty, .locked { border: 1px solid var(--line); border-radius: 14px; padding: 28px; background: var(--panel); max-width: 640px; }
+  .empty h1 { font-size: 21px; margin: 0 0 8px; } .empty p, .locked p { color: var(--muted); font-size: 14px; margin: 6px 0; }
+  .locked { border-color: rgba(239,68,68,.35); background: linear-gradient(180deg, rgba(239,68,68,.07), rgba(239,68,68,.01)); }
+  .locked h1 { font-size: 20px; margin: 0 0 10px; display: flex; gap: 9px; align-items: center; }
+  .locked .why { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: rgba(0,0,0,.28); border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+  .statstrip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 11px; padding: 10px 14px; min-width: 92px; }
+  .stat.warn { border-color: rgba(239,68,68,.4); }
+  .stat .v { font-family: var(--mono); font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat.warn .v { color: #fca5a5; }
+  .stat .l { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+  .maprow { position: relative; }
+  svg.map { width: 100%; height: auto; display: block; border-radius: 14px; border: 1px solid var(--line); background: var(--map); }
+  .maphint { position: absolute; left: 12px; top: 12px; font-size: 11px; font-family: var(--mono); color: var(--muted); background: rgba(0,0,0,.4); border: 1px solid var(--line); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
+  .controls { display: flex; align-items: center; gap: 12px; margin: 11px 2px 4px; flex-wrap: wrap; }
+  .play { display: inline-flex; align-items: center; gap: 8px; background: var(--accent-deep); color: #05210f; border: none; border-radius: 9px; padding: 9px 15px; font-family: var(--ui); font-weight: 600; font-size: 13.5px; cursor: pointer; }
+  .play:hover { background: var(--accent); }
+  .readout { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .readout b { color: var(--text); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-left: auto; }
+  .legend i { display: inline-block; width: 14px; height: 5px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+
+  /* floating camera tile (VMS style) */
+  .camtile { position: absolute; top: 14px; right: 14px; width: 340px; max-width: 62%; background: #0a0f0d; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .camtile .bar { display: flex; align-items: center; gap: 7px; padding: 7px 10px; background: #101a15; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .camtile .bar .rec { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+  .camtile .bar .nm { font-family: var(--mono); color: #cfe6d9; letter-spacing: .03em; }
+  .camtile .bar .x { margin-left: auto; color: var(--muted); cursor: pointer; background: none; border: none; font-size: 14px; }
+  .camtile svg { width: 100%; height: auto; display: block; }
+
+  /* checkpoint chips + big frame */
+  .cpchips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
+  .cpchip { flex: 0 0 auto; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; color: var(--text); }
+  .cpchip:hover { border-color: var(--line-2); }
+  .cpchip[aria-pressed="true"] { border-color: var(--accent); background: var(--panel-2); }
+  .cpchip b { display: block; font-size: 13px; } .cpchip span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  svg.cpframe { width: 100%; height: auto; display: block; border-radius: 14px; border: 1px solid var(--line); background: #05080f; }
+  .cpcaption { font-size: 13px; color: var(--muted); margin-top: 12px; padding: 11px 14px; border-radius: 10px; background: rgba(34,197,94,.06); border: 1px solid var(--line-2); }
+  .cpcaption b { color: var(--text); } .cpcaption .id { color: #6ee7a0; } .cpcaption .anon { color: var(--muted); }
+
+  /* insights table */
+  .tablewrap { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-top: 4px; }
+  .thead, .trow { display: grid; grid-template-columns: 78px 1fr 92px 74px 84px 90px; align-items: center; }
+  .thead { background: var(--panel); color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; padding: 9px 14px; }
+  .tbody { max-height: 340px; overflow-y: auto; }
+  .trow { padding: 8px 14px; border-top: 1px solid var(--line); font-size: 13.5px; cursor: pointer; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .trow:hover { background: var(--panel-2); }
+  .trow[aria-selected="true"] { background: rgba(34,197,94,.10); box-shadow: inset 3px 0 0 var(--accent); }
+  .trow .sp.over { color: #fca5a5; font-weight: 600; }
+  .pill { font-family: var(--mono); font-size: 10px; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; justify-self: start; }
+  .pill.ok { background: rgba(34,197,94,.14); color: #6ee7a0; }
+  .pill.warn { background: rgba(245,158,11,.16); color: #fbbf24; }
+  .pill.over { background: rgba(239,68,68,.18); color: #fca5a5; }
+  .pill.stopped { background: rgba(100,116,139,.2); color: #cbd5e1; }
+
+  .banner { margin: 0 0 14px; padding: 11px 14px; border-radius: 11px; background: rgba(34,197,94,.06); border: 1px solid var(--line-2); color: var(--muted); font-size: 13px; }
+  .banner b { color: var(--text); }
+  h2.sec { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); margin: 4px 0 10px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<header class="topbar">
+  <div class="brand"><span class="mark">P</span> PlatePath</div>
+  <nav class="topnav" id="topnav">
+    <button data-nav="map" aria-current="true">Map</button>
+    <button data-nav="checkpoints">Checkpoints</button>
+    <button data-nav="alerts">Alerts</button>
+    <button data-nav="insights">Insights</button>
+  </nav>
+  <div class="topright">
+    <span class="acctsel"><select id="acct"></select></span>
+    <span class="avatar" id="avatar">P</span>
+  </div>
+</header>
+
+<div class="searchbar">
+  <span class="dd">Search by Plate or Vehicle ▾</span>
+  <span class="sinput"><span class="glass">⌕</span><input id="search" placeholder="Filter registered vehicles…" /></span>
+  <button class="ghost" id="reset">Reset</button>
+</div>
+
+<div class="workspace">
+  <aside class="rail">
+    <section>
+      <h3>Registered vehicles</h3>
+      <div id="veh-list"></div>
+    </section>
+    <section>
+      <h3><span class="warn">▲</span> Alerts</h3>
+      <div id="alerts"><div class="rail-empty">Select a vehicle to see its alerts.</div></div>
+    </section>
+  </aside>
+  <main class="stage" id="stage"></main>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Engine (ported from packages/shared — same math the API and apps run)
+// ---------------------------------------------------------------------------
+const EARTH_MI=3958.7613, rad=d=>d*Math.PI/180;
+function haversine(a,b){const dLat=rad(b.lat-a.lat),dLng=rad(b.lng-a.lng);const h=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLng/2)**2;return 2*EARTH_MI*Math.asin(Math.min(1,Math.sqrt(h)));}
+function bearing(a,b){const y=Math.sin(rad(b.lng-a.lng))*Math.cos(rad(b.lat));const x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat))-Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lng-a.lng));return (Math.atan2(y,x)*180/Math.PI+360)%360;}
+function mulberry32(seed){let a=seed>>>0;return()=>{a|=0;a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+const DRIVE=[
+  {lat:30.2100,lng:-97.8600,mph:20,limit:30,label:'Home'},
+  {lat:30.2180,lng:-97.8480,mph:34,limit:35},
+  {lat:30.2240,lng:-97.8350,mph:41,limit:40,dwell:45,label:'Red light'},
+  {lat:30.2360,lng:-97.8150,mph:68,limit:65,label:'On-ramp I-35'},
+  {lat:30.2520,lng:-97.7930,mph:82,limit:65,label:'Highway'},
+  {lat:30.2660,lng:-97.7760,mph:63,limit:65},
+  {lat:30.2720,lng:-97.7530,mph:30,limit:35,label:'Exit'},
+  {lat:30.2685,lng:-97.7420,mph:18,limit:25,label:'Downtown'},
+  {lat:30.2669,lng:-97.7390,mph:0,limit:25,label:'Arrived'},
+];
+function generateDrive(startIso,seed){
+  const rnd=mulberry32(seed),jit=()=>(rnd()-0.5)*0.00018,out=[];let t=Date.parse(startIso),N=DRIVE.length;
+  const push=(lat,lng,limit)=>out.push({ts:new Date(t).toISOString(),lat:lat+jit(),lng:lng+jit(),limit});
+  push(DRIVE[0].lat,DRIVE[0].lng,DRIVE[0].limit);
+  for(let i=0;i<N-1;i++){const a=DRIVE[i],b=DRIVE[i+1];const miles=haversine(a,b),mph=Math.max(4,a.mph),legSec=(miles/mph)*3600,steps=Math.max(1,Math.round(legSec/20));
+    for(let s=1;s<=steps;s++){const f=s/steps;t+=(legSec/steps)*1000;push(a.lat+(b.lat-a.lat)*f,a.lng+(b.lng-a.lng)*f,b.limit);}
+    if(b.dwell){const ds=Math.round(b.dwell/20);for(let s=0;s<ds;s++){t+=20000;push(b.lat,b.lng,b.limit);}}}
+  return out;
+}
+function buildTrack(pings,{margin=5}={}){
+  const p=pings.slice().sort((x,y)=>Date.parse(x.ts)-Date.parse(y.ts));const segs=[];let maxS=0,dist=0,moveSec=0,speeding=0,stops=0;
+  for(let i=1;i<p.length;i++){const from=p[i-1],to=p[i],dur=(Date.parse(to.ts)-Date.parse(from.ts))/1000;if(dur<=0)continue;
+    const legMi=haversine(from,to),gap=dur>300;let sp=legMi/(dur/3600);const plaus=sp<=130,limit=to.limit,over=plaus&&limit!=null&&sp>limit+margin;
+    segs.push({index:i-1,from,to,mi:legMi,dur,mph:Math.round(sp*10)/10,head:Math.round(bearing(from,to)),over,limit,gap});
+    if(!gap){if(plaus){dist+=legMi;moveSec+=dur;if(sp>maxS)maxS=sp;}if(over)speeding++;if(sp<1.5)stops++;}}
+  const elapsed=p.length>=2?(Date.parse(p[p.length-1].ts)-Date.parse(p[0].ts))/1000:0;
+  return {pings:p,segments:segs,totals:{distanceMi:Math.round(dist*100)/100,movingSec:Math.round(moveSec),avgMph:moveSec>0?Math.round((dist/(moveSec/3600))*10)/10:0,maxMph:Math.round(maxS*10)/10,stops,speeding,elapsedSec:Math.round(elapsed),startTs:p[0]?.ts||''}};
+}
+function speedBand(s){if(s.gap)return'gap';if(s.mph<1.5)return'stopped';if(s.limit==null)return'ok';const o=s.mph-s.limit;return o<=5?'ok':o<=12?'warn':'over';}
+function timeCode(startTs,ts){let s=Math.max(0,Math.round((Date.parse(ts)-Date.parse(startTs))/1000));const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60,pad=n=>String(n).padStart(2,'0');return h>0?`${h}:${pad(m)}:${pad(sec)}`:`${m}:${pad(sec)}`;}
+function makeViewport(pts,w,h,pad=34){const lats=pts.map(p=>p.lat),lngs=pts.map(p=>p.lng);const minLat=Math.min(...lats),maxLat=Math.max(...lats),minLng=Math.min(...lngs),maxLng=Math.max(...lngs);const cos=Math.cos((minLat+maxLat)/2*Math.PI/180)||1;const spanLng=Math.max(1e-6,(maxLng-minLng)*cos),spanLat=Math.max(1e-6,maxLat-minLat);const iw=w-pad*2,ih=h-pad*2,scale=Math.min(iw/spanLng,ih/spanLat);const ox=pad+(iw-spanLng*scale)/2,oy=pad+(ih-spanLat*scale)/2;return {project:p=>({x:ox+(p.lng-minLng)*cos*scale,y:oy+(maxLat-p.lat)*scale})};}
+const BAND={gap:'transparent',stopped:'#64748b',ok:'#22c55e',warn:'#f59e0b',over:'#ef4444'};
+
+// ---------------------------------------------------------------------------
+// Demo data
+// ---------------------------------------------------------------------------
+const OWNERS=[
+  {id:'family',role:'family',name:'The Rivera Family'},
+  {id:'fleet',role:'fleet',name:'Lone Star HVAC'},
+  {id:'dealer',role:'dealer',name:'Capital Auto Credit'},
+  {id:'agency',role:'agency',name:'County Sheriff — Auto Theft Unit'},
+];
+const VEHICLES=[
+  {id:'teen',owner:'family',plate:'RVR 1423',state:'TX',nick:"Maya's Civic · consented teen driver",verified:true,seed:42},
+  {id:'unver',owner:'family',plate:'ABC 1234',state:'CA',nick:'Unclaimed plate — demo of the block',verified:false,reason:'NOT_VERIFIED'},
+  {id:'van',owner:'fleet',plate:'LSH 8890',state:'TX',nick:'Service Van 4 · driver disclosed',verified:true,seed:7},
+  {id:'lot',owner:'dealer',plate:'DLR 0007',state:'TX',nick:'Stock #4471 · lienholder verified',verified:true,seed:15},
+  {id:'stolen',owner:'agency',plate:'STL 5521',state:'TX',nick:'Recovery case #24-1180 · lawful process',verified:true,seed:23},
+];
+const LABELS=DRIVE.filter(w=>w.label).map(w=>({lat:w.lat,lng:w.lng,label:w.label}));
+
+// ---------------------------------------------------------------------------
+// State + render
+// ---------------------------------------------------------------------------
+let curOwner='family', curVeh=null, track=null, nav='map', selSeg=null, cpIndex=0, selPin=null, playing=false, raf=0, query='';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+function renderAccount(){
+  $('acct').innerHTML=OWNERS.map(o=>`<option value="${o.id}" ${o.id===curOwner?'selected':''}>${o.name} · ${o.role}</option>`).join('');
+  $('acct').onchange=e=>{curOwner=e.target.value;curVeh=null;track=null;query='';$('search').value='';stopPlay();renderAll();};
+  $('avatar').textContent=(OWNERS.find(o=>o.id===curOwner)?.role||'P')[0];
+}
+function renderVehicles(){
+  const list=VEHICLES.filter(v=>v.owner===curOwner).filter(v=>!query || (v.plate+v.nick).toLowerCase().includes(query));
+  $('veh-list').innerHTML = list.length ? list.map(v=>`
+    <div class="veh" data-v="${v.id}" role="button" tabindex="0" aria-selected="${curVeh===v.id}">
+      <div class="r"><span class="plate">${v.plate} · ${v.state}</span><span class="chip ${v.verified?'ok':'lock'}">${v.verified?'Verified':'Pending'}</span></div>
+      <div class="nick">${v.nick}</div>
+      ${v.verified?'':`<div class="locknote">🔒 locked — ${v.reason}</div>`}
+    </div>`).join('') : `<div class="rail-empty">No vehicles match "${esc(query)}".</div>`;
+  $('veh-list').querySelectorAll('.veh').forEach(el=>{const open=()=>selectVehicle(el.dataset.v);el.onclick=open;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}};});
+}
+function buildAlerts(){
+  if(!track) return [];
+  const cps=buildCheckpoints();
+  const veh=VEHICLES.find(v=>v.id===curVeh);
+  const out=[{type:'GEOFENCE',color:'#f59e0b',title:`Departed "${cps[0].label}" zone`,cp:0}];
+  cps.forEach((c,i)=>{ if(c.speeding) out.push({type:'SPEEDING',color:'#ef4444',title:`${c.mph} mph in a ${c.limit} zone`,cp:i}); });
+  const last=cps.length-1;
+  out.push({type:'ARRIVED',color:'#22c55e',title:'Arrived at destination',cp:last});
+  out.forEach(a=>{a.tc=cps[a.cp].tc; a.loc=cps[a.cp].label; a.plate=veh.plate;});
+  out.sort((a,b)=>{const pa=cps[a.cp], pb=cps[b.cp]; return 0;}); // keep insertion (time) order roughly
+  return out.slice(0,7);
+}
+function renderAlerts(){
+  const veh=VEHICLES.find(v=>v.id===curVeh);
+  if(!veh){ $('alerts').innerHTML=`<div class="rail-empty">Select a vehicle to see its alerts.</div>`; return; }
+  if(!veh.verified){ $('alerts').innerHTML=`<div class="rail-empty">🔒 ${veh.plate} is not verified — no location or alerts.</div>`; return; }
+  const alerts=buildAlerts();
+  $('alerts').innerHTML=alerts.map((a,i)=>`
+    <button class="alert" data-cp="${a.cp}" style="border-left-color:${a.color}">
+      <div class="top"><span class="atype" style="background:${a.color}">${a.type}</span><span class="sub">t+${a.tc}</span></div>
+      <div class="title">${a.title}</div>
+      <div class="sub">${a.loc} · ${veh.plate}</div>
+    </button>`).join('');
+  $('alerts').querySelectorAll('.alert').forEach(el=>el.onclick=()=>{cpIndex=+el.dataset.cp; setNav('checkpoints');});
+}
+function selectVehicle(id){
+  curVeh=id; selSeg=null; cpIndex=0; selPin=null; stopPlay();
+  const v=VEHICLES.find(x=>x.id===id);
+  track=v.verified?buildTrack(generateDrive('2026-08-09T14:02:00Z',v.seed)):null;
+  renderVehicles(); renderAlerts(); renderStage();
+}
+function setNav(n){ nav=n; stopPlay(); $('topnav').querySelectorAll('button').forEach(b=>b.setAttribute('aria-current',String(b.dataset.nav===n))); renderStage(); }
+
+function buildCheckpoints(){
+  const veh=VEHICLES.find(v=>v.id===curVeh);
+  return LABELS.map(l=>{let bi=0,bd=Infinity;track.pings.forEach((p,i)=>{const d=(p.lat-l.lat)**2+(p.lng-l.lng)**2;if(d<bd){bd=d;bi=i;}});
+    const seg=track.segments[Math.min(track.segments.length-1,Math.max(0,bi-1))];
+    return {label:l.label,lat:l.lat,lng:l.lng,tc:timeCode(track.totals.startTs,track.pings[bi].ts),mph:seg?Math.round(seg.mph):0,limit:seg?seg.limit:null,speeding:seg?seg.over:false,plate:veh.plate,state:veh.state};});
+}
+
+function renderStage(){
+  const stage=$('stage'), v=VEHICLES.find(x=>x.id===curVeh);
+  if(!v){ stage.innerHTML=`<div class="banner"><b>Consent-based operations console.</b> Public traffic cams can't read plates or be scanned nationwide, and tracking a plate you merely typed in is stalking — so PlatePath identifies only vehicles whose ownership you've <b>verified</b>. Pick a vehicle, then use <b>Map</b>, <b>Checkpoints</b>, <b>Alerts</b>, and <b>Insights</b>.</div>
+    <div class="empty"><h1>Select a vehicle to begin</h1><p>You're signed in as a <b style="color:var(--text)">${OWNERS.find(o=>o.id===curOwner).role}</b> account. Open the California plate under the Family account to see the anti-stalking gate refuse a location.</p></div>`; return; }
+  if(!v.verified){ stage.innerHTML=`<div class="locked"><h1>🔒 Location history is locked</h1><p>Ownership of <b style="color:var(--text);font-family:var(--mono)">${v.plate}</b> is not verified, so no location will ever be shown.</p>
+    <div class="why"><b style="color:var(--text)">Why this matters:</b> typing a plate is not proof you own the car, and owning a car is not the driver's consent. PlatePath requires <b>proof of control</b> (a paired device, a reviewed registration, a lienholder record, or lawful process) <b>and</b> driver disclosure before a single point is returned — the gate that keeps this out of stalkerware territory Apple and Google ban.</div></div>`; return; }
+
+  const t=track,to=t.totals;
+  const stats=`<div class="statstrip">
+    <div class="stat"><div class="v">${to.distanceMi}</div><div class="l">Miles</div></div>
+    <div class="stat"><div class="v">${to.avgMph}</div><div class="l">Avg mph</div></div>
+    <div class="stat ${to.maxMph>80?'warn':''}"><div class="v">${to.maxMph}</div><div class="l">Top mph</div></div>
+    <div class="stat ${to.speeding>0?'warn':''}"><div class="v">${to.speeding}</div><div class="l">Speeding</div></div>
+    <div class="stat"><div class="v">${timeCode(to.startTs,t.pings[t.pings.length-1].ts)}</div><div class="l">Duration</div></div>
+  </div>`;
+
+  if(nav==='map'){
+    stage.innerHTML=stats+`
+      <div class="maprow">
+        <svg class="map" id="svg" viewBox="0 0 780 460" role="img" aria-label="Route with checkpoint pins"></svg>
+        <div class="maphint">${v.plate} · ${v.state} — click a checkpoint pin to open its camera</div>
+        <div class="camtile" id="camtile" hidden></div>
+      </div>
+      <div class="controls">
+        <button class="play" id="play">▶ Play route</button>
+        <span class="readout" id="readout">Click a pin to identify the vehicle at that checkpoint, or press play.</span>
+        <span class="legend"><span><i style="background:#22c55e"></i>at/under</span><span><i style="background:#f59e0b"></i>6–12 over</span><span><i style="background:#ef4444"></i>12+ over</span></span>
+      </div>`;
+    drawMap(); $('play').onclick=togglePlay;
+  } else if(nav==='checkpoints'){
+    const cps=buildCheckpoints(); if(cpIndex>=cps.length)cpIndex=0;
+    stage.innerHTML=`
+      <div class="cpchips" id="cpchips">${cps.map((c,i)=>`<button class="cpchip" data-cp="${i}" aria-pressed="${i===cpIndex}"><b>${c.label}</b><span>t+${c.tc} · ${c.mph} mph</span></button>`).join('')}</div>
+      <svg class="cpframe" id="cpframe" viewBox="0 0 760 380" role="img" aria-label="Checkpoint detection frame"></svg>
+      <div class="cpcaption" id="cpcaption"></div>`;
+    $('cpchips').querySelectorAll('.cpchip').forEach(el=>el.onclick=()=>{cpIndex=+el.dataset.cp;renderStage();});
+    $('cpframe').innerHTML=detectionInner(cps,cpIndex);
+    const cp=cps[cpIndex];
+    $('cpcaption').innerHTML=`<b>1 vehicle <span class="id">identified</span></b> — your registered plate <b style="font-family:var(--mono)">${esc(cp.plate)} · ${esc(cp.state)}</b> at <b>${cp.mph} mph</b>${cp.limit?` (limit ${cp.limit})`:''}. <b>3 others <span class="anon">detected, not identified</span></b>. PlatePath boxes every vehicle a checkpoint sees but reads plates only for vehicles you've verified — everyone else stays anonymous.`;
+  } else if(nav==='alerts'){
+    const alerts=buildAlerts();
+    stage.innerHTML=`<h2 class="sec">Alert feed · ${v.plate}</h2>`+alerts.map(a=>`
+      <button class="alert" data-cp="${a.cp}" style="border-left-color:${a.color};max-width:640px">
+        <div class="top"><span class="atype" style="background:${a.color}">${a.type}</span><span class="sub">t+${a.tc}</span></div>
+        <div class="title">${a.title}</div><div class="sub">${a.loc} · ${v.plate}</div></button>`).join('');
+    stage.querySelectorAll('.alert').forEach(el=>el.onclick=()=>{cpIndex=+el.dataset.cp;setNav('checkpoints');});
+  } else { // insights
+    stage.innerHTML=stats+`<h2 class="sec">Segments · time code · speed · limit</h2>
+      <div class="tablewrap"><div class="thead"><span>Time</span><span>Section</span><span>Speed</span><span>Limit</span><span>Distance</span><span>Status</span></div><div class="tbody" id="tbody"></div></div>`;
+    renderTable();
+  }
+}
+
+function drawMap(mk){
+  const t=track,w=780,h=460,vp=makeViewport(t.pings,w,h);
+  let s=`<rect x="0" y="0" width="${w}" height="${h}" rx="14" fill="#0b1512"/>`;
+  // faint "street" grid
+  for(let i=1;i<12;i++) s+=`<line x1="${w/12*i}" y1="0" x2="${w/12*i}" y2="${h}" stroke="#14211b" stroke-width="1"/>`;
+  for(let i=1;i<7;i++) s+=`<line x1="0" y1="${h/7*i}" x2="${w}" y2="${h/7*i}" stroke="#14211b" stroke-width="1"/>`;
+  // route
+  for(const seg of t.segments){ if(seg.gap)continue; const a=vp.project(seg.from),b=vp.project(seg.to);const sel=selSeg===seg.index;
+    s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${BAND[speedBand(seg)]}" stroke-width="${sel?7:5}" stroke-linecap="round" opacity="${selSeg==null||sel?1:.55}"/>`; }
+  // checkpoint pins (circular, public-safety style)
+  const cps=buildCheckpoints();
+  cps.forEach((c,i)=>{ const p=vp.project(c); const color=c.speeding?'#ef4444':(i===0?'#3b82f6':(i===cps.length-1?'#8b5cf6':'#22c55e'));
+    const on=selPin===i;
+    s+=`<g data-pin="${i}" style="cursor:pointer">
+      <circle cx="${p.x}" cy="${p.y}" r="${on?15:12}" fill="${color}" stroke="#0b1512" stroke-width="3"/>
+      <text x="${p.x}" y="${p.y+4}" text-anchor="middle" fill="#06140d" font-size="11" font-weight="700" font-family="ui-monospace,monospace">${i+1}</text>
+      <text x="${p.x+16}" y="${p.y+4}" fill="#cfe6d9" font-size="11" font-family="ui-monospace,monospace">${c.label}</text></g>`; });
+  if(mk) s+=`<circle cx="${mk.x}" cy="${mk.y}" r="6" fill="#fff"><animate attributeName="r" values="6;9;6" dur="1s" repeatCount="indefinite"/></circle>`;
+  $('svg').innerHTML=s;
+  $('svg').querySelectorAll('[data-pin]').forEach(el=>el.onclick=()=>openCam(+el.dataset.pin,cps));
+}
+function openCam(i,cps){
+  selPin=i; drawMap();
+  const cp=cps[i], tile=$('camtile');
+  tile.hidden=false;
+  tile.innerHTML=`<div class="bar"><span class="rec"></span><span class="nm">${esc(cp.label).toUpperCase()} · CHECKPOINT</span><button class="x" id="camx">✕</button></div>
+    <svg viewBox="0 0 760 380">${detectionInner(cps,i)}</svg>`;
+  $('camx').onclick=()=>{tile.hidden=true;selPin=null;drawMap();};
+  $('readout').innerHTML=`Checkpoint <b>${esc(cp.label)}</b> · t+<b>${cp.tc}</b> · registered plate <b>${esc(cp.plate)}</b> at <b>${cp.mph} mph</b>${cp.limit?` (limit ${cp.limit})`:''}`;
+}
+function renderTable(){
+  $('tbody').innerHTML=track.segments.filter(s=>!s.gap).map(s=>{const band=speedBand(s);
+    return `<div class="trow" data-seg="${s.index}" aria-selected="${selSeg===s.index}">
+      <span>${timeCode(track.totals.startTs,s.to.ts)}</span><span style="font-family:var(--ui);color:var(--muted)">#${s.index+1}</span>
+      <span class="sp ${s.over?'over':''}">${s.mph.toFixed(0)} mph</span><span style="color:var(--muted)">${s.limit??'—'}</span>
+      <span style="color:var(--muted)">${s.mi.toFixed(2)} mi</span><span class="pill ${band}">${band}</span></div>`;}).join('');
+  $('tbody').querySelectorAll('.trow').forEach(el=>el.onclick=()=>{selSeg=+el.dataset.seg;renderTable();});
+}
+
+// Detection frame inner SVG (registered vehicle identified; others anonymized)
+function detectionInner(cps,ci){
+  const cp=cps[ci], CW=760,CH=380,reduce=matchMedia('(prefers-reduced-motion: reduce)').matches, vpx=CW*0.52;
+  const road=t=>({y:CH*0.99+(CH*0.34-CH*0.99)*t,half:CW*0.46*(1-t)+CW*0.05*t,cx:CW*0.5*(1-t)+vpx*t,scale:(1-t)*1.0+t*0.34});
+  const laneX=(lane,t)=>{const r=road(t);return r.cx+(lane-1)*r.half*0.5;};
+  let s='';
+  s+=`<rect x="0" y="0" width="${CW}" height="${CH}" fill="#05080f"/><rect x="0" y="0" width="${CW}" height="${CH*0.34}" fill="#0a1322"/>`;
+  const bl=road(0),tf=road(1);
+  s+=`<polygon points="${bl.cx-bl.half},${bl.y} ${bl.cx+bl.half},${bl.y} ${tf.cx+tf.half},${tf.y} ${tf.cx-tf.half},${tf.y}" fill="#111722"/>`;
+  s+=`<line x1="${bl.cx-bl.half}" y1="${bl.y}" x2="${tf.cx-tf.half}" y2="${tf.y}" stroke="#3a4658" stroke-width="2"/><line x1="${bl.cx+bl.half}" y1="${bl.y}" x2="${tf.cx+tf.half}" y2="${tf.y}" stroke="#3a4658" stroke-width="2"/>`;
+  for(const div of [0.5,1.5]) for(let t=0.04;t<0.98;t+=0.13){const r1=road(t),r2=road(t+0.055);s+=`<line x1="${laneX(div,t)}" y1="${r1.y}" x2="${laneX(div,t+0.055)}" y2="${r2.y}" stroke="#41506a" stroke-width="${Math.max(1,3*r1.scale)}"/>`;}
+  const rng=mulberry32(2000+ci*13);
+  const scene=[{lane:1,t:0.36,tgt:true,mph:cp.mph}];
+  const dl=[0,2,0],dt=[0.6,0.5,0.18];
+  for(let k=0;k<3;k++) scene.push({lane:dl[k],t:dt[k],mph:Math.max(18,(cp.limit||45)+Math.round((rng()-0.35)*18))});
+  scene.sort((a,b)=>b.t-a.t);
+  for(const v of scene){
+    const r=road(v.t),x=laneX(v.lane,v.t),cw=98*r.scale,ch=70*r.scale,top=r.y-ch,left=x-cw/2;
+    s+=`<rect x="${left}" y="${top}" width="${cw}" height="${ch}" rx="${8*r.scale}" fill="${v.tgt?'#33415c':'#2a3140'}" stroke="#161c26" stroke-width="1.5"/>`;
+    s+=`<rect x="${left+cw*0.16}" y="${top+ch*0.12}" width="${cw*0.68}" height="${ch*0.32}" rx="${4*r.scale}" fill="#0c111a"/>`;
+    s+=`<rect x="${left+cw*0.08}" y="${r.y-ch*0.26}" width="${cw*0.16}" height="${ch*0.12}" fill="#c0392b"/><rect x="${left+cw*0.76}" y="${r.y-ch*0.26}" width="${cw*0.16}" height="${ch*0.12}" fill="#c0392b"/>`;
+    s+=`<text x="${left}" y="${top-8}" fill="#fff" font-family="ui-monospace,monospace" font-size="${Math.max(12,Math.round(20*r.scale))}" font-weight="600">${Math.round(v.mph)}</text>`;
+    if(v.tgt){
+      const pad=7,bx=left-pad,by=top-pad,bw=cw+pad*2,bh=ch+pad*2,tk=Math.max(10,16*r.scale);
+      s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#ef4444" stroke-width="3"/>`;
+      for(const [ox,oy,sx,sy] of [[bx,by,1,1],[bx+bw,by,-1,1],[bx,by+bh,1,-1],[bx+bw,by+bh,-1,-1]]) s+=`<path d="M ${ox} ${oy+sy*tk} L ${ox} ${oy} L ${ox+sx*tk} ${oy}" stroke="#fff" stroke-width="3" fill="none"/>`;
+      s+=`<rect x="${bx+bw-74}" y="${by-24}" width="74" height="20" rx="4" fill="#ef4444"/><text x="${bx+bw-66}" y="${by-10}" fill="#fff" font-family="ui-monospace,monospace" font-size="11" font-weight="700">● MATCH</text>`;
+      const plw=Math.max(70,cw*0.62),plh=Math.max(20,ch*0.3),plx=x-plw/2,ply=r.y-plh-ch*0.06;
+      s+=`<rect x="${plx}" y="${ply}" width="${plw}" height="${plh}" rx="3" fill="#0b0f16" stroke="#ef4444" stroke-width="2"/><text x="${x}" y="${ply+plh*0.72}" text-anchor="middle" fill="#fff" font-family="ui-monospace,monospace" font-weight="700" font-size="${Math.max(11,Math.round(plh*0.6))}">${esc(cp.plate)}</text>`;
+    } else {
+      const pad=4; s+=`<rect x="${left-pad}" y="${top-pad}" width="${cw+pad*2}" height="${ch+pad*2}" fill="none" stroke="#94a3b8" stroke-width="1.5" opacity="0.55"/>`;
+      s+=`<rect x="${x-cw*0.28}" y="${r.y-ch*0.34}" width="${cw*0.56}" height="${Math.max(10,ch*0.2)}" rx="2" fill="#0b0f16" opacity="0.7"/><text x="${x}" y="${r.y-ch*0.2}" text-anchor="middle" fill="#64748b" font-family="ui-monospace,monospace" font-size="${Math.max(9,Math.round(13*r.scale))}">▓▓▓▓</text>`;
+    }
+  }
+  s+=`<text x="16" y="26" fill="#e6edf7" font-family="ui-monospace,monospace" font-size="13" font-weight="600">${esc(cp.label)}</text><text x="16" y="44" fill="#8ea3bd" font-family="ui-monospace,monospace" font-size="12">t+${cp.tc}${cp.limit?` · limit ${cp.limit}`:''}</text>`;
+  s+=`<rect x="${CW-176}" y="14" width="120" height="22" rx="5" fill="#0f1626" stroke="#26355a"/><text x="${CW-166}" y="29" fill="#22c55e" font-family="ui-monospace,monospace" font-size="11" font-weight="600">ALPR · CHECKPOINT</text>`;
+  s+=`<circle cx="${CW-40}" cy="25" r="5" fill="#ef4444"${reduce?'':'><animate attributeName="opacity" values="1;.25;1" dur="1.4s" repeatCount="indefinite"/'}></circle><text x="${CW-30}" y="29" fill="#fca5a5" font-family="ui-monospace,monospace" font-size="11" font-weight="700">REC</text>`;
+  const B=18; for(const [ox,oy,sx,sy] of [[10,10,1,1],[CW-10,10,-1,1],[10,CH-10,1,-1],[CW-10,CH-10,-1,-1]]) s+=`<path d="M ${ox} ${oy+sy*B} L ${ox} ${oy} L ${ox+sx*B} ${oy}" stroke="#2b3745" stroke-width="2" fill="none"/>`;
+  if(!reduce) s+=`<line x1="0" x2="${CW}" y1="0" y2="0" stroke="#22c55e" stroke-width="1.5" opacity="0.22"><animate attributeName="y1" values="40;${CH};40" dur="4s" repeatCount="indefinite"/><animate attributeName="y2" values="40;${CH};40" dur="4s" repeatCount="indefinite"/></line>`;
+  return s;
+}
+
+// playback on the Map view
+function togglePlay(){ playing?stopPlay():startPlay(); }
+function startPlay(){
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  playing=true; const pb=$('play'); if(pb)pb.textContent='▮▮ Pause';
+  const t=track,w=780,h=460,vp=makeViewport(t.pings,w,h);
+  const first=Date.parse(t.pings[0].ts),last=Date.parse(t.pings[t.pings.length-1].ts),span=last-first;let clock=first;
+  const step=()=>{ if(!playing)return;
+    clock+=(reduce?span/30:1000/60*60);
+    let seg=t.segments.find(s=>Date.parse(s.from.ts)<=clock&&Date.parse(s.to.ts)>=clock)||t.segments[t.segments.length-1];
+    const f=(clock-Date.parse(seg.from.ts))/Math.max(1,(Date.parse(seg.to.ts)-Date.parse(seg.from.ts)));
+    const a=vp.project(seg.from),b=vp.project(seg.to);
+    selSeg=seg.index; drawMap({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
+    const band=speedBand(seg), col=BAND[band]==='transparent'?'#e6edf7':BAND[band];
+    const ro=$('readout'); if(ro) ro.innerHTML=`t+<b>${timeCode(t.totals.startTs,new Date(clock).toISOString())}</b> · <b style="color:${col}">${seg.mph.toFixed(0)} mph</b>${seg.limit?` / ${seg.limit} limit`:''}`;
+    if(clock>=last){ stopPlay(); return; } raf=requestAnimationFrame(step);
+  };
+  raf=requestAnimationFrame(step);
+}
+function stopPlay(){ playing=false; cancelAnimationFrame(raf); const pb=$('play'); if(pb)pb.textContent='▶ Play route'; }
+
+$('topnav').querySelectorAll('button').forEach(b=>b.onclick=()=>setNav(b.dataset.nav));
+$('search').oninput=e=>{query=e.target.value.toLowerCase().trim(); renderVehicles();};
+$('reset').onclick=()=>{query='';$('search').value='';curVeh=null;track=null;stopPlay();renderAll();};
+function renderAll(){ renderAccount(); renderVehicles(); renderAlerts(); renderStage(); }
+renderAll();
+</script>

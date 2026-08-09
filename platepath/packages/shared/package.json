@@ -1,0 +1,12 @@
+{
+  "name": "@platepath/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shared domain logic: geo math, track/speed engine, consent gate, pricing & projections.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types test/engine.test.ts"
+  }
+}

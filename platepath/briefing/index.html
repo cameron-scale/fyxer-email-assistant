@@ -1,0 +1,292 @@
+<title>PlatePath — Feasibility, Legality & Business Case</title>
+<meta name="description" content="The honest verdict on a 'find any plate via traffic cams' app, and the legal, buildable product it becomes: consent-based vehicle route intelligence." />
+<style>
+  :root {
+    /* Light palette (complete). Cool paper, ink biased toward the teal accent. */
+    --paper: #f6f7f9;
+    --card: #ffffff;
+    --ink: #10161f;
+    --ink-2: #3b4757;
+    --muted: #64717f;
+    --rule: #e2e6ec;
+    --rule-2: #cdd4dd;
+    --accent: #0d8f5a;
+    --accent-ink: #0a6b41;
+    --good: #1a7f4b;
+    --good-bg: #e7f4ec;
+    --warn: #a8690a;
+    --warn-bg: #fbf0dd;
+    --bad: #c0392b;
+    --bad-bg: #fbe9e7;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #0a0e14;
+      --card: #10161f;
+      --ink: #e8edf3;
+      --ink-2: #b9c4d0;
+      --muted: #8593a1;
+      --rule: #1e2733;
+      --rule-2: #2b3745;
+      --accent: #34d399;
+      --accent-ink: #6ee7a0;
+      --good: #4ade80; --good-bg: #10261a;
+      --warn: #fbbf24; --warn-bg: #2a2109;
+      --bad: #f87171; --bad-bg: #2a1210;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0a0e14;
+    --card: #10161f;
+    --ink: #e8edf3;
+    --ink-2: #b9c4d0;
+    --muted: #8593a1;
+    --rule: #1e2733;
+    --rule-2: #2b3745;
+    --accent: #34d399;
+    --accent-ink: #6ee7a0;
+    --good: #4ade80; --good-bg: #10261a;
+    --warn: #fbbf24; --warn-bg: #2a2109;
+    --bad: #f87171; --bad-bg: #2a1210;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--serif); font-size: 18px; line-height: 1.62;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 22px 100px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); font-weight: 600; }
+  h1, h2, h3 { font-family: var(--ui); line-height: 1.15; text-wrap: balance; letter-spacing: -0.02em; }
+  h1 { font-size: clamp(34px, 6vw, 52px); font-weight: 800; margin: 12px 0 10px; }
+  h2 { font-size: clamp(24px, 4vw, 32px); font-weight: 700; margin: 56px 0 6px; padding-top: 20px; border-top: 1px solid var(--rule); }
+  h3 { font-size: 20px; font-weight: 700; margin: 28px 0 4px; font-family: var(--ui); }
+  p { margin: 12px 0; color: var(--ink-2); }
+  strong { color: var(--ink); }
+  a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+  .lede { font-size: 21px; color: var(--ink); }
+  .sub { font-family: var(--ui); color: var(--muted); font-size: 15px; }
+
+  /* hero */
+  header.hero { padding: 64px 0 8px; }
+  .verdict {
+    margin: 26px 0; border: 1px solid var(--rule-2); border-left: 5px solid var(--accent);
+    background: var(--card); border-radius: 4px 12px 12px 4px; padding: 22px 24px;
+  }
+  .verdict .k { font-family: var(--ui); font-weight: 700; color: var(--ink); font-size: 15px; }
+
+  /* two-column kill/ship */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 22px 0; }
+  @media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
+  .col { border-radius: 12px; padding: 18px 20px; border: 1px solid var(--rule); background: var(--card); }
+  .col.dies { border-color: color-mix(in srgb, var(--bad) 40%, var(--rule)); }
+  .col.ships { border-color: color-mix(in srgb, var(--good) 45%, var(--rule)); }
+  .col h3 { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+  .col.dies h3 { color: var(--bad); }
+  .col.ships h3 { color: var(--good); }
+  .col ul { margin: 8px 0 0; padding-left: 18px; }
+  .col li { font-family: var(--ui); font-size: 14.5px; color: var(--ink-2); margin: 7px 0; }
+
+  /* tables */
+  .tablewrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--rule); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-family: var(--ui); font-size: 14px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th { background: color-mix(in srgb, var(--accent) 8%, var(--card)); color: var(--ink); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+  .tag.good { background: var(--good-bg); color: var(--good); }
+  .tag.warn { background: var(--warn-bg); color: var(--warn); }
+  .tag.bad { background: var(--bad-bg); color: var(--bad); }
+
+  /* stat band */
+  .band { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 24px 0; }
+  @media (max-width: 640px) { .band { grid-template-columns: repeat(2, 1fr); } }
+  .kpi { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 16px; }
+  .kpi .v { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .kpi .l { font-family: var(--ui); font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  figure { margin: 22px 0; }
+  figcaption { font-family: var(--ui); font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .chart { width: 100%; height: auto; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; }
+  .chart .grid { stroke: var(--rule); stroke-width: 1; }
+  .chart .ylab { fill: var(--muted); font-family: var(--mono); font-size: 11px; }
+  .chart .vlab { fill: var(--ink-2); font-family: var(--mono); font-size: 10.5px; }
+  .chart .xlab { fill: var(--ink); font-family: var(--ui); font-size: 13px; font-weight: 600; }
+  .chart .leg { fill: var(--muted); font-family: var(--ui); font-size: 12px; }
+
+  .callout { font-family: var(--ui); font-size: 14.5px; background: var(--warn-bg); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--rule)); border-radius: 10px; padding: 14px 16px; color: var(--ink-2); margin: 18px 0; }
+  .callout b { color: var(--ink); }
+
+  footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--rule); font-family: var(--ui); font-size: 13px; color: var(--muted); }
+  .cta { display: inline-flex; gap: 8px; align-items: center; font-family: var(--ui); font-weight: 600; font-size: 15px; background: var(--accent); color: #04222a; padding: 10px 18px; border-radius: 10px; text-decoration: none; margin: 6px 10px 6px 0; }
+  :root[data-theme="dark"] .cta, :root:not([data-theme="light"]) .cta { color: #04222a; }
+  .disclaimer { font-family: var(--ui); font-size: 12.5px; color: var(--muted); font-style: normal; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Feasibility · Legality · Business case</div>
+    <h1>The traffic-cam plate tracker can't be built. Here's the version that can.</h1>
+    <p class="lede">You asked for an app that scans public traffic cameras to find any license plate, traces its path with time codes, and shows its speed per section — for parents, fleets, dealers, and police. I researched federal and 50-state law, app-store policy, and what traffic cameras can actually do. The literal idea is a dead end on four independent grounds. The <em>goal</em> behind it is a real, fundable business — once you change the data source and the consent model.</p>
+  </header>
+
+  <div class="verdict">
+    <div class="k">Verdict</div>
+    <p style="margin:6px 0 0">The original mechanism fails on <strong>capability</strong> (traffic cams can't read plates and there's no national feed), <strong>federal law</strong> (the DPPA bars plate→owner lookups for these buyers), <strong>state law</strong> (ALPR bans + electronic-tracking statutes; the "register the plate" gate supplies none of the required consent), and <strong>platform policy</strong> (Apple/Google ban covert tracking). <strong>PlatePath</strong> keeps the goal and rebuilds it as consent-based, owner-verified vehicle route intelligence — legal in all 50 states, App-Store-approvable, and serving the same four customers.</p>
+  </div>
+
+  <div class="band">
+    <div class="kpi"><div class="v">4</div><div class="l">independent walls that kill the literal idea</div></div>
+    <div class="kpi"><div class="v">$2,500</div><div class="l">DPPA damages per violation (per plate lookup)</div></div>
+    <div class="kpi"><div class="v">~$8.3M</div><div class="l">base-case exit ARR (Year 3, model)</div></div>
+    <div class="kpi"><div class="v">5–13×</div><div class="l">LTV:CAC across the four segments</div></div>
+  </div>
+
+  <h2>What dies, and what ships</h2>
+  <div class="split">
+    <div class="col dies">
+      <h3>✕ What can't be built</h3>
+      <ul>
+        <li>Scanning public traffic cameras for a plate — they're low-res, wide-angle, snapshot-only, mostly unrecorded, with no national API.</li>
+        <li>A plate → registered-owner lookup for parents/dealers/fleets — barred by the DPPA.</li>
+        <li>Tracking "any plate you type in" — the register-a-plate gate stops nothing; it's textbook stalking.</li>
+        <li>A consumer download that traces a car — rejected by Apple &amp; Google.</li>
+      </ul>
+    </div>
+    <div class="col ships">
+      <h3>✓ What ships instead</h3>
+      <ul>
+        <li>Route + time codes + per-segment speed from <strong>consented telematics</strong> (GPS/OBD/phone) — full coverage, accurate speed.</li>
+        <li>Tracking only on vehicles whose ownership you've <strong>verified</strong> — a real gate, not a text box.</li>
+        <li>Driver-disclosure ledger, per-read audit log, per-state retention controls.</li>
+        <li>Fits the permitted lanes: dealer/BHPH, fleet, family, and an off-store agency tier.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Can it be built? (feasibility)</h2>
+  <p>Real plate-based tracking exists — but not on the substrate the idea assumes. DOT/511 <strong>traffic-flow</strong> cameras are engineered <em>not</em> to read plates: low resolution by design, wide pan-tilt-zoom fields of view, snapshots every few seconds to minutes rather than video, usually not archived, and split across ~50 incompatible state systems with no national API. You cannot reconstruct a path or compute segment speed from them.</p>
+  <p>A precise caveat, because it matters for credibility: <strong>some government cameras do read plates</strong> — electronic tolling, red-light/speed cameras, and point-to-point "average-speed" enforcement that literally computes segment speed from two timestamped reads. So it isn't <em>physics</em> that stops you — it's <strong>access</strong>. Those systems, and the real plate-reader networks (Flock: 120,000+ cameras across 49 states, ~$300M ARR, ~$7.5–8.4B valuation; Motorola/Vigilant; Rekor), are closed and gated to law enforcement and DPPA-permissible commercial users. None is a feed a consumer app can tap.</p>
+  <p><strong>The working substrate is consented GPS/telematics</strong> — the proven approach for "trace the path and speed," with full coverage and no plate-reading problem. That is what PlatePath is built on, and the engine that computes it is tested and running in this repo.</p>
+  <p><strong>Where plate detection <em>does</em> belong — the checkpoint view.</strong> At a camera <em>you</em> operate (a dealer lot gate, a fleet yard, a lawful agency ALPR site), PlatePath renders the classic detection frame — box every vehicle, call out the plate — but with one rule that makes it legal: it reads the plate <strong>only for vehicles registered to your account</strong>. Your car gets the red box, the plate, and the speed; every other vehicle is boxed but stays anonymous. Reading <em>everyone's</em> plate off a public road is the illegal part; identifying <em>your own</em> verified vehicle at your own checkpoint is fine — and looks identical for the car you're allowed to see. (Open the demo → <span style="font-family:var(--mono)">🎯 Checkpoint detection</span>.)</p>
+
+  <h2>Is it legal? (the four walls)</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Use case</th><th>Original idea</th><th>PlatePath (consent model)</th></tr></thead>
+      <tbody>
+        <tr><td>Dealer / BHPH / lender</td><td><span class="tag bad">Illegal</span> DPPA + ALPR</td><td><span class="tag good">Legal</span> borrower signs GPS consent at financing</td></tr>
+        <tr><td>Fleet</td><td><span class="tag bad">Illegal</span> no driver consent</td><td><span class="tag good">Legal</span> company vehicle + driver disclosure</td></tr>
+        <tr><td>Family</td><td><span class="tag bad">Stalkerware</span></td><td><span class="tag good">Legal (narrow)</span> own vehicle; minor or consented adult</td></tr>
+        <tr><td>Law enforcement</td><td><span class="tag bad">4th Amdt / toxic</span></td><td><span class="tag warn">Gated</span> off-store, lawful process, audited</td></tr>
+        <tr><td>"Find any plate you type in"</td><td><span class="tag bad">Never</span></td><td><span class="tag bad">Never — not built</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>The register-a-plate gate is the core mistake.</strong> Registration isn't ownership, and ownership isn't the driver's consent — anyone can type an ex-partner's plate. The federal DPPA (18 U.S.C. §§2721–2725) even makes the plate→owner lookup you'd use to "verify" it unlawful, with a private right of action at $2,500/violation. State electronic-tracking statutes (CA §637.7, TX §16.06, FL §934.425) require the <em>tracked person's</em> consent — which PlatePath's design supplies and the original doesn't. Four states (NH, ME, AR, VT) ban private ALPR outright; retention caps as short as ~3 minutes (NH) make historical tracing impossible there. Full analysis and citations: <strong>docs/LEGAL.md</strong>.</p>
+  <div class="callout"><b>App Store reality:</b> Apple and Google prohibit covert tracking. The only approvable lanes are parental (verified minors), enterprise/fleet (company vehicles with driver notice), and law-enforcement (sold off-store under legal process). PlatePath is designed to fit exactly these.</div>
+
+  <h2>Is the need real? (market)</h2>
+  <p>The original <em>mechanism</em> has no legitimate market — but the underlying jobs are real and funded. Fleets are pushed onto telematics by the <strong>FMCSA ELD mandate</strong>; <strong>72% of US parents</strong> already use monitoring tools (Pew, 2025); BHPH/subprime dealers carry <strong>~$32B</strong> in loans with subprime at a multi-year-high <strong>15.31%</strong> of financing (Experian, Q4 2025) and already run GPS on collateral.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Segment</th><th>US market (directional)</th><th>For a startup</th></tr></thead>
+      <tbody>
+        <tr><td>Fleet telematics</td><td class="num">~$5–11B</td><td>Largest; crowded (Samsara/Geotab/Motive)</td></tr>
+        <tr><td>Dealer / BHPH GPS</td><td class="num">~$32B loans</td><td><strong>Best wedge</strong> — built-in consent, fragmented incumbents</td></tr>
+        <tr><td>Family / teen</td><td class="num">~$0.6–3.8B</td><td>Low ARPU; Life360 dominant → funnel play</td></tr>
+        <tr><td>LE ALPR</td><td class="num">~$3.1B</td><td>Owned by Flock/Motorola; legally fraught</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>The wedge is BHPH/subprime dealers</strong>: concentrated buyers, dollar-denominated pain (one recovery dwarfs the cost), a built-in legal consent path (the borrower signs at financing), and fragmented incumbents. Fleet is the expansion; family is top-of-funnel; agency is last and gated.</p>
+
+  <h2>How to charge, and what it earns</h2>
+  <p>Hardware-light, per-unit SaaS, annual billing pushed hard — undercutting incumbents on the two things buyers hate: $150 hardware fees and 36-month lock-ins.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Plan</th><th class="num">Price</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Family</td><td class="num">$9.99–19.99/mo</td><td>or $79–149/yr; anchored to Life360/Bouncie</td></tr>
+        <tr><td>Fleet Starter / Pro</td><td class="num">$15 / $25 /veh</td><td>vs incumbents' $25–50 + hardware + 3-yr lock-in</td></tr>
+        <tr><td>Dealer &amp; Lender</td><td class="num">$9 /VIN</td><td>+$49 device; ~150 VINs/dealer ≈ $1,350/mo</td></tr>
+        <tr><td>Agency</td><td class="num">$10k–50k/yr</td><td>seat + case, off-store, audited</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <svg class="chart" id="chart" viewBox="0 0 760 340" role="img" aria-label="Three-year revenue by scenario"></svg>
+    <figcaption>Modeled annual revenue by scenario (S-curve growth, no hockey stick). Reproduce with <span style="font-family:var(--mono)">npm run projections</span>. Base case exits Year 3 at ~$8.3M ARR / ~43,500 active units.</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Scenario</th><th class="num">Yr 1</th><th class="num">Yr 2</th><th class="num">Yr 3</th><th class="num">Exit ARR</th><th class="num">Units</th></tr></thead>
+      <tbody>
+        <tr><td>Conservative</td><td class="num">$0.53M</td><td class="num">$1.64M</td><td class="num">$2.98M</td><td class="num">$3.5M</td><td class="num">18.7K</td></tr>
+        <tr><td><strong>Base</strong></td><td class="num">$1.04M</td><td class="num">$3.53M</td><td class="num">$6.83M</td><td class="num">$8.3M</td><td class="num">43.5K</td></tr>
+        <tr><td>Aggressive</td><td class="num">$1.73M</td><td class="num">$6.60M</td><td class="num">$14.0M</td><td class="num">$17.4M</td><td class="num">91.4K</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout"><b>Read the numbers honestly:</b> ~90% is <b>software</b> gross margin (revenue − serve cost); it excludes fixed R&D/G&A/compliance, so a real P&L still burns cash in Years 1–2 — that's what a raise funds. ARPU/CAC/churn are benchmarks, not observed data; replace them after pilots and kill consumer paid acquisition if blended LTV:CAC stays under ~2.5×.</div>
+
+  <h2>What's in the repo</h2>
+  <p>This briefing ships with a working reference implementation, not just slides: a tested route/speed engine and consent gate, a zero-dependency API where the gate returns <span style="font-family:var(--mono)">403</span> for an unverified plate, a React web app, an Expo iPhone app, and an interactive demo. The projection numbers above are generated by the code.</p>
+  <p>
+    <a class="cta" href="../demo/index.html">▶ Open the interactive demo</a>
+    <a class="cta" href="../README.md" style="background:transparent;color:var(--accent-ink);border:1px solid var(--rule-2)">Read the README</a>
+  </p>
+
+  <footer>
+    <p class="disclaimer"><strong>Not legal advice.</strong> Analysis of publicly available law as of mid-2026, for product design. Statutes and enforcement change; obtain a formal opinion from privacy/regulatory counsel before building or launching. Market figures are directional research-firm estimates. Financials are a transparent model whose inputs are assumptions, not guarantees. Sources are cited in docs/LEGAL.md and docs/STRATEGY.md.</p>
+  </footer>
+</div>
+
+<script>
+  // Grouped column chart of annual revenue ($M) by scenario. Values match the model output.
+  const data = [
+    { year: 'Year 1', vals: [0.53, 1.04, 1.73] },
+    { year: 'Year 2', vals: [1.64, 3.53, 6.60] },
+    { year: 'Year 3', vals: [2.98, 6.83, 13.98] },
+  ];
+  const series = ['Conservative', 'Base', 'Aggressive'];
+  const colors = ['#94a3b8', '#0d8f5a', '#f59e0b'];
+  const W = 760, H = 340, padL = 46, padR = 16, padT = 24, padB = 54;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const maxV = 15;
+  const y = v => padT + plotH - (v / maxV) * plotH;
+  let s = '';
+  // gridlines + y labels
+  for (let g = 0; g <= 15; g += 3) {
+    const yy = y(g);
+    s += `<line class="grid" x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"/>`;
+    s += `<text class="ylab" x="${padL - 8}" y="${yy + 4}" text-anchor="end">$${g}M</text>`;
+  }
+  const groupW = plotW / data.length;
+  const barW = 34, gap = 10;
+  const groupInner = series.length * barW + (series.length - 1) * gap;
+  data.forEach((d, gi) => {
+    const gx = padL + gi * groupW + (groupW - groupInner) / 2;
+    d.vals.forEach((v, si) => {
+      const bx = gx + si * (barW + gap);
+      const by = y(v), bh = padT + plotH - by;
+      s += `<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" rx="4" fill="${colors[si]}"><title>${series[si]} ${d.year}: $${v}M</title></rect>`;
+      s += `<text class="vlab" x="${bx + barW / 2}" y="${by - 6}" text-anchor="middle">${v}</text>`;
+    });
+    s += `<text class="xlab" x="${padL + gi * groupW + groupW / 2}" y="${H - padB + 22}" text-anchor="middle">${d.year}</text>`;
+  });
+  // legend
+  series.forEach((name, i) => {
+    const lx = padL + i * 150;
+    s += `<rect x="${lx}" y="${H - 20}" width="12" height="12" rx="3" fill="${colors[i]}"/>`;
+    s += `<text class="leg" x="${lx + 18}" y="${H - 10}">${name}</text>`;
+  });
+  document.getElementById('chart').innerHTML = s;
+</script>
