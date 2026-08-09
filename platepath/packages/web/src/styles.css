@@ -1,11 +1,16 @@
 :root {
-  --bg: #060910;
-  --panel: #0f172a;
-  --panel-2: #111c33;
-  --line: #1e293b;
-  --text: #e2e8f0;
-  --muted: #94a3b8;
-  --accent: #22d3ee;
+  /* Public-safety operations console — emerald primary, green-biased charcoal. */
+  --bg: #0a0f0d;
+  --panel: #111815;
+  --panel-2: #16211c;
+  --line: #1f2a25;
+  --line-2: #2b3a32;
+  --brandbar: #10402f;
+  --brandbar-2: #0b2c20;
+  --text: #e9efeb;
+  --muted: #92a89d;
+  --accent: #22c55e;
+  --accent-deep: #16a34a;
   --over: #f87171;
 }
 * { box-sizing: border-box; }
@@ -18,11 +23,15 @@ body {
 .app { max-width: 1200px; margin: 0 auto; padding: 0 16px 64px; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 4px; border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; background: var(--bg); z-index: 5;
+  padding: 12px 16px; border-bottom: 1px solid #0a241a;
+  position: sticky; top: 0; z-index: 5;
+  background: linear-gradient(180deg, var(--brandbar), var(--brandbar-2));
 }
+.topbar, .topbar * { color: #fff; }
 .brand { font-weight: 700; font-size: 20px; display: flex; align-items: center; gap: 8px; }
-.brand .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.brand .dot { width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center;
+  background: radial-gradient(circle at 32% 30%, #2fe08a, #12734a); box-shadow: none; }
+.brand .dot::before { content: "P"; color: #052617; font-weight: 900; font-size: 13px; }
 .brand .tag { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; }
 .owner-switch select {
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
