@@ -118,6 +118,20 @@
   .pill.over { background: rgba(239,68,68,.18); color: #fca5a5; }
   .pill.stopped { background: rgba(100,116,139,.2); color: #cbd5e1; }
 
+  /* view toggle + checkpoint detection */
+  .viewtabs { display: inline-flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; margin-bottom: 14px; }
+  .viewtab { font-family: var(--ui); font-size: 13px; padding: 7px 13px; border-radius: 7px; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: .12s; }
+  .viewtab[aria-pressed="true"] { background: var(--panel-2); color: var(--text); box-shadow: 0 0 0 1px var(--line-2) inset; }
+  .cpchips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
+  .cpchip { flex: 0 0 auto; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; color: var(--text); transition: .12s; }
+  .cpchip:hover { border-color: var(--line-2); }
+  .cpchip[aria-pressed="true"] { border-color: var(--accent); background: var(--panel-2); }
+  .cpchip b { display: block; font-size: 13px; }
+  .cpchip span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  svg.cpframe { width: 100%; height: auto; display: block; border-radius: 14px; border: 1px solid var(--line); background: #05080f; }
+  .cpcaption { font-family: var(--ui); font-size: 13px; color: var(--muted); margin: 12px 2px 0; padding: 11px 14px; border-radius: 10px; background: rgba(34,211,238,.06); border: 1px solid var(--line-2); }
+  .cpcaption b { color: var(--text); }
+  .cpcaption .id { color: #4ade80; } .cpcaption .anon { color: #94a3b8; }
   footer { margin-top: 28px; color: var(--faint); font-size: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
   footer b { color: var(--muted); }
   a { color: var(--accent); }
@@ -248,6 +262,7 @@ const LABELS=DRIVE.filter(w=>w.label).map(w=>({lat:w.lat,lng:w.lng,label:w.label
 // State + render
 // ---------------------------------------------------------------------------
 let curOwner='family', curVeh=null, track=null, selSeg=null, playing=false, raf=0;
+let stageView='route', cpIndex=0;
 const $=id=>document.getElementById(id);
 
 function renderAccounts(){
@@ -271,7 +286,7 @@ function renderVehicles(){
   });
 }
 function selectVehicle(id){
-  curVeh=id; selSeg=null; stopPlay();
+  curVeh=id; selSeg=null; cpIndex=0; stopPlay();
   const v=VEHICLES.find(x=>x.id===id);
   track = v.verified ? buildTrack(generateDrive('2026-08-09T14:02:00Z', v.seed)) : null;
   renderVehicles(); renderStage();
@@ -297,23 +312,129 @@ function renderStage(){
       <div class="stat"><div class="v">${to.stops}</div><div class="l">Stops</div></div>
       <div class="stat"><div class="v">${timeCode(to.startTs,t.pings[t.pings.length-1].ts)}</div><div class="l">Duration</div></div>
     </div>
-    <div class="maprow"><svg class="map" id="svg" viewBox="0 0 760 440" role="img" aria-label="Route colored by speed"></svg></div>
-    <div class="controls">
-      <button class="play" id="play"><span class="tri">▶</span> Play route</button>
-      <span class="readout" id="readout">Tap a segment, or press play to trace the drive.</span>
-      <span class="legend">
-        <span><i style="background:#22c55e"></i>at/under</span>
-        <span><i style="background:#f59e0b"></i>6–12 over</span>
-        <span><i style="background:#ef4444"></i>12+ over</span>
-        <span><i style="background:#64748b"></i>stopped</span>
-      </span>
+    <div class="viewtabs" id="viewtabs">
+      <button class="viewtab" data-view="route" aria-pressed="${stageView==='route'}">🗺 Route map</button>
+      <button class="viewtab" data-view="checkpoints" aria-pressed="${stageView==='checkpoints'}">🎯 Checkpoint detection</button>
     </div>
-    <div class="tablewrap">
-      <div class="thead"><span>Time</span><span>Section</span><span>Speed</span><span>Limit</span><span>Distance</span><span>Status</span></div>
-      <div class="tbody" id="tbody"></div>
-    </div>`;
-  drawMap(); renderTable();
-  $('play').onclick=togglePlay;
+    <div id="viewbody"></div>`;
+  $('viewtabs').querySelectorAll('.viewtab').forEach(b=>b.onclick=()=>{
+    stageView=b.dataset.view; stopPlay();
+    $('viewtabs').querySelectorAll('.viewtab').forEach(x=>x.setAttribute('aria-pressed', String(x.dataset.view===stageView)));
+    renderViewBody();
+  });
+  renderViewBody();
+}
+
+function renderViewBody(){
+  if(stageView==='route'){
+    $('viewbody').innerHTML=`
+      <div class="maprow"><svg class="map" id="svg" viewBox="0 0 760 440" role="img" aria-label="Route colored by speed"></svg></div>
+      <div class="controls">
+        <button class="play" id="play"><span class="tri">▶</span> Play route</button>
+        <span class="readout" id="readout">Tap a segment, or press play to trace the drive.</span>
+        <span class="legend">
+          <span><i style="background:#22c55e"></i>at/under</span>
+          <span><i style="background:#f59e0b"></i>6–12 over</span>
+          <span><i style="background:#ef4444"></i>12+ over</span>
+          <span><i style="background:#64748b"></i>stopped</span>
+        </span>
+      </div>
+      <div class="tablewrap">
+        <div class="thead"><span>Time</span><span>Section</span><span>Speed</span><span>Limit</span><span>Distance</span><span>Status</span></div>
+        <div class="tbody" id="tbody"></div>
+      </div>`;
+    drawMap(); renderTable(); $('play').onclick=togglePlay;
+  } else {
+    const cps=buildCheckpoints();
+    if(cpIndex>=cps.length) cpIndex=0;
+    $('viewbody').innerHTML=`
+      <div class="cpchips" id="cpchips">${cps.map((c,i)=>`<button class="cpchip" data-cp="${i}" aria-pressed="${i===cpIndex}"><b>${c.label}</b><span>t+${c.tc} · ${c.mph} mph</span></button>`).join('')}</div>
+      <svg class="cpframe" id="cpframe" viewBox="0 0 760 380" role="img" aria-label="Checkpoint detection frame"></svg>
+      <div class="cpcaption" id="cpcaption"></div>`;
+    $('cpchips').querySelectorAll('.cpchip').forEach(el=>el.onclick=()=>{cpIndex=+el.dataset.cp; renderViewBody(); $('cpchips').children[cpIndex]?.scrollIntoView({inline:'nearest',block:'nearest'});});
+    drawDetection(cps);
+  }
+}
+
+// Map each labeled waypoint to its nearest ping → time code + segment speed/limit.
+function buildCheckpoints(){
+  const veh=VEHICLES.find(v=>v.id===curVeh);
+  return LABELS.map(l=>{
+    let bi=0,bd=Infinity;
+    track.pings.forEach((p,i)=>{const d=(p.lat-l.lat)**2+(p.lng-l.lng)**2; if(d<bd){bd=d;bi=i;}});
+    const seg=track.segments[Math.min(track.segments.length-1, Math.max(0, bi-1))];
+    return {label:l.label, tc:timeCode(track.totals.startTs, track.pings[bi].ts),
+            mph: seg?Math.round(seg.mph):0, limit: seg?seg.limit:null, plate:veh.plate, state:veh.state};
+  });
+}
+
+// Camera-style detection frame: box every vehicle, but read the plate ONLY for
+// the registered vehicle (red box + plate + speed). Others stay anonymous.
+function drawDetection(cps){
+  const cp=cps[cpIndex];
+  const CW=760, CH=380, reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const vpx=CW*0.52;
+  const road=t=>({ y: CH*0.99+(CH*0.34-CH*0.99)*t, half: CW*0.46*(1-t)+CW*0.05*t, cx: CW*0.5*(1-t)+vpx*t, scale:(1-t)*1.0+t*0.34 });
+  const laneX=(lane,t)=>{const r=road(t); return r.cx+(lane-1)*r.half*0.5;};
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  let s='';
+  // backdrop + horizon + road
+  s+=`<rect x="0" y="0" width="${CW}" height="${CH}" fill="#05080f"/>`;
+  s+=`<rect x="0" y="0" width="${CW}" height="${CH*0.34}" fill="#0a1322"/>`;
+  const bl=road(0), tf=road(1);
+  s+=`<polygon points="${bl.cx-bl.half},${bl.y} ${bl.cx+bl.half},${bl.y} ${tf.cx+tf.half},${tf.y} ${tf.cx-tf.half},${tf.y}" fill="#111722"/>`;
+  s+=`<line x1="${bl.cx-bl.half}" y1="${bl.y}" x2="${tf.cx-tf.half}" y2="${tf.y}" stroke="#3a4658" stroke-width="2"/>`;
+  s+=`<line x1="${bl.cx+bl.half}" y1="${bl.y}" x2="${tf.cx+tf.half}" y2="${tf.y}" stroke="#3a4658" stroke-width="2"/>`;
+  for(const div of [0.5,1.5]) for(let t=0.04;t<0.98;t+=0.13){ const r1=road(t),r2=road(t+0.055); s+=`<line x1="${laneX(div,t)}" y1="${r1.y}" x2="${laneX(div,t+0.055)}" y2="${r2.y}" stroke="#41506a" stroke-width="${Math.max(1,3*r1.scale)}"/>`; }
+
+  // scene: target (registered) + 3 decoys
+  const rng=mulberry32(2000+cpIndex*13);
+  const scene=[{lane:1,t:0.36,tgt:true,mph:cp.mph}];
+  const dl=[0,2,0], dt=[0.6,0.5,0.18];
+  for(let k=0;k<3;k++) scene.push({lane:dl[k],t:dt[k],mph:Math.max(18,(cp.limit||45)+Math.round((rng()-0.35)*18))});
+  scene.sort((a,b)=>b.t-a.t); // draw far→near
+
+  for(const v of scene){
+    const r=road(v.t), x=laneX(v.lane,v.t), cw=98*r.scale, ch=70*r.scale, top=r.y-ch, left=x-cw/2;
+    // car (rear view)
+    s+=`<rect x="${left}" y="${top}" width="${cw}" height="${ch}" rx="${8*r.scale}" fill="${v.tgt?'#33415c':'#2a3140'}" stroke="#161c26" stroke-width="1.5"/>`;
+    s+=`<rect x="${left+cw*0.16}" y="${top+ch*0.12}" width="${cw*0.68}" height="${ch*0.32}" rx="${4*r.scale}" fill="#0c111a"/>`;
+    s+=`<rect x="${left+cw*0.08}" y="${r.y-ch*0.26}" width="${cw*0.16}" height="${ch*0.12}" fill="#c0392b"/>`;
+    s+=`<rect x="${left+cw*0.76}" y="${r.y-ch*0.26}" width="${cw*0.16}" height="${ch*0.12}" fill="#c0392b"/>`;
+    // speed number (like the reference image)
+    s+=`<text x="${left}" y="${top-8}" fill="#fff" font-family="ui-monospace,monospace" font-size="${Math.max(12,Math.round(20*r.scale))}" font-weight="600">${Math.round(v.mph)}</text>`;
+    if(v.tgt){
+      // red bounding box + corner ticks
+      const pad=7, bx=left-pad, by=top-pad, bw=cw+pad*2, bh=ch+pad*2, tk=Math.max(10,16*r.scale);
+      s+=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="#ef4444" stroke-width="3"/>`;
+      const corners=[[bx,by,1,1],[bx+bw,by,-1,1],[bx,by+bh,1,-1],[bx+bw,by+bh,-1,-1]];
+      for(const [ox,oy,sx,sy] of corners) s+=`<path d="M ${ox} ${oy+sy*tk} L ${ox} ${oy} L ${ox+sx*tk} ${oy}" stroke="#fff" stroke-width="3" fill="none"/>`;
+      // MATCH tag (top-right of box, so it doesn't cover the speed number at top-left)
+      s+=`<rect x="${bx+bw-74}" y="${by-24}" width="74" height="20" rx="4" fill="#ef4444"/><text x="${bx+bw-66}" y="${by-10}" fill="#fff" font-family="ui-monospace,monospace" font-size="11" font-weight="700">● MATCH</text>`;
+      // plate readout on the car's rear (mirrors the reference image)
+      const plw=Math.max(70,cw*0.62), plh=Math.max(20,ch*0.3), plx=x-plw/2, ply=r.y-plh-ch*0.06;
+      s+=`<rect x="${plx}" y="${ply}" width="${plw}" height="${plh}" rx="3" fill="#0b0f16" stroke="#ef4444" stroke-width="2"/>`;
+      s+=`<text x="${x}" y="${ply+plh*0.72}" text-anchor="middle" fill="#fff" font-family="ui-monospace,monospace" font-weight="700" font-size="${Math.max(11,Math.round(plh*0.6))}">${esc(cp.plate)}</text>`;
+    } else {
+      const pad=4, tk=Math.max(7,11*r.scale);
+      s+=`<rect x="${left-pad}" y="${top-pad}" width="${cw+pad*2}" height="${ch+pad*2}" fill="none" stroke="#94a3b8" stroke-width="1.5" opacity="0.55"/>`;
+      // anonymized plate placeholder
+      s+=`<rect x="${x-cw*0.28}" y="${r.y-ch*0.34}" width="${cw*0.56}" height="${Math.max(10,ch*0.2)}" rx="2" fill="#0b0f16" opacity="0.7"/><text x="${x}" y="${r.y-ch*0.2}" text-anchor="middle" fill="#64748b" font-family="ui-monospace,monospace" font-size="${Math.max(9,Math.round(13*r.scale))}">▓▓▓▓</text>`;
+    }
+  }
+
+  // HUD overlay
+  s+=`<text x="16" y="26" fill="#e6edf7" font-family="ui-monospace,monospace" font-size="13" font-weight="600">${esc(cp.label)}</text>`;
+  s+=`<text x="16" y="44" fill="#8ea3bd" font-family="ui-monospace,monospace" font-size="12">t+${cp.tc}${cp.limit?` · limit ${cp.limit}`:''}</text>`;
+  s+=`<rect x="${CW-176}" y="14" width="120" height="22" rx="5" fill="#0f1626" stroke="#26355a"/><text x="${CW-166}" y="29" fill="#22d3ee" font-family="ui-monospace,monospace" font-size="11" font-weight="600">ALPR · CHECKPOINT</text>`;
+  s+=`<circle cx="${CW-40}" cy="25" r="5" fill="#ef4444"${reduce?'':'><animate attributeName="opacity" values="1;.25;1" dur="1.4s" repeatCount="indefinite"/'}></circle><text x="${CW-30}" y="29" fill="#fca5a5" font-family="ui-monospace,monospace" font-size="11" font-weight="700">REC</text>`;
+  // corner brackets
+  const B=18; for(const [ox,oy,sx,sy] of [[10,10,1,1],[CW-10,10,-1,1],[10,CH-10,1,-1],[CW-10,CH-10,-1,-1]]) s+=`<path d="M ${ox} ${oy+sy*B} L ${ox} ${oy} L ${ox+sx*B} ${oy}" stroke="#2b3745" stroke-width="2" fill="none"/>`;
+  // scanline
+  if(!reduce) s+=`<line x1="0" x2="${CW}" y1="0" y2="0" stroke="#22d3ee" stroke-width="1.5" opacity="0.25"><animate attributeName="y1" values="40;${CH};40" dur="4s" repeatCount="indefinite"/><animate attributeName="y2" values="40;${CH};40" dur="4s" repeatCount="indefinite"/></line>`;
+
+  $('cpframe').innerHTML=s;
+  $('cpcaption').innerHTML=`<b>1 vehicle <span class="id">identified</span></b> — your registered plate <b style="font-family:var(--mono)">${esc(cp.plate)} · ${esc(cp.state)}</b> at <b>${cp.mph} mph</b>${cp.limit?` (limit ${cp.limit})`:''}. <b>3 others <span class="anon">detected, not identified</span></b>. PlatePath boxes every vehicle a checkpoint sees but reads plates only for vehicles you've verified — every other driver stays anonymous. That gate is exactly what separates this from illegal mass plate-scraping.`;
 }
 
 function drawMap(mk){

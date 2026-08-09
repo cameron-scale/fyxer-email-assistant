@@ -110,6 +110,36 @@ the *LE legal-process* method). It never returns `verified` synchronously —
 verification always needs an out-of-band proof, which is what defeats casual
 abuse.
 
+## Checkpoint detection (the "box the car + call out the plate" view)
+
+At a camera the customer operates — a dealer lot gate, a fleet yard, a depot, or
+(agency tier) a lawful ALPR site — PlatePath renders the familiar detection view:
+every vehicle is boxed, but the **plate is read out only for vehicles registered
+and verified to the account**. The target gets a red box, a `● MATCH` tag, its
+plate, and its speed; every other vehicle is boxed and shows a speed but its
+plate stays anonymized.
+
+That single rule — `identifyDetections()` in
+`packages/shared/src/checkpoints.ts` — is the legal line. Reading *every*
+stranger's plate off a public road is the DPPA/stalkerware problem
+(see [LEGAL.md](./LEGAL.md)); identifying *your own* verified vehicle at a
+checkpoint is lawful, and looks identical for the car you're allowed to see.
+
+- `buildCheckpoints(track, waypoints)` → snaps labeled waypoints to the nearest
+  ping and attaches the arriving segment's speed/limit + a trip-relative time
+  code (the "checkpoint" chips in the UI).
+- `identifyDetections(detected, registeredPlates)` → per detected plate, returns
+  the plate string **only** if it's registered; otherwise `{ plate: null,
+  identified: false }`. There is no path that returns a plate for an
+  unregistered vehicle.
+
+Both the web app (`CheckpointView.tsx`) and the demo console render this frame
+from those two functions. In production the "detected plates" come from the
+customer's own checkpoint camera (an ALPR unit at their site) or, for the agency
+tier, a lawful ALPR source under process — never from scraping public traffic
+cameras, which (as LEGAL.md and the feasibility research explain) can't read
+plates anyway.
+
 ## Mapping
 
 `packages/shared/src/viewport.ts` provides a tile-free equirectangular

@@ -6,6 +6,8 @@
  */
 import { haversineMiles, bearingDeg } from '../src/geo.ts';
 import { buildTrack, splitTrips, speedBand, timeCode } from '../src/trackEngine.ts';
+import { buildCheckpoints, identifyDetections } from '../src/checkpoints.ts';
+import { DRIVE_LABELS } from '../src/mockData.ts';
 import {
   beginClaim,
   assertCanTrack,
@@ -90,6 +92,29 @@ console.log('trackEngine — gap / trip splitting & outlier rejection');
   ok('two trips detected', splitTrips(t).length === 2, splitTrips(t).length);
   ok('a gap segment exists', t.segments.some((s) => s.isGap));
   ok('implausible teleport not counted in maxSpeed', t.totals.maxSpeedMph < 130, t.totals.maxSpeedMph);
+}
+
+console.log('checkpoints & the identification gate');
+{
+  const t = buildTrack('veh_teen', demoPings());
+  const cps = buildCheckpoints(t, DRIVE_LABELS);
+  ok('a checkpoint per labeled waypoint', cps.length === DRIVE_LABELS.length, cps.length);
+  ok('checkpoints carry a time code', cps.every((c) => typeof c.timeCode === 'string' && c.timeCode.length > 0));
+  ok('checkpoints carry a speed', cps.every((c) => typeof c.speedMph === 'number'));
+  ok('at least one checkpoint is on a speeding segment', cps.some((c) => c.isSpeeding));
+
+  // The gate: only the registered plate is read out; everyone else is anonymized.
+  const detected = [
+    { plate: 'RVR1423', speedMph: 41 }, // registered
+    { plate: 'XYZ9999', speedMph: 67 }, // stranger
+    { plate: 'foo-123', speedMph: 55 }, // stranger, punctuation
+  ];
+  const results = identifyDetections(detected, ['rvr 1423']); // registered set, messy formatting
+  ok('registered plate is identified', results[0].identified && results[0].plate === 'RVR1423');
+  ok('stranger #1 is anonymized (no plate returned)', !results[1].identified && results[1].plate === null);
+  ok('stranger #2 is anonymized (no plate returned)', !results[2].identified && results[2].plate === null);
+  ok('anonymized detections still carry speed', results[1].speedMph === 67);
+  ok('exactly one identified of three detected', results.filter((r) => r.identified).length === 1);
 }
 
 console.log('consent gate');

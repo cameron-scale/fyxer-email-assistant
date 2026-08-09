@@ -3,6 +3,7 @@ import type { Owner, Track } from '@platepath/shared';
 import { speedBand, timeCode } from '@platepath/shared';
 import { api, type VehicleWithGate } from './api.ts';
 import { RouteMap } from './components/RouteMap.tsx';
+import { CheckpointView } from './components/CheckpointView.tsx';
 
 export function App() {
   const [owners, setOwners] = useState<Owner[]>([]);
@@ -12,6 +13,7 @@ export function App() {
   const [track, setTrack] = useState<Track | null>(null);
   const [blocked, setBlocked] = useState<string>('');
   const [selectedSeg, setSelectedSeg] = useState<number | undefined>();
+  const [view, setView] = useState<'route' | 'checkpoints'>('route');
 
   useEffect(() => {
     api.owners().then((o) => {
@@ -123,6 +125,15 @@ export function App() {
                 <Stat label="Stops" value={String(track.totals.stops)} />
               </section>
 
+              <div className="viewtabs">
+                <button className={`viewtab ${view === 'route' ? 'active' : ''}`} onClick={() => setView('route')}>🗺 Route map</button>
+                <button className={`viewtab ${view === 'checkpoints' ? 'active' : ''}`} onClick={() => setView('checkpoints')}>🎯 Checkpoint detection</button>
+              </div>
+
+              {view === 'checkpoints' ? (
+                <CheckpointView track={track} vehicle={vehicles.find((v) => v.id === selectedVehicle)!} />
+              ) : (
+                <>
               <RouteMap
                 track={track}
                 selected={selectedSeg}
@@ -158,6 +169,8 @@ export function App() {
                     </div>
                   ))}
               </div>
+                </>
+              )}
             </>
           )}
         </main>
