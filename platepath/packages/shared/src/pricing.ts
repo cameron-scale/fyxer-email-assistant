@@ -41,18 +41,18 @@ export const PLANS: Plan[] = [
     id: 'fleet_starter',
     name: 'Fleet Starter',
     segment: 'fleet',
-    pricePerVehicleMo: 20,
+    pricePerVehicleMo: 15, // undercuts Samsara/Motive/Azuga ($25–50 + $150 hw + 36-mo lock-in)
     hardwareUpfront: 0, // hardware bundled, amortized in the rate
     hardwareCost: 28,
     serveCostMo: 3.2,
     blurb:
-      'SMB fleets (3–25 vehicles). OBD or hardwired GPS, live map, routes & speed, driver disclosure workflow, maintenance reminders.',
+      'SMB fleets (3–25 vehicles). OBD or hardwired GPS, live map, routes & speed, driver disclosure workflow, maintenance reminders. No 3-year lock-in.',
   },
   {
     id: 'fleet_pro',
     name: 'Fleet Pro',
     segment: 'fleet',
-    pricePerVehicleMo: 33,
+    pricePerVehicleMo: 25,
     hardwareUpfront: 0,
     hardwareCost: 45,
     serveCostMo: 4.5,
@@ -63,23 +63,23 @@ export const PLANS: Plan[] = [
     id: 'dealer',
     name: 'Dealer & Lender',
     segment: 'dealer',
-    pricePerVehicleMo: 4, // low monthly; value is recovery + lot management at scale
+    pricePerVehicleMo: 9, // per financed VIN; ~150 active VINs/dealer → ~$1,350/mo/account
     hardwareUpfront: 49,
     hardwareCost: 24,
     serveCostMo: 0.9,
     blurb:
-      'BHPH / subprime lots. Hardwired trackers on financed inventory, lot management, lawful recovery workflow with lienholder verification.',
+      'BHPH / subprime lots. Hardwired trackers on financed inventory, lot management, lawful recovery with borrower-signed GPS consent + lienholder verification.',
   },
   {
     id: 'agency',
     name: 'Agency',
     segment: 'agency',
-    pricePerVehicleMo: 0, // seat + case based, quoted; modeled as ARPU below
+    pricePerVehicleMo: 0, // seat + case based, quoted; modeled as per-account ARPU below
     hardwareUpfront: 0,
     hardwareCost: 0,
     serveCostMo: 6,
     blurb:
-      'Law-enforcement / licensed investigators. Case-based, audited access with lawful-process gating. Sold by seat + case, not per random plate.',
+      'Law-enforcement / licensed investigators. Seat + case pricing ($10k–50k/yr), audited access with lawful-process gating. Never a per-random-plate lookup.',
   },
 ];
 
@@ -126,38 +126,38 @@ export const DEFAULT_ASSUMPTIONS: SegmentAssumption[] = [
   },
   {
     segment: 'fleet',
-    label: 'SMB & mid fleet',
+    label: 'SMB & mid fleet (per vehicle)',
     startingUnits: 120,
     initialMonthlyAdds: 90,
     addGrowth: 0.13,
-    monthlyChurn: 0.018,
-    arpu: 26,
+    monthlyChurn: 0.018, // research: fleet 2–3%/mo; sticky once integrated
+    arpu: 20, // blended Starter+Pro; research SMB benchmark $12–20/veh/mo
     serveCostMo: 3.8,
-    cac: 210,
+    cac: 120, // ~$400–1,200/account ÷ ~8 vehicles
     hardwareMarginPerAdd: -20, // hardware subsidized; recovered via LTV
   },
   {
     segment: 'dealer',
-    label: 'Dealer & lender',
+    label: 'Dealer & lender (per financed VIN)',
     startingUnits: 400,
     initialMonthlyAdds: 260,
     addGrowth: 0.10,
-    monthlyChurn: 0.02,
-    arpu: 4.5,
+    monthlyChurn: 0.015, // research: ~1.5%/mo
+    arpu: 9, // research: ~$10/VIN/mo
     serveCostMo: 0.9,
-    cac: 60,
+    cac: 45, // per VIN ($2–6k/dealer ÷ ~150 VINs)
     hardwareMarginPerAdd: 22,
   },
   {
     segment: 'agency',
-    label: 'Law enforcement / licensed PI',
+    label: 'Law enforcement / licensed PI (per account)',
     startingUnits: 0,
-    initialMonthlyAdds: 4, // seats/cases, higher ARPU, slow controlled ramp
-    addGrowth: 0.09,
+    initialMonthlyAdds: 2, // agency accounts, slow controlled ramp
+    addGrowth: 0.08,
     monthlyChurn: 0.01,
-    arpu: 240,
+    arpu: 1200, // ~$14.4k/yr/account, low end of research $10–50k/yr seat+case
     serveCostMo: 6,
-    cac: 900,
+    cac: 9000, // long procurement cycle ($8–25k)
     hardwareMarginPerAdd: 0,
   },
 ];
